@@ -27,3 +27,8 @@ groups:
       Cargo.toml: ec464f9ffef72a946fc0aa7938ff325ec6dd347fbc0c6f2361e274c3e2123a2c
     dependents:
       CHANGELOG.md: edafb15262ce9ce30b09bb7b19ff4d627a01eb224ce6275e5149d70d92d934c2
+  status-schema:
+    source:
+      src/status.rs: ca0acf36942745162025bfb1eec63308c6c32523c23de76454f220a204628df7
+    dependents:
+      schema/status.schema.json: 9ec3b9088047bc92fb147a7387820fad669d9019d32481f8bd09e9335664f6eb

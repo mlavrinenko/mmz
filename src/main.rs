@@ -13,7 +13,9 @@ mmz — memoized command runner
 Usage:
     mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
     mmz --init                write a starter mmz.yaml in the current directory
-    mmz --status              show each rule's freshness
+    mmz --status              show each rule's freshness as a table
+    mmz --status=json         the same as JSON, with each rule's inputs and hashes
+    mmz --status=json-schema  print the JSON Schema for --status=json
     mmz --schema              print the mmz.yaml JSON Schema
     mmz --version             print version
     mmz --help                print this help
@@ -60,7 +62,9 @@ fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
         "--schema" => Some(meta(rest, mmz::schema::SCHEMA)),
         "--init" => Some(run_init(rest)),
-        "--status" => Some(run_status(rest)),
+        status if status == "--status" || status.starts_with("--status=") => {
+            Some(run_status(status, rest))
+        }
         other if other.starts_with('-') => Some(unknown_option(other)),
         _ => None,
     }
@@ -89,15 +93,33 @@ fn run_init(rest: &[String]) -> ExitCode {
     }
 }
 
-fn run_status(rest: &[String]) -> ExitCode {
+/// Handles `--status`, `--status=json`, and `--status=json-schema`. `arg` is the
+/// full token, so its `=suffix` selects the rendering.
+fn run_status(arg: &str, rest: &[String]) -> ExitCode {
     if !rest.is_empty() {
         return usage("`--status` takes no arguments");
+    }
+    let format = arg.strip_prefix("--status").unwrap_or("");
+    match format {
+        "=json-schema" => return emit(mmz::status::SCHEMA),
+        "" | "=json" => {}
+        other => {
+            return usage(&format!(
+                "unknown `--status` format `{}`; use json or json-schema",
+                other.trim_start_matches('=')
+            ));
+        }
     }
     let cwd = match current_dir() {
         Ok(dir) => dir,
         Err(code) => return code,
     };
-    match mmz::status::report(&cwd) {
+    let rendered = if format == "=json" {
+        mmz::status::report_json(&cwd)
+    } else {
+        mmz::status::report(&cwd)
+    };
+    match rendered {
         Ok(text) => emit(&text),
         Err(err) => report_error(&err),
     }

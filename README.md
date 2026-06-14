@@ -30,7 +30,9 @@ Or download a pre-built binary from the
 ```
 mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
 mmz --init                write a starter mmz.yaml in the current directory
-mmz --status              show each rule's freshness
+mmz --status              show each rule's freshness as a table
+mmz --status=json         the same as JSON, with each rule's inputs and hashes
+mmz --status=json-schema  print the JSON Schema for --status=json
 mmz --schema              print the mmz.yaml JSON Schema
 mmz --version             print version
 mmz --help                print help
@@ -116,10 +118,15 @@ it has not confirmed unchanged.
 
 ## State and exit codes
 
-Records live in a git-ignored `.mmz/` directory, one YAML file per rule. The
-state is derived and throwaway — do not commit it. A record counts as fresh only
-when its `status` is `ok` and its content digest, format, algorithm, and command
-all still match; anything else re-runs.
+Records live in a git-ignored `.mmz/` directory, one YAML file per rule, written
+atomically (temp file + rename) so a crash or concurrent writer never leaves a
+truncated record. The state is derived and throwaway — do not commit it. A record
+counts as fresh only when its `status` is `ok` and its content digest, format,
+algorithm, and command all still match; anything else re-runs.
+
+`mmz --status=json` reports the same freshness verdict for each rule along with
+every resolved input and its content hash, so you can `jq` out what changed;
+`mmz --status=json-schema` prints its schema.
 
 | Code | Meaning |
 | ---- | ------- |

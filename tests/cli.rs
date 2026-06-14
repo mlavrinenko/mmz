@@ -126,6 +126,42 @@ fn status_reports_rule_freshness() {
 }
 
 #[test]
+fn status_json_lists_inputs_and_hashes() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+    mmz(dir.path())
+        .arg("--status=json")
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("\"state\": \"never\"")
+                .and(predicate::str::contains("\"path\": \"a.txt\""))
+                .and(predicate::str::contains("\"inputs\"")),
+        );
+}
+
+#[test]
+fn status_json_schema_prints_the_schema() {
+    Command::cargo_bin("mmz")
+        .expect("binary should build")
+        .arg("--status=json-schema")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"$schema\"").and(predicate::str::contains("no-inputs")));
+}
+
+#[test]
+fn status_with_unknown_format_is_a_usage_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+    mmz(dir.path())
+        .arg("--status=bogus")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("unknown `--status` format"));
+}
+
+#[test]
 fn unknown_option_is_a_usage_error() {
     Command::cargo_bin("mmz")
         .expect("binary should build")

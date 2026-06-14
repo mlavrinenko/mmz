@@ -24,6 +24,14 @@ groups:
     dependents:
       - schema/mmz.schema.json
 
+  # The --status=json output shape lives in src/status.rs; its JSON Schema is
+  # maintained by hand alongside it.
+  - name: status-schema
+    source:
+      - src/status.rs
+    dependents:
+      - schema/status.schema.json
+
   # A package change (version, dependencies, metadata) should land in the
   # changelog.
   - name: release-notes

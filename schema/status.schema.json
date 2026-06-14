@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/status.schema.json",
+  "title": "mmz status",
+  "description": "Output of `mmz --status=json`: each rule's freshness against its cache.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest", "rules"],
+  "properties": {
+    "manifest": {
+      "type": "string",
+      "description": "Path of the manifest governing the working directory."
+    },
+    "rules": {
+      "type": "array",
+      "description": "One entry per command rule, in manifest order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "state", "inputs"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The rule's name (matcher and cache identity)."
+          },
+          "state": {
+            "type": "string",
+            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files.",
+            "enum": ["fresh", "stale", "never", "failed", "no-inputs"]
+          },
+          "digest": {
+            "type": "string",
+            "description": "Digest of the current inputs. Absent when the rule resolves to no files."
+          },
+          "cached": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["digest", "ok"],
+            "description": "The stored record. Absent when the rule has never run.",
+            "properties": {
+              "digest": {
+                "type": "string",
+                "description": "Input digest recorded at the last run."
+              },
+              "ok": {
+                "type": "boolean",
+                "description": "Whether the recorded run succeeded."
+              }
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "description": "Resolved inputs with content hashes, sorted by path.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "hash"],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Path relative to the manifest root, forward slashes."
+                },
+                "hash": {
+                  "type": "string",
+                  "description": "Lowercase hex blake3 of the file's contents."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

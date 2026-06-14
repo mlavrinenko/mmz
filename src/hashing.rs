@@ -3,6 +3,8 @@
 use std::fs::File;
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::error::Result;
 
 /// Name of the hash algorithm recorded in cache records.
@@ -23,25 +25,56 @@ pub fn hash_file(path: &Path) -> Result<String> {
     Ok(hasher.finalize().to_hex().as_str().to_owned())
 }
 
-/// Folds the relative paths and their content hashes into a single digest.
+/// A single input's relative path paired with its content hash.
+#[derive(Serialize)]
+pub struct FileHash {
+    /// Path relative to the manifest root, with forward slashes.
+    pub path: String,
+    /// Lowercase hex `blake3` of the file's contents.
+    pub hash: String,
+}
+
+/// Hashes each input in turn, preserving the order of `rel_paths`.
 ///
-/// Both the path and the content feed the digest, so a rename, a deletion, or
-/// an edit all change the result. `rel_paths` is expected pre-sorted (as
-/// [`crate::resolve::expand`] returns it) so the digest is order-stable.
+/// # Errors
+///
+/// Returns [`crate::error::Error::Io`] if any input cannot be read.
+pub fn hash_each(base: &Path, rel_paths: &[String]) -> Result<Vec<FileHash>> {
+    rel_paths
+        .iter()
+        .map(|rel| {
+            Ok(FileHash {
+                path: rel.clone(),
+                hash: hash_file(&base.join(rel))?,
+            })
+        })
+        .collect()
+}
+
+/// Folds a list of `(path, hash)` pairs into one order-dependent digest. Both
+/// the path and the content feed it, so a rename, a deletion, or an edit all
+/// change the result. The pairs are expected pre-sorted by path (as
+/// [`crate::resolve::expand`] returns them) so the digest is stable.
+#[must_use]
+pub fn digest_hashes(files: &[FileHash]) -> String {
+    let mut hasher = blake3::Hasher::new();
+    for file in files {
+        hasher.update(file.path.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(file.hash.as_bytes());
+        hasher.update(b"\n");
+    }
+    hasher.finalize().to_hex().as_str().to_owned()
+}
+
+/// Hashes `rel_paths` and folds them into a single digest. Convenience over
+/// [`hash_each`] then [`digest_hashes`] for callers that need only the digest.
 ///
 /// # Errors
 ///
 /// Returns [`crate::error::Error::Io`] if any input cannot be read.
 pub fn digest_files(base: &Path, rel_paths: &[String]) -> Result<String> {
-    let mut hasher = blake3::Hasher::new();
-    for rel in rel_paths {
-        let hash = hash_file(&base.join(rel))?;
-        hasher.update(rel.as_bytes());
-        hasher.update(b"\0");
-        hasher.update(hash.as_bytes());
-        hasher.update(b"\n");
-    }
-    Ok(hasher.finalize().to_hex().as_str().to_owned())
+    Ok(digest_hashes(&hash_each(base, rel_paths)?))
 }
 
 #[cfg(test)]
