@@ -59,7 +59,7 @@ robust and there is no nesting blind spot. Wrappers go outside it
 `mmz.yaml` — the nearest one, searching upward from the working directory.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/mmz.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/v0.1.0/schema/mmz.schema.json
 scopes:
   rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
 commands:
@@ -89,6 +89,11 @@ commands:
 The manifest is validated at load: command names must be non-empty and unique,
 every referenced scope must be defined, and `strict` names must be known. Run
 `mmz --schema` for the full JSON Schema.
+
+`mmz --init` pins the `$schema` URL to the `v{version}` tag of the mmz that wrote
+it, not `main`, so a project keeps validating against the schema its mmz was
+built for even when different projects pin different mmz versions. `mmz --help`
+and `mmz --version` report the running version.
 
 ## Matching
 

@@ -9,8 +9,14 @@ const MANIFEST_NAME: &str = "mmz.yaml";
 
 /// Commented starter manifest. Doubles as inline documentation of the format,
 /// and carries the `$schema` line so editors validate the file immediately.
-pub const TEMPLATE: &str = "\
-# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/mmz.schema.json
+///
+/// The `$schema` URL is pinned to the version that scaffolded the file (the
+/// `v{version}` git tag), not `main`, so each project validates against the
+/// schema its mmz was built for even when projects pin different versions.
+pub const TEMPLATE: &str = concat!(
+    "# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/v",
+    env!("CARGO_PKG_VERSION"),
+    "/schema/mmz.schema.json
 # mmz.yaml — memoized command runner config.
 # Prefix a command with `mmz`; it is skipped when the matched rule's inputs are
 # byte-for-byte unchanged since the command last succeeded.
@@ -35,7 +41,8 @@ commands:
 # Runtime cases mmz errors on instead of falling back. Omit for all (the safe
 # default); list a subset to relax the rest; use [] to fall back everywhere.
 # strict: [no_match, no_inputs]
-";
+"
+);
 
 /// Writes [`TEMPLATE`] to `mmz.yaml` in `cwd`, returning the path written.
 ///
@@ -61,6 +68,19 @@ mod tests {
     fn template_is_a_valid_manifest() {
         let manifest: Manifest = serde_yaml_ng::from_str(TEMPLATE).expect("template parses");
         manifest.validate().expect("template validates");
+    }
+
+    #[test]
+    fn template_pins_schema_to_this_version() {
+        let pinned = format!("mmz/v{}/schema/mmz.schema.json", env!("CARGO_PKG_VERSION"));
+        assert!(
+            TEMPLATE.contains(&pinned),
+            "schema URL pins the build version"
+        );
+        assert!(
+            !TEMPLATE.contains("/main/"),
+            "no floating main ref in the scaffolded schema URL"
+        );
     }
 
     #[test]

@@ -7,8 +7,13 @@ use std::process::ExitCode;
 
 use mmz::error::Error;
 
-const USAGE: &str = "\
-mmz — memoized command runner
+/// This binary's version, embedded at build time from `Cargo.toml`.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+const USAGE: &str = concat!(
+    "mmz ",
+    env!("CARGO_PKG_VERSION"),
+    " — memoized command runner
 
 Usage:
     mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
@@ -30,7 +35,8 @@ Exit codes:
     0    skipped (fresh) or succeeded        4    manifest missing or invalid
     2    usage error                         70   internal error
     3    strict refusal (no rule / inputs)   127  command could not be spawned
-    otherwise the wrapped command's own exit code";
+    otherwise the wrapped command's own exit code"
+);
 
 fn main() -> ExitCode {
     env_logger::init();
@@ -59,7 +65,7 @@ fn run_cli(args: &[String]) -> ExitCode {
 /// start of a wrapped command rather than an mmz action.
 fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
     match first {
-        "--version" | "-V" => Some(meta(rest, &format!("mmz {}\n", env!("CARGO_PKG_VERSION")))),
+        "--version" | "-V" => Some(meta(rest, &format!("mmz {VERSION}\n"))),
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
         "--schema" => Some(meta(rest, mmz::schema::SCHEMA)),
         "--init" => Some(run_init(rest)),

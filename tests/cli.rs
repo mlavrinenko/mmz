@@ -101,6 +101,14 @@ fn init_writes_a_manifest_then_refuses_to_clobber() {
     mmz(dir.path()).arg("--init").assert().success();
     let manifest = fs::read_to_string(dir.path().join("mmz.yaml")).expect("manifest written");
     assert!(manifest.contains("$schema"), "carries the schema line");
+    assert!(
+        manifest.contains(&format!("/v{}/", env!("CARGO_PKG_VERSION"))),
+        "schema URL pins the installed mmz version"
+    );
+    assert!(
+        !manifest.contains("/main/"),
+        "scaffolded schema URL is not a floating main ref"
+    );
     mmz(dir.path()).arg("--init").assert().code(2);
 }
 
@@ -208,4 +216,17 @@ fn reports_version() {
         .assert()
         .success()
         .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn help_shows_version() {
+    Command::cargo_bin("mmz")
+        .expect("binary should build")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains(env!("CARGO_PKG_VERSION"))
+                .and(predicate::str::contains("memoized command runner")),
+        );
 }

@@ -4,10 +4,10 @@ groups:
   cli-docs:
     source:
       src/lib.rs: 0bf2907bad3ba5d7aa58e397886e91d1e1a17b870ca5c3aed996fdb8be10ce9c
-      src/main.rs: 49652348ae82759b5ce3f9acf5a199c0b126db90ed1dc96ef7ffa508d26aa01f
+      src/main.rs: 6d6e748c4f59a6be4c927673982072d29b6e16cbd2f8f8fca16592abdc10fc64
       src/manifest.rs: c39e717d699fcba7f8c345a642ef17f9b95eb91c2a70ff5a4ec68024024ccb49
     dependents:
-      README.md: f30340274bf7f2e6b76ca4f127515af5791f4f4339cffb0982231cdfc7640808
+      README.md: 1abc2e553037b885c762ec796cc14d305d2a6dd1d30851671c03aa0a80765a37
       www/index.html: aa7dc762693c3bc1b892d59fe7d13e3766813e720593d707e5f88d271e42dde9
   dev-docs:
     source:
@@ -16,7 +16,7 @@ groups:
     dependents:
       AGENTS.md: 071107bc9809ecee3d09509b6ffc3d73eb772826730b1ce3e43ebac3d10696b5
       CONTRIBUTING.md: 058ffde227268d6ea617765fc95d8754842c521285eb7546ad0e4c62c2dd30ec
-      mmz.yaml: c8d759df2aa564b9e352a18ebd5068f883d7169f0eacf4a0240419645c7de3cf
+      mmz.yaml: 67dd8a5e54958d1394ab426cf88dfa513ba4fa9bc98bc3a4108d975fe25f9feb
   manifest-schema:
     source:
       src/manifest.rs: c39e717d699fcba7f8c345a642ef17f9b95eb91c2a70ff5a4ec68024024ccb49
@@ -26,7 +26,7 @@ groups:
     source:
       Cargo.toml: 8e416b10303a635a497fdb07e085f5d5c4fd0d655565ba54e90b033316e3af70
     dependents:
-      CHANGELOG.md: 405f3645899afc788a4f4b4abdb67c07ca297c12626394f3bb8bf2c4f61f4c5d
+      CHANGELOG.md: cfaedc8096c2cefb7f1a6058c0f75c5866b60366b9feff6f07a3f9f2dc2d4077
   status-schema:
     source:
       src/status.rs: d4c930a467135cd10cd2007d203156fd9e5f551f7072117cc1f6497a777a10b3

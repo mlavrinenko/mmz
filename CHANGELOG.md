@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON Schemas for `mmz.yaml` and the status output under `schema/`.
 - Library crate: `mmz::run`, `mmz::status`, `mmz::prune`, and `mmz::Manifest`
   expose the same engine the binary wraps.
+- `mmz --init` pins the scaffolded `$schema` URL to the `v{version}` tag of the
+  mmz that wrote it (not `main`), so projects pinning different mmz versions each
+  validate against the matching schema. `mmz --help` and `mmz --version` report
+  the running version.
 
 ### Notes
 
