@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/mmz.schema.json
+# yaml-language-server: $schema=schema/mmz.schema.json
 # mmz memoizes its own checks (dogfood). `just check` wraps the slow, read-only
 # checks with the locally built mmz binary; a no-op `just check` then skips them.
 
