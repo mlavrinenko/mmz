@@ -87,10 +87,21 @@ pub fn write(base: &Path, command: &str, digest: &str, ok: bool) {
     }
 }
 
+/// Writes the record atomically: serialize to a per-process temp file in the
+/// cache directory, then rename it over the final path. A reader therefore sees
+/// either the old record or the complete new one, never a half-written file —
+/// so a crash mid-write or a concurrent writer can never produce a truncated
+/// record that would parse wrong. A failed rename cleans up its temp file.
 fn try_write(base: &Path, command: &str, record: &Record) -> Result<()> {
-    fs::create_dir_all(base.join(DIR))?;
+    let dir = base.join(DIR);
+    fs::create_dir_all(&dir)?;
     let text = serde_yaml_ng::to_string(record).map_err(|err| Error::Serialize(Box::new(err)))?;
-    fs::write(record_path(base, command), text)?;
+    let tmp = dir.join(format!("{}.{}.tmp", slug(command), std::process::id()));
+    fs::write(&tmp, text)?;
+    if let Err(err) = fs::rename(&tmp, record_path(base, command)) {
+        let _ = fs::remove_file(&tmp);
+        return Err(err.into());
+    }
     Ok(())
 }
 
@@ -161,5 +172,23 @@ mod tests {
     fn slug_is_readable_and_distinct() {
         assert!(slug("cargo test").starts_with("cargo-test-"));
         assert_ne!(slug("cargo test"), slug("cargo build"));
+    }
+
+    #[test]
+    fn write_is_atomic_and_leaves_no_temp_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        write(base, "cargo test", "digest-a", true);
+
+        let temps: Vec<_> = std::fs::read_dir(base.join(".mmz"))
+            .expect("cache dir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "tmp"))
+            .collect();
+        assert!(temps.is_empty(), "rename leaves no .tmp behind");
+        assert!(
+            is_fresh(base, "cargo test", "digest-a"),
+            "record is readable"
+        );
     }
 }
