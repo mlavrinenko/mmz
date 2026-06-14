@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/mmz.schema.json",
+  "title": "mmz manifest",
+  "description": "Configuration for mmz, the memoized command runner.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "scopes": {
+      "description": "Named glob sets, each referenced by command rules.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "commands": {
+      "description": "Ordered command rules; the first token-prefix match wins.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Token-prefix matcher and the cache identity."
+          },
+          "inputs": {
+            "type": "array",
+            "description": "Scope names whose globs union into this rule's input set.",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "gitignore": {
+      "type": "boolean",
+      "default": true,
+      "description": "Skip git-ignored paths when expanding globs."
+    },
+    "strict": {
+      "type": "array",
+      "description": "Runtime cases mmz errors on instead of falling back to passthrough. Omit the key for all cases (the default); list a subset to relax the rest; use [] to fall back everywhere.",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["no_match", "no_inputs"]
+      }
+    }
+  }
+}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mmz</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }
+    h1 { margin-bottom: 0.25rem; }
+    code { background: #f4f4f4; padding: 0.15em 0.4em; border-radius: 3px; }
+    pre code { display: block; padding: 1em; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>mmz</h1>
+  <p>memoized command runner</p>
+
+  <p>Prefix any command with <code>mmz</code>; when the matched rule's declared
+    inputs are byte-for-byte unchanged since the command last succeeded,
+    <code>mmz</code> skips it and exits 0.</p>
+
+  <h2>Install</h2>
+  <pre><code>cargo install mmz</code></pre>
+
+  <h2>Usage</h2>
+  <pre><code>mmz --init        # write a starter mmz.yaml
+mmz cargo test    # skipped when the declared inputs are unchanged
+mmz --status      # show each rule's freshness
+mmz --schema      # print the mmz.yaml JSON Schema</code></pre>
+
+  <p><code>mmz</code> fails closed: it errors when no manifest is found, the
+    manifest is invalid, no rule matches, or a matched rule has no inputs. Relax
+    the last two per project with the <code>strict</code> list.</p>
+
+  <p>Or download a binary from the
+    <a href="https://github.com/mlavrinenko/mmz/releases/latest">latest release</a>.
+  </p>
+
+  <footer>
+    <p><a href="https://github.com/mlavrinenko/mmz">GitHub</a></p>
+  </footer>
+</body>
+</html>
