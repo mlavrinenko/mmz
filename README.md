@@ -6,54 +6,148 @@
 
 memoized command runner
 
-## Install
+Prefix any command with `mmz`. When the matched rule's declared inputs are
+byte-for-byte unchanged since the command last succeeded, `mmz` skips it and
+exits 0. Otherwise it runs the command, streams its output, and records the
+result on success.
 
-### From crates.io
+It is not a build system: no task ordering, no dependency graph, no
+output/artifact tracking, no remote cache. It answers one question per
+invocation — are this rule's inputs unchanged since it last passed? See
+[Non-goals](#non-goals).
+
+## Install
 
 ```bash
 cargo install mmz
 ```
 
-### From binary releases
-
-Download a pre-built binary from the
+Or download a pre-built binary from the
 [latest release](https://github.com/mlavrinenko/mmz/releases/latest).
 
 ## Usage
 
-`mmz` is a memoized command runner: prefix any command with `mmz`, and when the
-matched rule's declared inputs are byte-for-byte unchanged since the command last
-succeeded, `mmz` skips it and exits 0. Otherwise it runs the command, streams its
-output, and records the result on success.
-
-Scaffold a manifest:
-
-```bash
-mmz --init        # writes a starter mmz.yaml
+```
+mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
+mmz --init                write a starter mmz.yaml in the current directory
+mmz --status              show each rule's freshness
+mmz --schema              print the mmz.yaml JSON Schema
+mmz --version             print version
+mmz --help                print help
+mmz -- <command> [args]   run a command whose name begins with a dash
 ```
 
-```yaml
-# mmz.yaml — nearest one, searching upward from the working directory
-scopes:
-  rust: ["**/*.rs", Cargo.toml, Cargo.lock]
-commands:
-  - name: cargo test      # token-prefix matcher and cache identity
-    inputs: [rust]
-# strict: [no_match, no_inputs]   # the default; omit, or use [] to relax
-```
-
-Then wrap commands wherever memoization is wanted — a Justfile recipe, a shell,
-a git hook:
+Scaffold a manifest, then wrap commands wherever memoization is wanted — a
+Justfile recipe line, a shell, a git hook:
 
 ```bash
+mmz --init                # writes a starter mmz.yaml
 mmz cargo test            # skipped when the rust inputs are unchanged
 mmz --status              # show each rule's freshness
-mmz --schema              # print the mmz.yaml JSON Schema
 ```
 
-`mmz` fails closed: it errors when no manifest is found, the manifest is invalid,
-no rule matches, or a matched rule has no inputs. Relax the last two per project
-with the `strict` list. See [DESIGN.md](DESIGN.md) for the full model.
+`mmz` receives a clean argv vector (not a shell-expanded string), so matching is
+robust and there is no nesting blind spot. Wrappers go outside it
+(`chronic mmz cargo test`). There is no `just`/runner integration and no
+`--no-memo`: a bare command without `mmz` is simply unmemoized.
+
+## Manifest
+
+`mmz.yaml` — the nearest one, searching upward from the working directory.
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/mmz.schema.json
+scopes:
+  rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
+commands:
+  - name: cargo test       # token-prefix matcher and cache identity
+    inputs: [rust]
+# gitignore: true          # skip git-ignored paths when expanding globs (default)
+# strict: [no_match, no_inputs]   # the default; list a subset to relax, [] to relax all
+```
+
+- `scopes`: named glob sets, declared once and referenced by many commands, so a
+  shared input path lives in one place. Globs follow the common convention — `*`
+  stays within a directory, `**` crosses directories.
+- `commands`: ordered rules. Each has a `name` (the matcher and cache identity)
+  and `inputs` (scope names whose globs, unioned, are the rule's input set).
+- `gitignore` (default `true`): glob expansion skips git-ignored paths, so build
+  artifacts never enter an input set. Explicitly listed literal paths are always
+  kept. The `.git` directory is never traversed; symlinks are not followed.
+- `strict` (default: all): the runtime cases `mmz` errors on rather than falling
+  back — `no_match` (no rule matches) and `no_inputs` (a matched rule resolves to
+  zero files). Omit for both; list a subset to relax the rest; `[]` to relax all.
+
+The manifest is validated at load: command names must be non-empty and unique,
+every referenced scope must be defined, and `strict` names must be known. Run
+`mmz --schema` for the full JSON Schema.
+
+## Matching
+
+A rule's `name` is split on whitespace into tokens, and it matches when those
+tokens are a prefix of the invoked argv: `cargo test` matches `cargo test` and
+`cargo test --workspace`, but not `cargo build` and not the bare `cargo`.
+Matching is on whole tokens, so `car` does not match `cargo`.
+
+Rules are tried in manifest order; the first match wins. Order specific rules
+before general ones. The cache identity is the matched rule (its `name`), not
+the full argv, so you control granularity by how specifically rules are written:
+split a rule or narrow its matcher when one rule conflates commands with
+different real inputs.
+
+## Correctness contract
+
+The governing asymmetry, because the failure is silent:
+
+- Under-declaring a rule's inputs → `mmz` skips a command that should have run →
+  false green. Dangerous.
+- Over-declaring inputs → an unnecessary re-run. Harmless.
+
+So a rule's scopes must be a superset of every file any matching invocation
+could depend on. When in doubt, broaden the scope. Toolchain sensitivity is
+modeled as ordinary inputs: add `rust-toolchain.toml` or `flake.lock` to a scope
+and a toolchain bump busts the cache. `mmz` trusts file content, not the ambient
+environment.
+
+`mmz` fails closed: a missing or invalid manifest always errors, and unmatched
+commands or matched rules with no inputs error too unless `strict` relaxes them
+(then they run unmemoized). What `mmz` never does is skip a command whose inputs
+it has not confirmed unchanged.
+
+## State and exit codes
+
+Records live in a git-ignored `.mmz/` directory, one YAML file per rule. The
+state is derived and throwaway — do not commit it. A record counts as fresh only
+when its `status` is `ok` and its content digest, format, algorithm, and command
+all still match; anything else re-runs.
+
+| Code | Meaning |
+| ---- | ------- |
+| 0    | skipped (fresh) or the command succeeded |
+| *n*  | the wrapped command's own exit code |
+| 2    | usage error (empty invocation, unknown option, `--init` over an existing manifest) |
+| 3    | strict refusal (no matching rule, or a matched rule with no inputs) |
+| 4    | manifest missing or invalid |
+| 70   | internal error |
+| 127  | command could not be spawned |
+
+## Non-goals
+
+`mmz` follows the Unix philosophy — one thing, done right — so these stay out of
+scope:
+
+- Task orchestration: no execution order or dependency graph; use a task runner.
+- Output replay: only the exit code is cached, never stdout, stderr, or artifacts.
+- Automatic dependency tracing: no strace; scopes are declared explicitly.
+- Remote caching: state is strictly local and throwaway.
+- Deep runner integration: no plugins or hooks; `mmz` is a dumb CLI prefix.
+
+## Dogfooding
+
+`mmz` memoizes its own checks: [`mmz.yaml`](mmz.yaml) declares the rules and the
+[`Justfile`](Justfile) `check` recipe wraps `cargo test`, `cargo clippy`,
+`cargo fmt`, and `cargo machete` with the locally built binary, so a no-op
+`just check` skips them.
 
 ## Development
 
@@ -62,7 +156,7 @@ Prerequisites: [Nix](https://nixos.org/) with flakes enabled.
 ```bash
 direnv allow         # or: nix develop
 
-just check           # fmt + clippy + tests + file-size + drift check
+just check           # fmt + clippy + tests + file-size + drift check (memoized)
 just build
 just test
 just cover           # code coverage (70% minimum)

@@ -7,8 +7,7 @@ groups:
       src/main.rs: e968292080b144d144ac6cbcac161950218cab9aa04603363a0a5b0d7deb6e46
       src/manifest.rs: 88e4741d9f8764fbaf9f7d9a0776697c01300a4cfa87fb04457e31545410cb7c
     dependents:
-      DESIGN.md: 23e30cbc1020060b463a01450328ab85e6087730d14e95281b18afc213f5052c
-      README.md: 71b0711b3909dc8a7e3b47283d4e2ef81e1f15257cc5ec251e6c2bb4b54f37ac
+      README.md: 56c07b80714685efa9635efb864b10730717b548ccae245c578e59d4db0118de
       www/index.html: 575e19ffa1edffd996ba243a967707004694563156e65f11d9fbe0a0df36aa82
   dev-docs:
     source:

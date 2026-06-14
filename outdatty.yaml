@@ -15,7 +15,6 @@ groups:
     dependents:
       - README.md
       - www/index.html
-      - DESIGN.md
 
   # The manifest type and the JSON Schema that validates mmz.yaml are kept in
   # sync by hand; a change to one must be mirrored in the other.
