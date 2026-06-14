@@ -1,5 +1,9 @@
 set quiet := true
 
+# Locally built mmz, used to memoize check's own commands (dogfood). The _mmz
+# recipe keeps it current; mmz.yaml declares which checks it memoizes.
+mmz := "target/debug/mmz"
+
 # List available recipes
 default:
     @just --list
@@ -7,13 +11,18 @@ default:
 # Run fixes, then other checks
 fix-check: eject fmt clippy-fix check
 
-# Run all checks in parallel (fmt + clippy + tests + unused deps + file size + drift)
-check:
+# Build the mmz binary that `check` uses to memoize its own checks (dogfood).
+_mmz:
+    cargo build -q --bin mmz
+
+# Run all checks in parallel (fmt + clippy + tests + unused deps + file size +
+# drift). The four code checks run through mmz, so a no-op re-run skips them.
+check: _mmz
     parallel -j 0 -- \
-        "chronic just fmt-check" \
-        "chronic cargo clippy --workspace --all-targets -q -- -D warnings" \
-        "chronic cargo test --workspace -q" \
-        "chronic just machete" \
+        "chronic {{ mmz }} cargo fmt --all -- --check" \
+        "chronic {{ mmz }} cargo clippy --workspace --all-targets -q -- -D warnings" \
+        "chronic {{ mmz }} cargo test --workspace -q" \
+        "chronic {{ mmz }} cargo machete" \
         "chronic just check-file-size" \
         "chronic just outdatty-check"
 

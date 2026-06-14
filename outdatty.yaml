@@ -34,7 +34,8 @@ groups:
       - CHANGELOG.md
 
   # The dev tooling and conventions documented for contributors track the
-  # files that define them.
+  # files that define them. mmz.yaml's rules mirror the commands `just check`
+  # memoizes, so a change to the recipe should be reflected there too.
   - name: dev-docs
     source:
       - flake.nix
@@ -42,3 +43,4 @@ groups:
     dependents:
       - CONTRIBUTING.md
       - AGENTS.md
+      - mmz.yaml

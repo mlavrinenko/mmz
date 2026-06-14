@@ -12,11 +12,12 @@ groups:
       www/index.html: 575e19ffa1edffd996ba243a967707004694563156e65f11d9fbe0a0df36aa82
   dev-docs:
     source:
-      Justfile: 126ca4233f8437aed8615918c4fc7f4b07f751fa94adec9024a327803a6baeac
+      Justfile: 7001ef1108525fec6e2533fb03b7e3ec5fa29408ba1962d259eecbb8c27a12a6
       flake.nix: bf1b3829e8a1a366c665bf9c6677ca2c5a6f8028c30544929b51ac647233b082
     dependents:
-      AGENTS.md: e2107cb769128a18a59b461b96c2e91d5d02a7c32df386f84115f99176610333
-      CONTRIBUTING.md: a2a2f8a1fbda6e5dc85af292e73e9ce3ff4ee131951f0f422c2c10cc785b625e
+      AGENTS.md: 071107bc9809ecee3d09509b6ffc3d73eb772826730b1ce3e43ebac3d10696b5
+      CONTRIBUTING.md: 058ffde227268d6ea617765fc95d8754842c521285eb7546ad0e4c62c2dd30ec
+      mmz.yaml: c8d759df2aa564b9e352a18ebd5068f883d7169f0eacf4a0240419645c7de3cf
   manifest-schema:
     source:
       src/manifest.rs: 88e4741d9f8764fbaf9f7d9a0776697c01300a4cfa87fb04457e31545410cb7c

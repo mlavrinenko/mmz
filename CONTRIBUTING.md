@@ -47,7 +47,7 @@ Minimum 70% coverage enforced via `cargo-tarpaulin`. Run `just cover` to check.
 (cyclomatic complexity weighted by test coverage) and fails above 30. A global
 coverage threshold can stay green while one branchy, untested function rots;
 CRAP catches that. It reads `target/coverage/lcov.info`, so run `just cover`
-first (CI and `just validate` chain them). Fix a flagged function by adding
+first (CI chains the two). Fix a flagged function by adding
 tests or reducing its branching. Tune the threshold per repo via `--threshold`
 or a `.cargo-crap.toml`.
 
@@ -68,6 +68,15 @@ changed but its dependents were not re-confirmed.
 After editing a source, review the listed dependents, update them as needed, then
 run `just outdatty-update` to record the new state into `outdatty.lock` and commit
 it. Add or adjust groups whenever you introduce files that must move together.
+
+## Dogfooding
+
+`mmz` memoizes its own checks. [mmz.yaml](mmz.yaml) declares the rules, and the
+`just check` recipe wraps `cargo test`, `cargo clippy`, `cargo fmt`, and
+`cargo machete` with the locally built binary (the `_mmz` recipe builds it
+first). A no-op `just check` then skips those commands. State lives in the
+git-ignored `.mmz/` directory. If you add or rename a wrapped command in the
+recipe, mirror it in `mmz.yaml` so the rule still matches.
 
 ## Commits
 
