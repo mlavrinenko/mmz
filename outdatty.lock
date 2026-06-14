@@ -24,9 +24,9 @@ groups:
       schema/mmz.schema.json: 39726b6c570971fcfc19121787df32a3368960d1501e84e37b304b54024c656b
   release-notes:
     source:
-      Cargo.toml: ec464f9ffef72a946fc0aa7938ff325ec6dd347fbc0c6f2361e274c3e2123a2c
+      Cargo.toml: 8e416b10303a635a497fdb07e085f5d5c4fd0d655565ba54e90b033316e3af70
     dependents:
-      CHANGELOG.md: edafb15262ce9ce30b09bb7b19ff4d627a01eb224ce6275e5149d70d92d934c2
+      CHANGELOG.md: f5c1f4b40adcc082cef8cea911154e73692354756e9164d15478dcb82e6b3807
   status-schema:
     source:
       src/status.rs: ca0acf36942745162025bfb1eec63308c6c32523c23de76454f220a204628df7

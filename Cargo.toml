@@ -9,8 +9,8 @@ rust-version = "1.85"
 description = "memoized command runner"
 license = "MIT"
 repository = "https://github.com/mlavrinenko/mmz"
-keywords = []
-categories = ["command-line-utilities"]
+keywords = ["memoize", "cache", "incremental", "cli", "build"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
 include = ["/src/", "/schema/", "/LICENSE*", "/README.md", "/CHANGELOG.md"]
 
 [lib]

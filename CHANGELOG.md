@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-15
+
 ### Added
 
 - Memoized command runner: prefix a command with `mmz` to skip it when the
@@ -16,9 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `strict` list (default: all): the runtime cases mmz errors on rather than
   falling back — `no_match` and `no_inputs`. Use a subset, or `[]`, to relax.
 - `mmz --init`, `mmz --status`, and `mmz --schema` actions.
-- JSON Schema for `mmz.yaml` at `schema/mmz.schema.json`.
+- `mmz --status=json`: the freshness report as JSON, listing each rule's
+  resolved inputs with content hashes for scripting and `jq`.
+  `mmz --status=json-schema` prints its JSON Schema.
+- JSON Schemas for `mmz.yaml` and the status output under `schema/`.
 
 ### Notes
 
 - Fails closed by default: a missing or invalid manifest always errors, as do
   unmatched commands and matched rules with no inputs (relaxable via `strict`).
+- Cache records are written atomically (temp file + rename), so a crash or a
+  concurrent writer can never leave a truncated record.
