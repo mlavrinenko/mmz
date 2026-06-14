@@ -4,11 +4,11 @@ groups:
   cli-docs:
     source:
       src/lib.rs: 5b7ada05c5edb3048b12da42a19ea06521b7c13addbc460cd32c17f014aa7943
-      src/main.rs: e968292080b144d144ac6cbcac161950218cab9aa04603363a0a5b0d7deb6e46
+      src/main.rs: 3dbe42b5068a7c58f830e3455e501200aa900b8ea70b5cbe6af4b1ccf8867dc3
       src/manifest.rs: 88e4741d9f8764fbaf9f7d9a0776697c01300a4cfa87fb04457e31545410cb7c
     dependents:
-      README.md: 56c07b80714685efa9635efb864b10730717b548ccae245c578e59d4db0118de
-      www/index.html: 575e19ffa1edffd996ba243a967707004694563156e65f11d9fbe0a0df36aa82
+      README.md: 844d82acabcda74a2660a0d7a4953710a893c068a0c485753f0effc47fc42b58
+      www/index.html: 273e39cc812a6371dd787a7cf7d18d8fb06ab3f910dd6048b4f510dc823b3944
   dev-docs:
     source:
       Justfile: 7001ef1108525fec6e2533fb03b7e3ec5fa29408ba1962d259eecbb8c27a12a6

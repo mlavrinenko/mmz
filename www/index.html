@@ -3,41 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mmz</title>
+  <title>mmz — memoized command runner</title>
+  <meta name="description" content="mmz is a memoized command runner: prefix any command with mmz and it skips when the declared inputs are byte-for-byte unchanged since the command last succeeded.">
+  <link rel="icon" href="logo.svg">
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }
-    h1 { margin-bottom: 0.25rem; }
-    code { background: #f4f4f4; padding: 0.15em 0.4em; border-radius: 3px; }
-    pre code { display: block; padding: 1em; overflow-x: auto; }
+    :root { --ink: #000; --paper: #fff; --line: 2px solid #000; }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+      color: var(--ink); background: var(--paper);
+      max-width: 720px; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; border-bottom: 2px solid var(--ink); }
+    a:hover { background: var(--ink); color: var(--paper); }
+
+    header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+    header img { width: 64px; height: 64px; display: block; }
+    h1 { font-size: 2rem; margin: 0; letter-spacing: -0.02em; }
+    .tagline { margin: 0; }
+
+    .hero {
+      border: var(--line); background: var(--ink); color: var(--paper);
+      padding: 1.5rem; margin: 1.5rem 0; font-size: 1.05rem;
+    }
+
+    h2 {
+      font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.18em;
+      margin: 2rem 0 0.5rem; border-bottom: var(--line); padding-bottom: 0.3rem;
+    }
+    pre {
+      border: var(--line); padding: 1rem; margin: 0.5rem 0; overflow-x: auto;
+      background: var(--paper);
+    }
+    code { font-family: inherit; }
+    p { margin: 0.5rem 0; }
+
+    nav { display: flex; flex-wrap: wrap; gap: 0; border: var(--line); margin-top: 2rem; }
+    nav a {
+      flex: 1 1 0; min-width: 33%; text-align: center; padding: 0.75rem 0.5rem;
+      border: none; border-right: var(--line);
+    }
+    nav a:last-child { border-right: none; }
+
+    footer { margin-top: 2.5rem; font-size: 0.85rem; }
   </style>
 </head>
 <body>
-  <h1>mmz</h1>
-  <p>memoized command runner</p>
+  <header>
+    <img src="logo.svg" alt="mmz logo: a skip-forward mark">
+    <div>
+      <h1>mmz</h1>
+      <p class="tagline">memoized command runner</p>
+    </div>
+  </header>
 
-  <p>Prefix any command with <code>mmz</code>; when the matched rule's declared
+  <div class="hero">
+    Prefix any command with <code>mmz</code>. When the matched rule's declared
     inputs are byte-for-byte unchanged since the command last succeeded,
-    <code>mmz</code> skips it and exits 0.</p>
+    <code>mmz</code> skips it and exits 0. Otherwise it runs, streams output, and
+    records the result.
+  </div>
+
+  <p>Not a build system: no task graph, no artifact tracking, no remote cache.
+    One question per run — are this rule's inputs unchanged since it last passed?</p>
 
   <h2>Install</h2>
   <pre><code>cargo install mmz</code></pre>
+  <p>Or grab a binary from the
+    <a href="https://github.com/mlavrinenko/mmz/releases/latest">latest release</a>.</p>
 
   <h2>Usage</h2>
   <pre><code>mmz --init        # write a starter mmz.yaml
 mmz cargo test    # skipped when the declared inputs are unchanged
 mmz --status      # show each rule's freshness
+mmz --status=json # the same, with inputs and hashes, for jq
 mmz --schema      # print the mmz.yaml JSON Schema</code></pre>
 
   <p><code>mmz</code> fails closed: it errors when no manifest is found, the
     manifest is invalid, no rule matches, or a matched rule has no inputs. Relax
     the last two per project with the <code>strict</code> list.</p>
 
-  <p>Or download a binary from the
-    <a href="https://github.com/mlavrinenko/mmz/releases/latest">latest release</a>.
-  </p>
+  <nav>
+    <a href="https://github.com/mlavrinenko/mmz">GitHub</a>
+    <a href="https://crates.io/crates/mmz">crates.io</a>
+    <a href="https://github.com/mlavrinenko/mmz#readme">Docs</a>
+  </nav>
 
   <footer>
-    <p><a href="https://github.com/mlavrinenko/mmz">GitHub</a></p>
+    <p>MIT licensed.</p>
   </footer>
 </body>
 </html>
