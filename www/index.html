@@ -77,8 +77,9 @@
   <h2>Usage</h2>
   <pre><code>mmz --init        # write a starter mmz.yaml
 mmz cargo test    # skipped when the declared inputs are unchanged
-mmz --status      # show each rule's freshness
+mmz --status      # show each rule's freshness and record age
 mmz --status=json # the same, with inputs and hashes, for jq
+mmz --prune       # drop cache records whose rule no longer exists
 mmz --schema      # print the mmz.yaml JSON Schema</code></pre>
 
   <p><code>mmz</code> fails closed: it errors when no manifest is found, the

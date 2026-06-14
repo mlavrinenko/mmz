@@ -105,6 +105,35 @@ fn init_writes_a_manifest_then_refuses_to_clobber() {
 }
 
 #[test]
+fn prune_drops_records_for_removed_rules() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+    // Record a run for the `sh` rule.
+    mmz(dir.path())
+        .args(["sh", "-c", "exit 0"])
+        .assert()
+        .success();
+
+    // Rewrite the manifest so `sh` is gone, leaving its record orphaned.
+    fs::write(
+        dir.path().join("mmz.yaml"),
+        "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: cat\n    inputs: [src]\n",
+    )
+    .expect("rewrite manifest");
+
+    mmz(dir.path())
+        .arg("--prune")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("pruned 1").and(predicate::str::contains("sh")));
+    mmz(dir.path())
+        .arg("--prune")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("no orphan"));
+}
+
+#[test]
 fn schema_prints_the_manifest_schema() {
     Command::cargo_bin("mmz")
         .expect("binary should build")

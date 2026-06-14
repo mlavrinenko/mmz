@@ -10,6 +10,7 @@
 //! JSON shape is described by [`SCHEMA`], printed by `mmz --status=json-schema`.
 
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
@@ -48,6 +49,8 @@ struct RuleStatus {
 struct CachedInfo {
     digest: String,
     ok: bool,
+    /// Unix seconds when the run was recorded.
+    ran_at: u64,
 }
 
 /// A rule's freshness verdict.
@@ -112,9 +115,10 @@ fn collect(cwd: &Path) -> Result<Report> {
         .parent()
         .ok_or_else(|| Error::Internal("manifest path has no parent".to_owned()))?;
 
+    let cache_dir = base.join(&manifest.cache_dir);
     let mut rules = Vec::with_capacity(manifest.commands.len());
     for rule in &manifest.commands {
-        rules.push(rule_status(&manifest, rule, base)?);
+        rules.push(rule_status(&manifest, rule, base, &cache_dir)?);
     }
     Ok(Report {
         manifest: manifest_path.display().to_string(),
@@ -124,12 +128,18 @@ fn collect(cwd: &Path) -> Result<Report> {
 
 /// Computes one rule's status: resolve its inputs, hash them, and compare the
 /// digest against the stored record.
-fn rule_status(manifest: &Manifest, rule: &Rule, base: &Path) -> Result<RuleStatus> {
+fn rule_status(
+    manifest: &Manifest,
+    rule: &Rule,
+    base: &Path,
+    cache_dir: &Path,
+) -> Result<RuleStatus> {
     let globs = manifest.globs_for(rule)?;
     let files = resolve::expand(&globs, base, manifest.gitignore)?;
-    let cached = cache::read(base, &rule.name).map(|cached| CachedInfo {
+    let cached = cache::read(cache_dir, &rule.name).map(|cached| CachedInfo {
         digest: cached.digest,
         ok: cached.ok,
+        ran_at: cached.ran_at,
     });
     if files.is_empty() {
         return Ok(RuleStatus {
@@ -157,29 +167,76 @@ fn rule_status(manifest: &Manifest, rule: &Rule, base: &Path) -> Result<RuleStat
     })
 }
 
-/// Renders the aligned `RULE / STATE` table.
+/// Renders the aligned `RULE / STATE / AGE` table. AGE is the time since the
+/// rule's record was written, blank when it has none.
 fn render_text(report: &Report) -> String {
-    let width = report
+    let now = now_secs();
+    let rule_width = report
         .rules
         .iter()
         .map(|rule| rule.name.chars().count())
         .max()
         .unwrap_or(0)
         .max("RULE".len());
+    let state_width = report
+        .rules
+        .iter()
+        .map(|rule| rule.state.label().len())
+        .max()
+        .unwrap_or(0)
+        .max("STATE".len());
 
-    let mut out = format!("{:<width$}  STATE\n", "RULE");
+    let row = |rule: &str, state: &str, age: &str| {
+        let line = format!("{rule:<rule_width$}  {state:<state_width$}  {age}");
+        format!("{}\n", line.trim_end())
+    };
+    let mut out = row("RULE", "STATE", "AGE");
     for rule in &report.rules {
-        out.push_str(&format!("{:<width$}  {}\n", rule.name, rule.state.label()));
+        let age = rule.cached.as_ref().map_or_else(String::new, |record| {
+            humanize_age(now.saturating_sub(record.ran_at))
+        });
+        out.push_str(&row(&rule.name, rule.state.label(), &age));
     }
     out
 }
 
+/// Renders a record's age as a coarse, human-readable span (`5s`, `3m`, `2h`,
+/// `4d` ago).
+fn humanize_age(secs: u64) -> String {
+    const MINUTE: u64 = 60;
+    const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
+    if secs < MINUTE {
+        format!("{secs}s ago")
+    } else if secs < HOUR {
+        format!("{}m ago", secs / MINUTE)
+    } else if secs < DAY {
+        format!("{}h ago", secs / HOUR)
+    } else {
+        format!("{}d ago", secs / DAY)
+    }
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{SCHEMA, report, report_json};
+    use super::{SCHEMA, humanize_age, report, report_json};
 
     fn write(dir: &std::path::Path, name: &str, body: &str) {
         std::fs::write(dir.join(name), body).expect("write");
+    }
+
+    #[test]
+    fn humanize_age_scales_by_unit() {
+        assert_eq!(humanize_age(5), "5s ago");
+        assert_eq!(humanize_age(90), "1m ago");
+        assert_eq!(humanize_age(3 * 3600), "3h ago");
+        assert_eq!(humanize_age(2 * 86_400), "2d ago");
     }
 
     #[test]
@@ -207,6 +264,34 @@ mod tests {
         assert!(
             report(base).expect("report").contains("stale"),
             "stale after an input changes"
+        );
+    }
+
+    #[test]
+    fn text_shows_age_after_a_run_and_json_reports_ran_at() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        write(base, "a.txt", "one");
+        write(
+            base,
+            "mmz.yaml",
+            "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
+        );
+        let argv = ["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
+        crate::run(&argv, base).expect("recorded run");
+
+        assert!(
+            report(base).expect("report").contains("ago"),
+            "table shows a record age once a run is recorded"
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&report_json(base).expect("json")).expect("valid json");
+        let ran_at = json
+            .pointer("/rules/0/cached/ran_at")
+            .expect("ran_at present");
+        assert!(
+            ran_at.as_u64().is_some_and(|secs| secs > 0),
+            "ran_at is a unix timestamp"
         );
     }
 
@@ -271,7 +356,14 @@ mod tests {
             schema.get("$schema").and_then(serde_json::Value::as_str),
             Some("https://json-schema.org/draft/2020-12/schema")
         );
-        for key in ["manifest", "rules", "state", "inputs", "no-inputs"] {
+        for key in [
+            "manifest",
+            "rules",
+            "state",
+            "inputs",
+            "no-inputs",
+            "ran_at",
+        ] {
             assert!(SCHEMA.contains(key), "schema mentions `{key}`");
         }
     }

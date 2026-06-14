@@ -8,12 +8,31 @@
 //!
 //! The cache identity is the matched rule, so the operator controls
 //! granularity through how specifically rules are written. State lives in a
-//! gitignored `.mmz/` directory and is throwaway.
+//! gitignored cache directory (`.mmz/` by default) and is throwaway.
+//!
+//! # Use as a library
+//!
+//! The binary is a thin wrapper over this crate; the same entry points are
+//! public. [`run`] memoizes one invocation against the nearest manifest,
+//! returning the exit code to propagate:
+//!
+//! ```no_run
+//! use std::path::Path;
+//!
+//! let argv = vec!["cargo".to_owned(), "test".to_owned()];
+//! let exit_code: u8 = mmz::run(&argv, Path::new("."))?;
+//! # let _ = exit_code;
+//! # Ok::<(), mmz::Error>(())
+//! ```
+//!
+//! [`status::report_json`] renders the freshness report, [`prune::prune`] sweeps
+//! orphaned records, and [`Manifest`] loads and validates an `mmz.yaml` for
+//! callers that want the parsed model directly.
 //!
 //! Modules: the manifest ([`manifest`]), pattern resolution ([`resolve`]),
 //! content hashing ([`hashing`]), rule matching ([`matcher`]), the cache
 //! ([`cache`]), and the orchestration engine ([`engine`]). The `mmz --…`
-//! actions live in [`init`], [`schema`], and [`status`].
+//! actions live in [`init`], [`schema`], [`status`], and [`prune`].
 
 pub mod cache;
 pub mod engine;
@@ -22,9 +41,11 @@ pub mod hashing;
 pub mod init;
 pub mod manifest;
 pub mod matcher;
+pub mod prune;
 pub mod resolve;
 pub mod schema;
 pub mod status;
 
 pub use engine::run;
 pub use error::{Error, Result};
+pub use manifest::Manifest;

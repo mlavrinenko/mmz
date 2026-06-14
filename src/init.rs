@@ -21,9 +21,13 @@ scopes:
   rust: [\"**/*.rs\", \"Cargo.toml\", \"Cargo.lock\"]
 
 # Ordered rules. The first whose name is a token-prefix of the command wins.
+# Set `match: exact` on a rule to match only the bare command (no extra args).
 commands:
   - name: cargo test
     inputs: [rust]
+
+# Directory for throwaway cache records, relative to this file. Git-ignore it.
+# cache_dir: .mmz
 
 # Skip git-ignored paths when expanding globs (default true).
 # gitignore: true

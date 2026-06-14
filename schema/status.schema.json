@@ -35,7 +35,7 @@
           "cached": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["digest", "ok"],
+            "required": ["digest", "ok", "ran_at"],
             "description": "The stored record. Absent when the rule has never run.",
             "properties": {
               "digest": {
@@ -45,6 +45,11 @@
               "ok": {
                 "type": "boolean",
                 "description": "Whether the recorded run succeeded."
+              },
+              "ran_at": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Unix seconds when the record was written."
               }
             }
           },

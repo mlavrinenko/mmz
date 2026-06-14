@@ -13,15 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Memoized command runner: prefix a command with `mmz` to skip it when the
   matched rule's declared inputs are unchanged since it last succeeded.
-- `mmz.yaml` manifest with named `scopes`, ordered `commands` (token-prefix
-  matchers), and `gitignore` (default true).
+- `mmz.yaml` manifest with named `scopes`, ordered `commands`, and `gitignore`
+  (default true).
+- Per-rule `match`: `prefix` (default, token-prefix) or `exact` (the whole
+  command, no trailing args), so near-identical invocations can be separate
+  cache identities.
+- `cache_dir` (default `.mmz`): relocate the throwaway cache directory.
 - `strict` list (default: all): the runtime cases mmz errors on rather than
   falling back — `no_match` and `no_inputs`. Use a subset, or `[]`, to relax.
-- `mmz --init`, `mmz --status`, and `mmz --schema` actions.
+- `mmz --init`, `mmz --status`, `mmz --prune`, and `mmz --schema` actions.
+  `mmz --status` shows each rule's record age; `mmz --prune` drops records whose
+  rule no longer exists.
 - `mmz --status=json`: the freshness report as JSON, listing each rule's
-  resolved inputs with content hashes for scripting and `jq`.
+  resolved inputs with content hashes (and `ran_at`) for scripting and `jq`.
   `mmz --status=json-schema` prints its JSON Schema.
 - JSON Schemas for `mmz.yaml` and the status output under `schema/`.
+- Library crate: `mmz::run`, `mmz::status`, `mmz::prune`, and `mmz::Manifest`
+  expose the same engine the binary wraps.
 
 ### Notes
 

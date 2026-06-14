@@ -16,6 +16,7 @@ Usage:
     mmz --status              show each rule's freshness as a table
     mmz --status=json         the same as JSON, with each rule's inputs and hashes
     mmz --status=json-schema  print the JSON Schema for --status=json
+    mmz --prune               delete cache records whose rule no longer exists
     mmz --schema              print the mmz.yaml JSON Schema
     mmz --version             print version
     mmz --help                print this help
@@ -62,6 +63,7 @@ fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
         "--schema" => Some(meta(rest, mmz::schema::SCHEMA)),
         "--init" => Some(run_init(rest)),
+        "--prune" => Some(run_prune(rest)),
         status if status == "--status" || status.starts_with("--status=") => {
             Some(run_status(status, rest))
         }
@@ -89,6 +91,20 @@ fn run_init(rest: &[String]) -> ExitCode {
     };
     match mmz::init::init(&cwd) {
         Ok(path) => emit(&format!("wrote {}\n", path.display())),
+        Err(err) => report_error(&err),
+    }
+}
+
+fn run_prune(rest: &[String]) -> ExitCode {
+    if !rest.is_empty() {
+        return usage("`--prune` takes no arguments");
+    }
+    let cwd = match current_dir() {
+        Ok(dir) => dir,
+        Err(code) => return code,
+    };
+    match mmz::prune::prune(&cwd) {
+        Ok(text) => emit(&text),
         Err(err) => report_error(&err),
     }
 }

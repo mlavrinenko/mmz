@@ -1,26 +1,33 @@
 //! Maps an invoked command to the rule that memoizes it.
 
-use crate::manifest::Command;
+use crate::manifest::{Command, MatchMode};
 
-/// Returns the first command rule whose `name` is a token-prefix of `argv`.
+/// Returns the first command rule that matches `argv` under its match mode.
 ///
 /// Rules are tried in manifest order, so the author orders specific rules
-/// before general ones. A rule named `cargo test` matches `cargo test`,
-/// `cargo test --workspace`, and so on, but not `cargo build`.
+/// before general ones. A `prefix` rule named `cargo test` matches `cargo test`,
+/// `cargo test --workspace`, and so on, but not `cargo build`; an `exact` rule
+/// matches only the bare `cargo test`.
 #[must_use]
 pub fn first_match<'a>(commands: &'a [Command], argv: &[String]) -> Option<&'a Command> {
-    commands
-        .iter()
-        .find(|command| is_prefix(&command.name, argv))
+    commands.iter().find(|command| matches(command, argv))
 }
 
-/// True when the whitespace-split tokens of `name` are a leading slice of
-/// `argv`. An empty matcher never matches.
-fn is_prefix(name: &str, argv: &[String]) -> bool {
-    let tokens: Vec<&str> = name.split_whitespace().collect();
+/// True when `command` matches `argv` under its [`MatchMode`]. An empty matcher
+/// (a name with no tokens) never matches.
+fn matches(command: &Command, argv: &[String]) -> bool {
+    let tokens: Vec<&str> = command.name.split_whitespace().collect();
     if tokens.is_empty() {
         return false;
     }
+    match command.match_mode {
+        MatchMode::Prefix => leads(&tokens, argv),
+        MatchMode::Exact => argv.len() == tokens.len() && leads(&tokens, argv),
+    }
+}
+
+/// True when `tokens` equal the leading `tokens.len()` entries of `argv`.
+fn leads(tokens: &[&str], argv: &[String]) -> bool {
     match argv.get(..tokens.len()) {
         Some(prefix) => prefix.iter().map(String::as_str).eq(tokens.iter().copied()),
         None => false,
@@ -30,12 +37,21 @@ fn is_prefix(name: &str, argv: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::first_match;
-    use crate::manifest::Command;
+    use crate::manifest::{Command, MatchMode};
 
     fn rule(name: &str) -> Command {
         Command {
             name: name.to_owned(),
             inputs: Vec::new(),
+            match_mode: MatchMode::Prefix,
+        }
+    }
+
+    fn exact_rule(name: &str) -> Command {
+        Command {
+            name: name.to_owned(),
+            inputs: Vec::new(),
+            match_mode: MatchMode::Exact,
         }
     }
 
@@ -67,6 +83,19 @@ mod tests {
         assert!(
             first_match(&rules, &argv(&["cargo"])).is_none(),
             "no partial-token match"
+        );
+    }
+
+    #[test]
+    fn exact_rejects_trailing_args() {
+        let rules = [exact_rule("cargo test")];
+        assert!(
+            first_match(&rules, &argv(&["cargo", "test"])).is_some(),
+            "exact matches the bare command"
+        );
+        assert!(
+            first_match(&rules, &argv(&["cargo", "test", "--workspace"])).is_none(),
+            "exact rejects extra args a prefix rule would accept"
         );
     }
 }

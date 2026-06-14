@@ -17,6 +17,27 @@ const fn default_gitignore() -> bool {
     true
 }
 
+/// Default for [`Manifest::cache_dir`] — the gitignored state directory.
+fn default_cache_dir() -> String {
+    ".mmz".to_owned()
+}
+
+/// How a rule's `name` is matched against an invoked command.
+///
+/// Both modes split `name` on whitespace into tokens. The difference is whether
+/// trailing argv beyond those tokens is allowed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchMode {
+    /// The tokens are a leading slice of argv, so `cargo test` matches
+    /// `cargo test` and `cargo test --workspace`. The default.
+    #[default]
+    Prefix,
+    /// The tokens equal argv exactly, so `cargo test` matches only the bare
+    /// `cargo test`. Narrowing only — never causes a wrongful skip.
+    Exact,
+}
+
 /// A runtime situation mmz can either error on (strict) or fall back from.
 ///
 /// Only the cases reachable once a manifest has loaded are configurable; a
@@ -79,6 +100,12 @@ pub struct Manifest {
     #[serde(default = "default_gitignore")]
     pub gitignore: bool,
 
+    /// Directory for throwaway cache records, relative to the manifest root
+    /// (an absolute path is used as-is). Must be git-ignored. Defaults to
+    /// `.mmz`.
+    #[serde(default = "default_cache_dir")]
+    pub cache_dir: String,
+
     /// Runtime cases mmz errors on instead of falling back to passthrough.
     /// Omitted means all cases (the default); see [`StrictPolicy`].
     #[serde(default = "StrictPolicy::all")]
@@ -89,13 +116,18 @@ pub struct Manifest {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Command {
-    /// Token-prefix matcher and the cache identity. `cargo test` matches any
-    /// invocation beginning with the tokens `cargo test`.
+    /// Matcher and the cache identity. `cargo test` matches any invocation
+    /// beginning with the tokens `cargo test` (see [`Command::match_mode`]).
     pub name: String,
 
     /// Scope names whose globs, unioned, are this command's inputs.
     #[serde(default)]
     pub inputs: Vec<String>,
+
+    /// How `name` matches argv: token-prefix (default) or exact. Spelled
+    /// `match` in the manifest.
+    #[serde(rename = "match", default)]
+    pub match_mode: MatchMode,
 }
 
 impl Manifest {
@@ -187,10 +219,29 @@ impl Manifest {
 
 #[cfg(test)]
 mod tests {
-    use super::{Manifest, StrictCase};
+    use super::{Manifest, MatchMode, StrictCase};
 
     fn parse(text: &str) -> Manifest {
         serde_yaml_ng::from_str(text).expect("parse")
+    }
+
+    #[test]
+    fn cache_dir_defaults_and_overrides() {
+        assert_eq!(parse("commands: []\n").cache_dir, ".mmz");
+        assert_eq!(
+            parse("commands: []\ncache_dir: .cache/mmz\n").cache_dir,
+            ".cache/mmz"
+        );
+    }
+
+    #[test]
+    fn match_mode_defaults_to_prefix_and_parses_exact() {
+        let manifest =
+            parse("commands:\n  - name: cargo test\n  - name: cargo build\n    match: exact\n");
+        let prefix = manifest.commands.first().expect("first rule");
+        let exact = manifest.commands.get(1).expect("second rule");
+        assert_eq!(prefix.match_mode, MatchMode::Prefix, "default");
+        assert_eq!(exact.match_mode, MatchMode::Exact, "explicit");
     }
 
     #[test]

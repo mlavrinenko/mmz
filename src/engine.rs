@@ -71,12 +71,13 @@ fn memoized(
         );
         return exec(argv, cwd);
     };
-    if cache::is_fresh(base, &rule.name, &digest) {
+    let cache_dir = base.join(&manifest.cache_dir);
+    if cache::is_fresh(&cache_dir, &rule.name, &digest) {
         log::info!("mmz: skip `{}` (inputs unchanged)", rule.name);
         return Ok(0);
     }
     let code = exec(argv, cwd)?;
-    cache::write(base, &rule.name, &digest, code == 0);
+    cache::write(&cache_dir, &rule.name, &digest, code == 0);
     Ok(code)
 }
 

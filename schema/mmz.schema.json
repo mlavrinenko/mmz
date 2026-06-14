@@ -24,12 +24,18 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Token-prefix matcher and the cache identity."
+            "description": "Matcher and the cache identity."
           },
           "inputs": {
             "type": "array",
             "description": "Scope names whose globs union into this rule's input set.",
             "items": { "type": "string" }
+          },
+          "match": {
+            "type": "string",
+            "enum": ["prefix", "exact"],
+            "default": "prefix",
+            "description": "How name matches argv. prefix (default): name's tokens are a leading slice of the command. exact: the whole command equals name's tokens."
           }
         }
       }
@@ -38,6 +44,11 @@
       "type": "boolean",
       "default": true,
       "description": "Skip git-ignored paths when expanding globs."
+    },
+    "cache_dir": {
+      "type": "string",
+      "default": ".mmz",
+      "description": "Directory for throwaway cache records, relative to the manifest (an absolute path is used as-is). Must be git-ignored."
     },
     "strict": {
       "type": "array",
