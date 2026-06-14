@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/linecop/main/linecop-schema.json
 limits:
   Rust: 500
   Markdown: 200
@@ -7,3 +8,7 @@ count_mode: total
 exclude_dirs:
   - target
   - archive
+
+overrides:
+  - pattern: ./README.md
+    limit: 250
