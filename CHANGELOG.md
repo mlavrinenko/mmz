@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-15
+
+### Fixed
+
+- Package builds no longer fail when sccache is absent. The
+  `rustc-wrapper = "sccache"` dev speedup moved from a committed
+  `.cargo/config.toml` — which naersk vendored into the sandboxed `nix build`,
+  where cargo then tried and failed to exec a missing `sccache` — to the flake
+  dev shell's `RUSTC_WRAPPER`. It still applies under `nix develop` (loaded via
+  direnv), but never in the build sandbox or for downstream flake consumers.
+
 ## [0.1.0] - 2026-06-15
 
 ### Added

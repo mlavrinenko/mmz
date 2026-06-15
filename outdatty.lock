@@ -13,7 +13,7 @@ groups:
   dev-docs:
     source:
       Justfile: 7001ef1108525fec6e2533fb03b7e3ec5fa29408ba1962d259eecbb8c27a12a6
-      flake.nix: bf1b3829e8a1a366c665bf9c6677ca2c5a6f8028c30544929b51ac647233b082
+      flake.nix: 84b553c5b1481a4229bd3d32de5fa30b97340077f93f959e3479bc7b1b70e211
     dependents:
       AGENTS.md: 071107bc9809ecee3d09509b6ffc3d73eb772826730b1ce3e43ebac3d10696b5
       CONTRIBUTING.md: 058ffde227268d6ea617765fc95d8754842c521285eb7546ad0e4c62c2dd30ec
@@ -25,9 +25,9 @@ groups:
       schema/mmz.schema.json: a6f49f5421c57e91a1e04cc1a81e3b3cfbf83c1cf865d518e6c59d9885f7faab
   release-notes:
     source:
-      Cargo.toml: 8e416b10303a635a497fdb07e085f5d5c4fd0d655565ba54e90b033316e3af70
+      Cargo.toml: 94a84a3c06ab16fb4b98dde4e0328071ed27d50c9680db0696cd0c7fa1e406c6
     dependents:
-      CHANGELOG.md: cfaedc8096c2cefb7f1a6058c0f75c5866b60366b9feff6f07a3f9f2dc2d4077
+      CHANGELOG.md: 9d254c40e344d782c3510b6360e1a3467066c0af561d8d8ca994c82321fe881f
   status-schema:
     source:
       src/status.rs: d4c930a467135cd10cd2007d203156fd9e5f551f7072117cc1f6497a777a10b3
