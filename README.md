@@ -66,9 +66,11 @@ commands:
   - name: cargo test       # matcher and cache identity
     inputs: [rust]
 #   match: exact           # match only the bare command, no trailing args (default prefix)
+#   on_hit: "tests fresh"  # per-rule cache-hit note, overriding the global one below
 # cache_dir: .mmz          # where throwaway records live (default; must be git-ignored)
 # gitignore: true          # skip git-ignored paths when expanding globs (default)
 # strict: [no_match, no_inputs]   # the default; list a subset to relax, [] to relax all
+on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a hit
 ```
 
 - `scopes`: named glob sets, declared once and referenced by many commands, so a
@@ -85,6 +87,10 @@ commands:
 - `strict` (default: all): the runtime cases `mmz` errors on rather than falling
   back — `no_match` (no rule matches) and `no_inputs` (a matched rule resolves to
   zero files). Omit for both; list a subset to relax the rest; `[]` to relax all.
+- `on_hit` (default: none): a line printed to stderr when a command is skipped.
+  Embed `{cache:<field>}` to pull a field straight from the cache record
+  (`command`, `ran_at`, `input_digest`, …). Set it per command to override the
+  global note, or to `""` to silence one. `mmz --init` scaffolds a default.
 
 The manifest is validated at load: command names must be non-empty and unique,
 every referenced scope must be defined, and `strict` names must be known. Run

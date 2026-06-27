@@ -6,7 +6,7 @@
 //! status, and input digest all match — anything else is a miss, so the command
 //! re-runs. Records are derived, throwaway state and belong in `.gitignore`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -51,6 +51,10 @@ pub struct Cached {
     pub digest: String,
     /// Unix seconds when the run was recorded.
     pub ran_at: u64,
+    /// Every stored record field as a string, keyed by field name, for cache-hit
+    /// notice macros (`{cache:<field>}`). Driven off serialization, so a new
+    /// record field becomes a macro automatically.
+    pub fields: BTreeMap<String, String>,
 }
 
 /// Reads the record for `command` from `dir`, returning a [`Cached`] view only
@@ -66,11 +70,37 @@ pub fn read(dir: &Path, command: &str) -> Option<Cached> {
     if record.format != FORMAT || record.algorithm != ALGORITHM || record.command != command {
         return None;
     }
+    let fields = record_fields(&record);
     Some(Cached {
         ok: record.status == Status::Ok,
         digest: record.input_digest,
         ran_at: record.ran_at,
+        fields,
     })
+}
+
+/// Flattens a record into a `field -> string` map for notice macro expansion.
+/// Built from serialization, so every record field is exposed as a
+/// `{cache:<field>}` macro without per-field wiring; non-scalar shapes are
+/// skipped.
+fn record_fields(record: &Record) -> BTreeMap<String, String> {
+    use serde_yaml_ng::Value;
+    let mut fields = BTreeMap::new();
+    let Ok(Value::Mapping(map)) = serde_yaml_ng::to_value(record) else {
+        return fields;
+    };
+    for (key, value) in map {
+        let Some(name) = key.as_str() else { continue };
+        let text = match value {
+            Value::String(text) => text,
+            Value::Bool(flag) => flag.to_string(),
+            Value::Number(number) => number.to_string(),
+            Value::Null => String::new(),
+            _ => continue,
+        };
+        fields.insert(name.to_owned(), text);
+    }
+    fields
 }
 
 /// True when a trusted, successful record for `command` in `dir` matches `digest`.
@@ -216,6 +246,31 @@ mod tests {
         assert!(
             !is_fresh(base, "sh", "digest-a"),
             "failed record is never fresh"
+        );
+    }
+
+    #[test]
+    fn read_exposes_record_fields_for_macros() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write(dir.path(), "cargo test", "d1", true);
+        let cached = read(dir.path(), "cargo test").expect("record");
+        assert_eq!(
+            cached.fields.get("command").map(String::as_str),
+            Some("cargo test"),
+            "string field exposed"
+        );
+        assert_eq!(
+            cached.fields.get("status").map(String::as_str),
+            Some("ok"),
+            "enum field exposed in its serialized spelling"
+        );
+        assert_eq!(
+            cached.fields.get("input_digest").map(String::as_str),
+            Some("d1")
+        );
+        assert!(
+            cached.fields.contains_key("ran_at"),
+            "numeric field exposed for macros"
         );
     }
 

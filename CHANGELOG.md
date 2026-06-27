@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `on_hit`: an optional message printed to stderr when a command is skipped (a
+  cache hit). Supports `{cache:<field>}` macros that pull a field straight from
+  the matched rule's cache record, can be overridden per command (or silenced
+  with `""`), and is now scaffolded by `mmz --init`.
+
 ## [0.1.1] - 2026-06-15
 
 ### Fixed

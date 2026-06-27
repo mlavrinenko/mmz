@@ -32,6 +32,11 @@ commands:
   - name: cargo test
     inputs: [rust]
 
+# Printed to stderr when a command is skipped. `{cache:<field>}` pulls a field
+# straight from the cache record (command, ran_at, input_digest, ...). Set it per
+# command to override, or to \"\" to silence that one.
+on_hit: \"mmz: skipped {cache:command} (inputs unchanged)\"
+
 # Directory for throwaway cache records, relative to this file. Git-ignore it.
 # cache_dir: .mmz
 
@@ -80,6 +85,16 @@ mod tests {
         assert!(
             !TEMPLATE.contains("/main/"),
             "no floating main ref in the scaffolded schema URL"
+        );
+    }
+
+    #[test]
+    fn template_scaffolds_a_configured_on_hit() {
+        let manifest: Manifest = serde_yaml_ng::from_str(TEMPLATE).expect("template parses");
+        assert_eq!(
+            manifest.on_hit.as_deref(),
+            Some("mmz: skipped {cache:command} (inputs unchanged)"),
+            "init ships an on_hit notice using a cache macro"
         );
     }
 

@@ -13,7 +13,7 @@ use std::process::{Command, ExitStatus};
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
-use crate::{cache, hashing, matcher, resolve};
+use crate::{cache, hashing, matcher, notice, resolve};
 
 /// Runs `argv` (a program and its arguments) with memoization, from `cwd`.
 ///
@@ -72,13 +72,30 @@ fn memoized(
         return exec(argv, cwd);
     };
     let cache_dir = base.join(&manifest.cache_dir);
-    if cache::is_fresh(&cache_dir, &rule.name, &digest) {
-        log::info!("mmz: skip `{}` (inputs unchanged)", rule.name);
-        return Ok(0);
+    if let Some(cached) = cache::read(&cache_dir, &rule.name) {
+        if cached.ok && cached.digest == digest {
+            log::info!("mmz: skip `{}` (inputs unchanged)", rule.name);
+            announce_hit(manifest, rule, &cached);
+            return Ok(0);
+        }
     }
     let code = exec(argv, cwd)?;
     cache::write(&cache_dir, &rule.name, &digest, code == 0);
     Ok(code)
+}
+
+/// Prints the resolved cache-hit notice to stderr, if one is configured. A
+/// rule's own `on_hit` overrides the manifest default; an empty template at
+/// either level suppresses the line. The notice goes to stderr so it never
+/// pollutes a pipeline reading the wrapped command's stdout.
+fn announce_hit(manifest: &Manifest, rule: &Rule, cached: &cache::Cached) {
+    let Some(template) = rule.on_hit.as_deref().or(manifest.on_hit.as_deref()) else {
+        return;
+    };
+    if template.is_empty() {
+        return;
+    }
+    eprintln!("{}", notice::expand(template, &cached.fields));
 }
 
 /// Resolves a rule's scopes to a content digest, or `None` when the rule
@@ -153,6 +170,34 @@ mod tests {
             2,
             "input change re-runs"
         );
+    }
+
+    fn run_twice(base: &std::path::Path) {
+        let argv = ["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
+        assert_eq!(run(&argv, base).expect("first run records"), 0);
+        assert_eq!(run(&argv, base).expect("second run is a hit"), 0);
+    }
+
+    #[test]
+    fn on_hit_paths_are_exercised_on_a_cache_hit() {
+        // Per-command on_hit (overrides absent global) with a macro: the hit path
+        // resolves and prints the notice.
+        let rule = tempfile::tempdir().expect("tempdir");
+        std::fs::write(rule.path().join("a.txt"), b"one").expect("input");
+        write_manifest(
+            rule.path(),
+            "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n    on_hit: \"skip {cache:command}\"\n",
+        );
+        run_twice(rule.path());
+
+        // An empty global on_hit suppresses the line without erroring.
+        let blank = tempfile::tempdir().expect("tempdir");
+        std::fs::write(blank.path().join("a.txt"), b"one").expect("input");
+        write_manifest(
+            blank.path(),
+            "scopes:\n  src: [\"*.txt\"]\non_hit: \"\"\ncommands:\n  - name: sh\n    inputs: [src]\n",
+        );
+        run_twice(blank.path());
     }
 
     #[test]

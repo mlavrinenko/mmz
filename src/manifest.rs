@@ -110,6 +110,13 @@ pub struct Manifest {
     /// Omitted means all cases (the default); see [`StrictPolicy`].
     #[serde(default = "StrictPolicy::all")]
     pub strict: StrictPolicy,
+
+    /// Message printed to stderr when a command is skipped (a cache hit).
+    /// `{cache:<field>}` macros substitute a field from the matched rule's
+    /// cache record (e.g. `command`, `ran_at`, `input_digest`). An empty string
+    /// prints nothing. A command's own `on_hit` overrides this. Default: none.
+    #[serde(default)]
+    pub on_hit: Option<String>,
 }
 
 /// A single command rule: a matcher plus the scopes that feed its cache.
@@ -128,6 +135,11 @@ pub struct Command {
     /// `match` in the manifest.
     #[serde(rename = "match", default)]
     pub match_mode: MatchMode,
+
+    /// Overrides the manifest-level `on_hit` for this rule; an empty string
+    /// suppresses the notice. Default: inherit the manifest's `on_hit`.
+    #[serde(default)]
+    pub on_hit: Option<String>,
 }
 
 impl Manifest {
@@ -269,6 +281,27 @@ mod tests {
     fn strict_rejects_unknown_case() {
         let parsed: Result<Manifest, _> = serde_yaml_ng::from_str("strict: [bogus]\n");
         assert!(parsed.is_err(), "unknown strict case is rejected");
+    }
+
+    #[test]
+    fn on_hit_parses_global_and_per_command_and_defaults_none() {
+        let manifest = parse(
+            "on_hit: \"global note\"\ncommands:\n  - name: cargo test\n    on_hit: \"rule note\"\n  - name: cargo build\n",
+        );
+        assert_eq!(manifest.on_hit.as_deref(), Some("global note"));
+        let overridden = manifest.commands.first().expect("first rule");
+        let inherits = manifest.commands.get(1).expect("second rule");
+        assert_eq!(
+            overridden.on_hit.as_deref(),
+            Some("rule note"),
+            "per-command override"
+        );
+        assert_eq!(inherits.on_hit, None, "absent per-command on_hit is None");
+        assert_eq!(
+            parse("commands: []\n").on_hit,
+            None,
+            "absent global on_hit is None"
+        );
     }
 
     #[test]

@@ -52,6 +52,46 @@ fn skips_when_inputs_unchanged_and_reruns_on_change() {
 }
 
 #[test]
+fn on_hit_notice_prints_to_stderr_only_on_a_cache_hit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        dir.path().join("mmz.yaml"),
+        "scopes:\n  src: [\"*.txt\"]\non_hit: \"skipped {cache:command} now\"\ncommands:\n  - name: sh\n    inputs: [src]\n",
+    )
+    .expect("write manifest");
+    fs::write(dir.path().join("a.txt"), b"one").expect("write input");
+
+    // First run records and executes; no notice.
+    mmz(dir.path())
+        .args(["sh", "-c", "exit 0"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("skipped").not());
+
+    // Second run is a hit; the notice prints with {cache:command} expanded.
+    mmz(dir.path())
+        .args(["sh", "-c", "exit 0"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("skipped sh now"));
+}
+
+#[test]
+fn no_notice_to_stderr_without_on_hit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+    mmz(dir.path())
+        .args(["sh", "-c", "exit 0"])
+        .assert()
+        .success();
+    mmz(dir.path())
+        .args(["sh", "-c", "exit 0"])
+        .assert()
+        .success()
+        .stderr(predicate::str::is_empty());
+}
+
+#[test]
 fn propagates_exit_code_without_caching_failure() {
     let dir = tempfile::tempdir().expect("tempdir");
     write_project(dir.path());

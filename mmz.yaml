@@ -10,6 +10,9 @@ scopes:
   clippy: ["clippy.toml"]
   fmt: ["rustfmt.toml"]
 
+# Note printed to stderr on a cache hit, pulling the rule name from the record.
+on_hit: "mmz: skipped {cache:command} (inputs unchanged)"
+
 commands:
   - name: cargo test
     inputs: [rust]

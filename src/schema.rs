@@ -25,6 +25,7 @@ mod tests {
             "strict",
             "no_match",
             "no_inputs",
+            "on_hit",
         ] {
             assert!(SCHEMA.contains(key), "schema mentions `{key}`");
         }
