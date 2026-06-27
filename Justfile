@@ -1,7 +1,7 @@
-set quiet := true
+set quiet
 
 # Locally built mmz, used to memoize check's own commands (dogfood). The _mmz
-# recipe keeps it current; mmz.yaml declares which checks it memoizes.
+# recipe keeps it current; .mmz/config.yaml declares which checks it memoizes.
 mmz := "target/debug/mmz"
 
 # List available recipes
@@ -28,7 +28,7 @@ check: _mmz
 
 # Fail if a source changed without its dependents being re-confirmed
 outdatty-check:
-    outdatty check --format quiet
+    outdatty check
 
 # Re-confirm dependency groups: record current hashes into outdatty.lock
 outdatty-update:

@@ -1,6 +1,6 @@
 //! `mmz` is a memoized command runner.
 //!
-//! Prefix any command with `mmz`. A `mmz.yaml` manifest declares named input
+//! Prefix any command with `mmz`. A `.mmz/config.yaml` manifest declares named input
 //! scopes and command rules that reference them. When the invoked command
 //! matches a rule and that rule's inputs are byte-for-byte unchanged since the
 //! command last succeeded, `mmz` skips execution and exits 0; otherwise it runs
@@ -8,7 +8,7 @@
 //!
 //! The cache identity is the matched rule, so the operator controls
 //! granularity through how specifically rules are written. State lives in a
-//! gitignored cache directory (`.mmz/` by default) and is throwaway.
+//! gitignored cache directory (`.mmz/cache` by default) and is throwaway.
 //!
 //! # Use as a library
 //!
@@ -26,7 +26,7 @@
 //! ```
 //!
 //! [`status::report_json`] renders the freshness report, [`prune::prune`] sweeps
-//! orphaned records, and [`Manifest`] loads and validates an `mmz.yaml` for
+//! orphaned records, and [`Manifest`] loads and validates a `.mmz/config.yaml` for
 //! callers that want the parsed model directly.
 //!
 //! Modules: the manifest ([`manifest`]), pattern resolution ([`resolve`]),

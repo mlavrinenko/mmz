@@ -17,17 +17,17 @@ const USAGE: &str = concat!(
 
 Usage:
     mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
-    mmz --init                write a starter mmz.yaml in the current directory
+    mmz --init                write a starter .mmz/config.yaml in the current directory
     mmz --status              show each rule's freshness as a table
     mmz --status=json         the same as JSON, with each rule's inputs and hashes
     mmz --status=json-schema  print the JSON Schema for --status=json
     mmz --prune               delete cache records whose rule no longer exists
-    mmz --schema              print the mmz.yaml JSON Schema
+    mmz --schema              print the config JSON Schema
     mmz --version             print version
     mmz --help                print this help
     mmz -- <command> [args]   run a command whose name begins with a dash
 
-Config lives in mmz.yaml (nearest one, searching upward). mmz errors when no
+Config lives in .mmz/config.yaml (nearest one, searching upward). mmz errors when no
 manifest is found, the manifest is invalid, no rule matches, or a matched rule
 has no inputs; relax the last two per project with the `strict` list.
 

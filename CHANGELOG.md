@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-27
+
+### Changed
+
+- Breaking: the manifest moved from `mmz.yaml` to `.mmz/config.yaml`, and the
+  default `cache_dir` from `.mmz` to `.mmz/cache`. Everything mmz needs now lives
+  under one `.mmz/` directory. `mmz --init` writes the config plus a
+  `.mmz/.gitignore` that ignores the cache, so adding mmz costs one tracked entry
+  and never touches the project's root `.gitignore`. Input globs and `cache_dir`
+  resolve against the project root (the directory holding `.mmz`). Migrate by
+  moving `mmz.yaml` to `.mmz/config.yaml`, dropping any root `.gitignore` entry
+  for the old cache, and re-running `mmz --init` in a scratch dir to copy the
+  generated `.mmz/.gitignore`.
+
 ### Added
 
 - `on_hit`: an optional message printed to stderr when a command is skipped (a

@@ -107,21 +107,17 @@ pub fn report_json(cwd: &Path) -> Result<String> {
 /// Resolves the manifest and computes every rule's status once, for either
 /// rendering to consume.
 fn collect(cwd: &Path) -> Result<Report> {
-    let manifest_path = Manifest::discover(cwd).ok_or_else(|| Error::NoManifest {
-        start: cwd.to_path_buf(),
-    })?;
-    let manifest = Manifest::load(&manifest_path)?;
-    let base = manifest_path
-        .parent()
-        .ok_or_else(|| Error::Internal("manifest path has no parent".to_owned()))?;
+    let located = Manifest::locate(cwd)?;
+    let manifest = &located.manifest;
+    let base = located.root.as_path();
 
     let cache_dir = base.join(&manifest.cache_dir);
     let mut rules = Vec::with_capacity(manifest.commands.len());
     for rule in &manifest.commands {
-        rules.push(rule_status(&manifest, rule, base, &cache_dir)?);
+        rules.push(rule_status(manifest, rule, base, &cache_dir)?);
     }
     Ok(Report {
-        manifest: manifest_path.display().to_string(),
+        manifest: located.path.display().to_string(),
         rules,
     })
 }
@@ -231,6 +227,12 @@ mod tests {
         std::fs::write(dir.join(name), body).expect("write");
     }
 
+    fn manifest(root: &std::path::Path, body: &str) {
+        let dir = root.join(".mmz");
+        std::fs::create_dir_all(&dir).expect("mkdir .mmz");
+        std::fs::write(dir.join("config.yaml"), body).expect("write manifest");
+    }
+
     #[test]
     fn humanize_age_scales_by_unit() {
         assert_eq!(humanize_age(5), "5s ago");
@@ -244,9 +246,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let base = dir.path();
         write(base, "a.txt", "one");
-        write(
+        manifest(
             base,
-            "mmz.yaml",
             "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
         );
 
@@ -272,9 +273,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let base = dir.path();
         write(base, "a.txt", "one");
-        write(
+        manifest(
             base,
-            "mmz.yaml",
             "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
         );
         let argv = ["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
@@ -299,9 +299,8 @@ mod tests {
     fn reports_no_inputs_for_empty_scopes() {
         let dir = tempfile::tempdir().expect("tempdir");
         let base = dir.path();
-        write(
+        manifest(
             base,
-            "mmz.yaml",
             "scopes:\n  none: [\"*.none\"]\ncommands:\n  - name: sh\n    inputs: [none]\n",
         );
         let report = report(base).expect("report");
@@ -319,9 +318,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let base = dir.path();
         write(base, "a.txt", "one");
-        write(
+        manifest(
             base,
-            "mmz.yaml",
             "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
         );
 

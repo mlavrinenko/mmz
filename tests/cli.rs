@@ -11,14 +11,20 @@ fn mmz(dir: &Path) -> Command {
     cmd
 }
 
+/// Writes the manifest to `.mmz/config.yaml` under `dir`.
+fn write_manifest(dir: &Path, body: &str) {
+    let cfg = dir.join(".mmz");
+    fs::create_dir_all(&cfg).expect("create .mmz");
+    fs::write(cfg.join("config.yaml"), body).expect("write manifest");
+}
+
 /// Writes a manifest whose `sh` rule depends on every `*.txt` file, plus one
 /// such input file.
 fn write_project(dir: &Path) {
-    fs::write(
-        dir.join("mmz.yaml"),
+    write_manifest(
+        dir,
         "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
-    )
-    .expect("write manifest");
+    );
     fs::write(dir.join("a.txt"), b"one").expect("write input");
 }
 
@@ -54,11 +60,10 @@ fn skips_when_inputs_unchanged_and_reruns_on_change() {
 #[test]
 fn on_hit_notice_prints_to_stderr_only_on_a_cache_hit() {
     let dir = tempfile::tempdir().expect("tempdir");
-    fs::write(
-        dir.path().join("mmz.yaml"),
+    write_manifest(
+        dir.path(),
         "scopes:\n  src: [\"*.txt\"]\non_hit: \"skipped {cache:command} now\"\ncommands:\n  - name: sh\n    inputs: [src]\n",
-    )
-    .expect("write manifest");
+    );
     fs::write(dir.path().join("a.txt"), b"one").expect("write input");
 
     // First run records and executes; no notice.
@@ -117,11 +122,7 @@ fn unmatched_command_is_a_strict_refusal() {
 #[test]
 fn unmatched_command_passes_through_when_relaxed() {
     let dir = tempfile::tempdir().expect("tempdir");
-    fs::write(
-        dir.path().join("mmz.yaml"),
-        "commands:\n  - name: sh\nstrict: []\n",
-    )
-    .expect("write manifest");
+    write_manifest(dir.path(), "commands:\n  - name: sh\nstrict: []\n");
     mmz(dir.path()).args(["env", "false"]).assert().code(1);
 }
 
@@ -132,14 +133,15 @@ fn missing_manifest_is_a_config_error() {
         .args(["sh", "-c", "exit 7"])
         .assert()
         .code(4)
-        .stderr(predicate::str::contains("no mmz.yaml"));
+        .stderr(predicate::str::contains("no .mmz/config.yaml"));
 }
 
 #[test]
 fn init_writes_a_manifest_then_refuses_to_clobber() {
     let dir = tempfile::tempdir().expect("tempdir");
     mmz(dir.path()).arg("--init").assert().success();
-    let manifest = fs::read_to_string(dir.path().join("mmz.yaml")).expect("manifest written");
+    let manifest =
+        fs::read_to_string(dir.path().join(".mmz/config.yaml")).expect("manifest written");
     assert!(manifest.contains("$schema"), "carries the schema line");
     assert!(
         manifest.contains(&format!("/v{}/", env!("CARGO_PKG_VERSION"))),
@@ -148,6 +150,11 @@ fn init_writes_a_manifest_then_refuses_to_clobber() {
     assert!(
         !manifest.contains("/main/"),
         "scaffolded schema URL is not a floating main ref"
+    );
+    let ignore = fs::read_to_string(dir.path().join(".mmz/.gitignore")).expect("gitignore written");
+    assert!(
+        ignore.contains("/cache/"),
+        "init ignores the cache subtree, so the root .gitignore stays untouched"
     );
     mmz(dir.path()).arg("--init").assert().code(2);
 }
@@ -163,11 +170,10 @@ fn prune_drops_records_for_removed_rules() {
         .success();
 
     // Rewrite the manifest so `sh` is gone, leaving its record orphaned.
-    fs::write(
-        dir.path().join("mmz.yaml"),
+    write_manifest(
+        dir.path(),
         "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: cat\n    inputs: [src]\n",
-    )
-    .expect("rewrite manifest");
+    );
 
     mmz(dir.path())
         .arg("--prune")

@@ -1,11 +1,20 @@
-//! `mmz --init`: scaffold a starter `mmz.yaml` in the working directory.
+//! `mmz --init`: scaffold a starter `.mmz/config.yaml` in the working directory,
+//! alongside a `.mmz/.gitignore` so the cache self-ignores without the consumer
+//! touching their root `.gitignore`.
 
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
+use crate::manifest::CONFIG_DIR;
 
-/// Name written by [`init`].
-const MANIFEST_NAME: &str = "mmz.yaml";
+/// Config file name written inside [`CONFIG_DIR`] by [`init`].
+const CONFIG_NAME: &str = "config.yaml";
+
+/// Contents of the `.mmz/.gitignore` [`init`] writes: ignore the cache subtree,
+/// keep the tracked config and this file itself. mmz writes this only here — the
+/// cache-write path never creates a `.gitignore`.
+const CACHE_GITIGNORE: &str =
+    "# Throwaway mmz cache; the config beside it stays tracked.\n/cache/\n";
 
 /// Commented starter manifest. Doubles as inline documentation of the format,
 /// and carries the `$schema` line so editors validate the file immediately.
@@ -17,7 +26,7 @@ pub const TEMPLATE: &str = concat!(
     "# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/v",
     env!("CARGO_PKG_VERSION"),
     "/schema/mmz.schema.json
-# mmz.yaml — memoized command runner config.
+# .mmz/config.yaml — memoized command runner config.
 # Prefix a command with `mmz`; it is skipped when the matched rule's inputs are
 # byte-for-byte unchanged since the command last succeeded.
 
@@ -37,8 +46,9 @@ commands:
 # command to override, or to \"\" to silence that one.
 on_hit: \"mmz: skipped {cache:command} (inputs unchanged)\"
 
-# Directory for throwaway cache records, relative to this file. Git-ignore it.
-# cache_dir: .mmz
+# Directory for throwaway cache records, relative to the project root (the
+# directory holding .mmz). The generated .mmz/.gitignore already ignores it.
+# cache_dir: .mmz/cache
 
 # Skip git-ignored paths when expanding globs (default true).
 # gitignore: true
@@ -49,16 +59,24 @@ on_hit: \"mmz: skipped {cache:command} (inputs unchanged)\"
 "
 );
 
-/// Writes [`TEMPLATE`] to `mmz.yaml` in `cwd`, returning the path written.
+/// Writes [`TEMPLATE`] to `.mmz/config.yaml` under `cwd`, creating `.mmz` and a
+/// `.mmz/.gitignore` that ignores the cache subtree. Returns the config path.
 ///
 /// # Errors
 ///
-/// Returns [`Error::ManifestExists`] if a manifest is already present (so an
-/// existing config is never clobbered), or [`Error::Io`] on a write failure.
+/// Returns [`Error::ManifestExists`] if a config is already present (so an
+/// existing one is never clobbered), or [`Error::Io`] on a write failure.
 pub fn init(cwd: &Path) -> Result<PathBuf> {
-    let path = cwd.join(MANIFEST_NAME);
+    let dir = cwd.join(CONFIG_DIR);
+    let path = dir.join(CONFIG_NAME);
     if path.exists() {
         return Err(Error::ManifestExists { path });
+    }
+    std::fs::create_dir_all(&dir)?;
+    // Never clobber a customized ignore file that a prior run or the user wrote.
+    let ignore = dir.join(".gitignore");
+    if !ignore.exists() {
+        std::fs::write(&ignore, CACHE_GITIGNORE)?;
     }
     std::fs::write(&path, TEMPLATE)?;
     Ok(path)
@@ -66,8 +84,8 @@ pub fn init(cwd: &Path) -> Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MANIFEST_NAME, TEMPLATE, init};
-    use crate::manifest::Manifest;
+    use super::{CACHE_GITIGNORE, CONFIG_NAME, TEMPLATE, init};
+    use crate::manifest::{CONFIG_DIR, Manifest};
 
     #[test]
     fn template_is_a_valid_manifest() {
@@ -102,8 +120,18 @@ mod tests {
     fn writes_then_refuses_to_clobber() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = init(dir.path()).expect("first init writes");
-        assert_eq!(path, dir.path().join(MANIFEST_NAME));
-        assert!(path.is_file(), "manifest written");
+        assert_eq!(path, dir.path().join(CONFIG_DIR).join(CONFIG_NAME));
+        assert!(path.is_file(), "config written");
         assert!(init(dir.path()).is_err(), "second init refuses to clobber");
+    }
+
+    #[test]
+    fn writes_a_gitignore_that_covers_the_cache() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        init(dir.path()).expect("init writes");
+        let ignore = dir.path().join(CONFIG_DIR).join(".gitignore");
+        let body = std::fs::read_to_string(&ignore).expect("gitignore written");
+        assert_eq!(body, CACHE_GITIGNORE, "ignores the cache subtree");
+        assert!(body.contains("/cache/"), "the default cache_dir is covered");
     }
 }

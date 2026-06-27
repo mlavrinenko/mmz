@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::cache;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::manifest::Manifest;
 
 /// Prunes orphan cache records for the manifest governing `cwd`, returning a
@@ -20,14 +20,9 @@ use crate::manifest::Manifest;
 /// Returns [`Error::NoManifest`] when none is found, a manifest error when one
 /// cannot be loaded, or [`Error::Io`] if the cache directory cannot be swept.
 pub fn prune(cwd: &Path) -> Result<String> {
-    let manifest_path = Manifest::discover(cwd).ok_or_else(|| Error::NoManifest {
-        start: cwd.to_path_buf(),
-    })?;
-    let manifest = Manifest::load(&manifest_path)?;
-    let base = manifest_path
-        .parent()
-        .ok_or_else(|| Error::Internal("manifest path has no parent".to_owned()))?;
-    let cache_dir = base.join(&manifest.cache_dir);
+    let located = Manifest::locate(cwd)?;
+    let manifest = &located.manifest;
+    let cache_dir = located.root.join(&manifest.cache_dir);
     let live: BTreeSet<String> = manifest
         .commands
         .iter()
@@ -54,8 +49,10 @@ mod tests {
     use super::prune;
     use crate::cache;
 
-    fn write(dir: &std::path::Path, name: &str, body: &str) {
-        std::fs::write(dir.join(name), body).expect("write");
+    fn manifest(root: &std::path::Path, body: &str) {
+        let dir = root.join(".mmz");
+        std::fs::create_dir_all(&dir).expect("mkdir .mmz");
+        std::fs::write(dir.join("config.yaml"), body).expect("write manifest");
     }
 
     #[test]
@@ -63,11 +60,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let base = dir.path();
         // The manifest knows only `cargo test`, in a custom cache directory.
-        write(
-            base,
-            "mmz.yaml",
-            "cache_dir: .cache\ncommands:\n  - name: cargo test\n",
-        );
+        manifest(base, "cache_dir: .cache\ncommands:\n  - name: cargo test\n");
         let cache_dir = base.join(".cache");
         cache::write(&cache_dir, "cargo test", "d", true);
         cache::write(&cache_dir, "cargo bench", "d", true); // orphan

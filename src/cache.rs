@@ -1,4 +1,4 @@
-//! Per-rule cache records under a gitignored cache directory (`.mmz/` by
+//! Per-rule cache records under a gitignored cache directory (`.mmz/cache` by
 //! default; see `cache_dir` in the manifest).
 //!
 //! Each command rule owns one record, keyed by the rule name (the cache

@@ -1,5 +1,5 @@
-//! The mmz manifest (`mmz.yaml`): named input scopes and the command rules
-//! that reference them.
+//! The mmz manifest (`.mmz/config.yaml`): named input scopes and the command
+//! rules that reference them.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -9,17 +9,22 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 
-/// Default manifest file names, tried in order during discovery.
-const DEFAULT_NAMES: [&str; 2] = ["mmz.yaml", "mmz.yml"];
+/// Directory holding mmz's per-project state, found by walking upward. The
+/// config lives inside it so a project gains one entry, not two.
+pub const CONFIG_DIR: &str = ".mmz";
+
+/// Config file names within [`CONFIG_DIR`], tried in order during discovery.
+const CONFIG_NAMES: [&str; 2] = ["config.yaml", "config.yml"];
 
 /// Default for [`Manifest::gitignore`].
 const fn default_gitignore() -> bool {
     true
 }
 
-/// Default for [`Manifest::cache_dir`] — the gitignored state directory.
+/// Default for [`Manifest::cache_dir`] — the gitignored state directory, nested
+/// under [`CONFIG_DIR`] so a single `.mmz/.gitignore` can cover it.
 fn default_cache_dir() -> String {
-    ".mmz".to_owned()
+    ".mmz/cache".to_owned()
 }
 
 /// How a rule's `name` is matched against an invoked command.
@@ -100,9 +105,9 @@ pub struct Manifest {
     #[serde(default = "default_gitignore")]
     pub gitignore: bool,
 
-    /// Directory for throwaway cache records, relative to the manifest root
-    /// (an absolute path is used as-is). Must be git-ignored. Defaults to
-    /// `.mmz`.
+    /// Directory for throwaway cache records, relative to the project root —
+    /// the directory holding `.mmz` (an absolute path is used as-is). Must be
+    /// git-ignored. Defaults to `.mmz/cache`.
     #[serde(default = "default_cache_dir")]
     pub cache_dir: String,
 
@@ -212,13 +217,13 @@ impl Manifest {
     }
 
     /// Walks up from `start` to the filesystem root, returning the first
-    /// manifest found.
+    /// `.mmz/config.yaml` (or `.yml`) found.
     #[must_use]
     pub fn discover(start: &Path) -> Option<PathBuf> {
         let mut dir = Some(start);
         while let Some(current) = dir {
-            for name in DEFAULT_NAMES {
-                let candidate = current.join(name);
+            for name in CONFIG_NAMES {
+                let candidate = current.join(CONFIG_DIR).join(name);
                 if candidate.is_file() {
                     return Some(candidate);
                 }
@@ -227,6 +232,45 @@ impl Manifest {
         }
         None
     }
+
+    /// Discovers, loads, and validates the nearest manifest above `cwd`, pairing
+    /// it with the project root its relative paths resolve against.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NoManifest`] when none is found, a load/validation error
+    /// from [`Manifest::load`], or [`Error::Internal`] if the config path has no
+    /// project root (it always does in practice — `<root>/.mmz/config.yaml`).
+    pub fn locate(cwd: &Path) -> Result<Located> {
+        let path = Self::discover(cwd).ok_or_else(|| Error::NoManifest {
+            start: cwd.to_path_buf(),
+        })?;
+        let root = path
+            .parent()
+            .and_then(Path::parent)
+            .ok_or_else(|| Error::Internal("config path has no project root".to_owned()))?
+            .to_path_buf();
+        let manifest = Self::load(&path)?;
+        Ok(Located {
+            path,
+            root,
+            manifest,
+        })
+    }
+}
+
+/// A discovered manifest: the config file, the project root its relative paths
+/// resolve against, and the parsed, validated model.
+///
+/// Config lives at `<root>/.mmz/config.yaml`, so the project root is the parent
+/// of `.mmz`. Input globs and `cache_dir` resolve against `root`, never `.mmz`.
+pub struct Located {
+    /// The config file, for display and error messages.
+    pub path: PathBuf,
+    /// Project root: the directory that holds `.mmz`.
+    pub root: PathBuf,
+    /// The parsed, validated manifest.
+    pub manifest: Manifest,
 }
 
 #[cfg(test)]
@@ -239,7 +283,7 @@ mod tests {
 
     #[test]
     fn cache_dir_defaults_and_overrides() {
-        assert_eq!(parse("commands: []\n").cache_dir, ".mmz");
+        assert_eq!(parse("commands: []\n").cache_dir, ".mmz/cache");
         assert_eq!(
             parse("commands: []\ncache_dir: .cache/mmz\n").cache_dir,
             ".cache/mmz"
@@ -344,9 +388,17 @@ mod tests {
     #[test]
     fn load_validates_from_disk() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("mmz.yaml");
+        let path = dir.path().join("config.yaml");
         std::fs::write(&path, "commands:\n  - name: sh\n    inputs: [ghost]\n").expect("write");
         assert!(Manifest::load(&path).is_err(), "load runs validation");
+    }
+
+    fn write_config(root: &std::path::Path, body: &str) -> std::path::PathBuf {
+        let dir = root.join(".mmz");
+        std::fs::create_dir_all(&dir).expect("mkdir .mmz");
+        let path = dir.join("config.yaml");
+        std::fs::write(&path, body).expect("write config");
+        path
     }
 
     #[test]
@@ -354,8 +406,22 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let nested = dir.path().join("a/b");
         std::fs::create_dir_all(&nested).expect("mkdir");
-        let path = dir.path().join("mmz.yaml");
-        std::fs::write(&path, "commands: []\n").expect("write");
+        let path = write_config(dir.path(), "commands: []\n");
         assert_eq!(Manifest::discover(&nested), Some(path));
+    }
+
+    #[test]
+    fn locate_roots_at_the_parent_of_dot_mmz() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let nested = dir.path().join("a/b");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        write_config(dir.path(), "commands: []\n");
+        let located = Manifest::locate(&nested).expect("locate");
+        assert_eq!(located.root, dir.path(), "root is the parent of .mmz");
+        assert_eq!(
+            located.root.join(&located.manifest.cache_dir),
+            dir.path().join(".mmz/cache"),
+            "cache_dir resolves under the project root, not inside .mmz",
+        );
     }
 }

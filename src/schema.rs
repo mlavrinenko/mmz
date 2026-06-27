@@ -1,4 +1,4 @@
-//! The JSON Schema for `mmz.yaml`, emitted by `mmz --schema`.
+//! The JSON Schema for `.mmz/config.yaml`, emitted by `mmz --schema`.
 //!
 //! The schema is maintained by hand alongside [`crate::manifest`] and embedded
 //! at build time, so `mmz --schema` and the file editors load by URL are the

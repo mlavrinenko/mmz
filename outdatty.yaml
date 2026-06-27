@@ -17,8 +17,8 @@ groups:
       - README.md
       - www/index.html
 
-  # The manifest type and the JSON Schema that validates mmz.yaml are kept in
-  # sync by hand; a change to one must be mirrored in the other.
+  # The manifest type and the JSON Schema that validates .mmz/config.yaml are
+  # kept in sync by hand; a change to one must be mirrored in the other.
   - name: manifest-schema
     source:
       - src/manifest.rs
@@ -42,8 +42,8 @@ groups:
       - CHANGELOG.md
 
   # The dev tooling and conventions documented for contributors track the
-  # files that define them. mmz.yaml's rules mirror the commands `just check`
-  # memoizes, so a change to the recipe should be reflected there too.
+  # files that define them. .mmz/config.yaml's rules mirror the commands
+  # `just check` memoizes, so a change to the recipe should be reflected there.
   - name: dev-docs
     source:
       - flake.nix
@@ -51,4 +51,4 @@ groups:
     dependents:
       - CONTRIBUTING.md
       - AGENTS.md
-      - mmz.yaml
+      - .mmz/config.yaml

@@ -29,12 +29,12 @@ Or download a pre-built binary from the
 
 ```
 mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
-mmz --init                write a starter mmz.yaml in the current directory
+mmz --init                write a starter .mmz/config.yaml in the current directory
 mmz --status              show each rule's freshness as a table
 mmz --status=json         the same as JSON, with each rule's inputs and hashes
 mmz --status=json-schema  print the JSON Schema for --status=json
 mmz --prune               delete cache records whose rule no longer exists
-mmz --schema              print the mmz.yaml JSON Schema
+mmz --schema              print the config JSON Schema
 mmz --version             print version
 mmz --help                print help
 mmz -- <command> [args]   run a command whose name begins with a dash
@@ -44,7 +44,7 @@ Scaffold a manifest, then wrap commands wherever memoization is wanted — a
 Justfile recipe line, a shell, a git hook:
 
 ```bash
-mmz --init                # writes a starter mmz.yaml
+mmz --init                # writes .mmz/config.yaml and .mmz/.gitignore
 mmz cargo test            # skipped when the rust inputs are unchanged
 mmz --status              # show each rule's freshness
 ```
@@ -56,7 +56,10 @@ robust and there is no nesting blind spot. Wrappers go outside it
 
 ## Manifest
 
-`mmz.yaml` — the nearest one, searching upward from the working directory.
+`.mmz/config.yaml` — the nearest one, searching upward from the working
+directory. Everything mmz needs lives under one `.mmz/` directory: the tracked
+config plus a `.mmz/.gitignore` (written by `--init`) that ignores the cache,
+so a project gains one entry and its root `.gitignore` stays untouched.
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/v0.1.0/schema/mmz.schema.json
@@ -67,7 +70,7 @@ commands:
     inputs: [rust]
 #   match: exact           # match only the bare command, no trailing args (default prefix)
 #   on_hit: "tests fresh"  # per-rule cache-hit note, overriding the global one below
-# cache_dir: .mmz          # where throwaway records live (default; must be git-ignored)
+# cache_dir: .mmz/cache    # where throwaway records live (default; must be git-ignored)
 # gitignore: true          # skip git-ignored paths when expanding globs (default)
 # strict: [no_match, no_inputs]   # the default; list a subset to relax, [] to relax all
 on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a hit
@@ -82,8 +85,9 @@ on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a h
 - `gitignore` (default `true`): glob expansion skips git-ignored paths, so build
   artifacts never enter an input set. Explicitly listed literal paths are always
   kept. The `.git` directory is never traversed; symlinks are not followed.
-- `cache_dir` (default `.mmz`): directory for throwaway records, relative to the
-  manifest. Keep it git-ignored; set it to relocate state (e.g. `.cache/mmz`).
+- `cache_dir` (default `.mmz/cache`): directory for throwaway records, relative
+  to the project root (the directory holding `.mmz`). Keep it git-ignored; set it
+  to relocate state (e.g. `.cache/mmz`).
 - `strict` (default: all): the runtime cases `mmz` errors on rather than falling
   back — `no_match` (no rule matches) and `no_inputs` (a matched rule resolves to
   zero files). Omit for both; list a subset to relax the rest; `[]` to relax all.
@@ -140,7 +144,7 @@ it has not confirmed unchanged.
 
 ## State and exit codes
 
-Records live in a git-ignored cache directory (`.mmz/` by default), one YAML file
+Records live in a git-ignored cache directory (`.mmz/cache` by default), one YAML file
 per rule, written atomically (temp file + rename) so a crash or concurrent writer
 never leaves a truncated record. Derived, throwaway state — do not commit it. A
 record is fresh only when its `status` is `ok` and its content digest, format,
@@ -185,7 +189,7 @@ std::process::exit(mmz::run(&argv, std::path::Path::new("."))?.into());
 
 ## Dogfooding
 
-`mmz` memoizes its own checks: [`mmz.yaml`](mmz.yaml) declares the rules and the
+`mmz` memoizes its own checks: [`.mmz/config.yaml`](.mmz/config.yaml) declares the rules and the
 [`Justfile`](Justfile) `check` recipe wraps `cargo test`, `cargo clippy`,
 `cargo fmt`, and `cargo machete` with the locally built binary, so a no-op
 `just check` skips them.

@@ -27,16 +27,12 @@ use crate::{cache, hashing, matcher, notice, resolve};
 /// relevant strict case is enforced, [`Error::EmptyCommand`] if `argv` is
 /// empty, or [`Error::Spawn`] if the command cannot be launched.
 pub fn run(argv: &[String], cwd: &Path) -> Result<u8> {
-    let manifest_path = Manifest::discover(cwd).ok_or_else(|| Error::NoManifest {
-        start: cwd.to_path_buf(),
-    })?;
-    let manifest = Manifest::load(&manifest_path)?;
-    let base = manifest_path
-        .parent()
-        .ok_or_else(|| Error::Internal("manifest path has no parent".to_owned()))?;
+    let located = Manifest::locate(cwd)?;
+    let manifest = &located.manifest;
+    let base = located.root.as_path();
     match matcher::first_match(&manifest.commands, argv) {
-        Some(rule) => memoized(&manifest, rule, base, argv, cwd),
-        None => no_match(&manifest, argv, cwd),
+        Some(rule) => memoized(manifest, rule, base, argv, cwd),
+        None => no_match(manifest, argv, cwd),
     }
 }
 
@@ -137,7 +133,9 @@ mod tests {
     use super::run;
 
     fn write_manifest(dir: &std::path::Path, body: &str) {
-        std::fs::write(dir.join("mmz.yaml"), body).expect("write manifest");
+        let cfg = dir.join(".mmz");
+        std::fs::create_dir_all(&cfg).expect("mkdir .mmz");
+        std::fs::write(cfg.join("config.yaml"), body).expect("write manifest");
     }
 
     #[test]

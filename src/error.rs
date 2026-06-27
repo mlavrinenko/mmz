@@ -13,14 +13,16 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     /// No manifest was found searching upward from the working directory.
-    #[error("no mmz.yaml found in `{start}` or any parent; create one with `mmz --init`")]
+    #[error("no .mmz/config.yaml found in `{start}` or any parent; create one with `mmz --init`")]
     NoManifest {
         /// Directory the upward search started from.
         start: PathBuf,
     },
 
     /// No rule matched the invoked command and `no_match` strictness is on.
-    #[error("no rule matches `{command}`; add a matching rule to mmz.yaml or relax `strict`")]
+    #[error(
+        "no rule matches `{command}`; add a matching rule to .mmz/config.yaml or relax `strict`"
+    )]
     NoMatch {
         /// The invoked command, joined for display.
         command: String,
@@ -132,6 +134,10 @@ mod tests {
         let no_manifest = Error::NoManifest {
             start: std::path::PathBuf::from("/tmp/x"),
         };
-        assert!(no_manifest.to_string().contains("no mmz.yaml found"));
+        assert!(
+            no_manifest
+                .to_string()
+                .contains("no .mmz/config.yaml found")
+        );
     }
 }

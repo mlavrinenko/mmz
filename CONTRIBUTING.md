@@ -71,12 +71,12 @@ it. Add or adjust groups whenever you introduce files that must move together.
 
 ## Dogfooding
 
-`mmz` memoizes its own checks. [mmz.yaml](mmz.yaml) declares the rules, and the
-`just check` recipe wraps `cargo test`, `cargo clippy`, `cargo fmt`, and
-`cargo machete` with the locally built binary (the `_mmz` recipe builds it
-first). A no-op `just check` then skips those commands. State lives in the
-git-ignored `.mmz/` directory. If you add or rename a wrapped command in the
-recipe, mirror it in `mmz.yaml` so the rule still matches.
+`mmz` memoizes its own checks. [.mmz/config.yaml](.mmz/config.yaml) declares the
+rules, and the `just check` recipe wraps `cargo test`, `cargo clippy`,
+`cargo fmt`, and `cargo machete` with the locally built binary (the `_mmz` recipe
+builds it first). A no-op `just check` then skips those commands. State lives in
+the git-ignored `.mmz/cache` directory. If you add or rename a wrapped command in
+the recipe, mirror it in `.mmz/config.yaml` so the rule still matches.
 
 ## Commits
 

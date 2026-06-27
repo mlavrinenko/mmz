@@ -51,8 +51,8 @@
     },
     "cache_dir": {
       "type": "string",
-      "default": ".mmz",
-      "description": "Directory for throwaway cache records, relative to the manifest (an absolute path is used as-is). Must be git-ignored."
+      "default": ".mmz/cache",
+      "description": "Directory for throwaway cache records, relative to the project root (the directory holding .mmz); an absolute path is used as-is. Must be git-ignored."
     },
     "strict": {
       "type": "array",
