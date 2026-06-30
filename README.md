@@ -33,6 +33,7 @@ mmz --init                write a starter .mmz/config.yaml in the current direct
 mmz --status              show each rule's freshness as a table
 mmz --status=json         the same as JSON, with each rule's inputs and hashes
 mmz --status=json-schema  print the JSON Schema for --status=json
+mmz --is-fresh [-- cmd]   exit 0 if cmd's rule (or every rule) is fresh; runs nothing
 mmz --prune               delete cache records whose rule no longer exists
 mmz --schema              print the config JSON Schema
 mmz --version             print version
@@ -155,9 +156,22 @@ algorithm, and command all still match; anything else re-runs.
 `jq` out what changed, and `mmz --status=json-schema` prints its schema. Renaming
 or removing a rule orphans its record; `mmz --prune` sweeps the unclaimed ones.
 
+`mmz --is-fresh -- <command>` gates a command on its cache without running it:
+exit 0 when its rule is already fresh, exit 1 otherwise. With no command,
+`mmz --is-fresh` gates every rule at once. It is the inverse of wrapping — where
+`mmz <command>` runs a stale command, `mmz --is-fresh -- <command>` refuses it —
+so a git hook can require that an expensive check was already run (and memoized)
+without paying to run it on the spot:
+
+```bash
+# pre-push: refuse the push if the VM checks were not run, but never run them here
+mmz --is-fresh -- just check-vm || { echo "stale: run 'just check-vm' first" >&2; exit 1; }
+```
+
 | Code | Meaning |
 | ---- | ------- |
-| 0    | skipped (fresh) or the command succeeded |
+| 0    | fresh, skipped, or the command succeeded |
+| 1    | `--is-fresh`: the targeted rule (or some rule) is not fresh |
 | *n*  | the wrapped command's own exit code |
 | 2    | usage error (empty invocation, unknown option, `--init` over an existing manifest) |
 | 3    | strict refusal (no matching rule, or a matched rule with no inputs) |

@@ -245,6 +245,73 @@ fn status_with_unknown_format_is_a_usage_error() {
 }
 
 #[test]
+fn is_fresh_gate_passes_after_a_run_and_never_executes() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+
+    // Never run: the gate fails, names the rule, and executes nothing.
+    mmz(dir.path())
+        .args(["--is-fresh", "--", "sh"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("`sh` is never"));
+    assert_eq!(log_len(dir.path()), 0, "a failing gate runs nothing");
+
+    // Record a successful run; the gate then passes, still running nothing.
+    mmz(dir.path())
+        .args(["sh", "-c", "printf x >> runs.log"])
+        .assert()
+        .success();
+    assert_eq!(log_len(dir.path()), 1, "the wrapped run executed once");
+    mmz(dir.path())
+        .args(["--is-fresh", "--", "sh"])
+        .assert()
+        .success();
+    assert_eq!(log_len(dir.path()), 1, "a passing gate still runs nothing");
+
+    // A changed input makes the gate fail again.
+    fs::write(dir.path().join("a.txt"), b"two").expect("rewrite input");
+    mmz(dir.path())
+        .args(["--is-fresh", "--", "sh"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("stale"));
+}
+
+#[test]
+fn is_fresh_with_no_command_gates_every_rule() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+    mmz(dir.path()).arg("--is-fresh").assert().code(1);
+    mmz(dir.path())
+        .args(["sh", "-c", "exit 0"])
+        .assert()
+        .success();
+    mmz(dir.path()).arg("--is-fresh").assert().success();
+}
+
+#[test]
+fn is_fresh_for_an_unmatched_command_is_a_strict_refusal() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+    mmz(dir.path())
+        .args(["--is-fresh", "--", "cargo", "test"])
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("no rule matches"));
+}
+
+#[test]
+fn is_fresh_without_a_manifest_is_a_config_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    mmz(dir.path())
+        .arg("--is-fresh")
+        .assert()
+        .code(4)
+        .stderr(predicate::str::contains("no .mmz/config.yaml"));
+}
+
+#[test]
 fn unknown_option_is_a_usage_error() {
     Command::cargo_bin("mmz")
         .expect("binary should build")

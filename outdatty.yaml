@@ -13,6 +13,7 @@ groups:
       - src/lib.rs
       - src/manifest.rs
       - src/init.rs
+      - src/freshness.rs
     dependents:
       - README.md
       - www/index.html

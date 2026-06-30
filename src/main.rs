@@ -21,6 +21,7 @@ Usage:
     mmz --status              show each rule's freshness as a table
     mmz --status=json         the same as JSON, with each rule's inputs and hashes
     mmz --status=json-schema  print the JSON Schema for --status=json
+    mmz --is-fresh [-- cmd]   exit 0 if cmd's rule (or every rule) is fresh; runs nothing
     mmz --prune               delete cache records whose rule no longer exists
     mmz --schema              print the config JSON Schema
     mmz --version             print version
@@ -32,9 +33,10 @@ manifest is found, the manifest is invalid, no rule matches, or a matched rule
 has no inputs; relax the last two per project with the `strict` list.
 
 Exit codes:
-    0    skipped (fresh) or succeeded        4    manifest missing or invalid
-    2    usage error                         70   internal error
-    3    strict refusal (no rule / inputs)   127  command could not be spawned
+    0    fresh, skipped, or succeeded        4    manifest missing or invalid
+    1    --is-fresh: not fresh               70   internal error
+    2    usage error                         127  command could not be spawned
+    3    strict refusal (no rule / inputs)
     otherwise the wrapped command's own exit code"
 );
 
@@ -70,6 +72,7 @@ fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
         "--schema" => Some(meta(rest, mmz::schema::SCHEMA)),
         "--init" => Some(run_init(rest)),
         "--prune" => Some(run_prune(rest)),
+        "--is-fresh" => Some(run_is_fresh(rest)),
         status if status == "--status" || status.starts_with("--status=") => {
             Some(run_status(status, rest))
         }
@@ -144,6 +147,52 @@ fn run_status(arg: &str, rest: &[String]) -> ExitCode {
     match rendered {
         Ok(text) => emit(&text),
         Err(err) => report_error(&err),
+    }
+}
+
+/// Handles `mmz --is-fresh [-- <command>]`: assert freshness without running.
+/// A bare `--is-fresh` gates every rule; a trailing command (optionally behind
+/// `--`, to allow a leading dash) gates the one rule it matches. Exit 0 when
+/// fresh, 1 when not, or a library error's code.
+fn run_is_fresh(rest: &[String]) -> ExitCode {
+    let cwd = match current_dir() {
+        Ok(dir) => dir,
+        Err(code) => return code,
+    };
+    let argv = strip_separator(rest);
+    let target = if argv.is_empty() { None } else { Some(argv) };
+    match mmz::freshness::evaluate(&cwd, target) {
+        Ok(verdicts) => report_freshness(&verdicts),
+        Err(err) => report_error(&err),
+    }
+}
+
+/// Drops a leading `--` separator, so `--is-fresh -- just check` and
+/// `--is-fresh just check` both name the command `just check`.
+fn strip_separator(rest: &[String]) -> &[String] {
+    match rest.split_first() {
+        Some((first, tail)) if first == "--" => tail,
+        _ => rest,
+    }
+}
+
+/// Reports a freshness gate: each not-fresh rule on stderr, then exit 0 when all
+/// are fresh, 1 otherwise. The stale lines name the rule and why it would re-run,
+/// so a hook can point the user at the command to run.
+fn report_freshness(verdicts: &[mmz::freshness::Verdict]) -> ExitCode {
+    let mut fresh = true;
+    for verdict in verdicts {
+        if verdict.is_fresh() {
+            continue;
+        }
+        fresh = false;
+        let reason = verdict.reason().unwrap_or("not fresh");
+        eprintln!("mmz: `{}` is {} ({reason})", verdict.rule, verdict.state());
+    }
+    if fresh {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
     }
 }
 

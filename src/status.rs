@@ -56,7 +56,7 @@ struct CachedInfo {
 /// A rule's freshness verdict.
 #[derive(Serialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
-enum State {
+pub(crate) enum State {
     Fresh,
     Stale,
     Never,
@@ -66,13 +66,30 @@ enum State {
 
 impl State {
     /// The label used in the human table; matches the JSON enum spelling.
-    const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::Fresh => "fresh",
             Self::Stale => "stale",
             Self::Never => "never",
             Self::Failed => "failed",
             Self::NoInputs => "no-inputs",
+        }
+    }
+
+    /// True only for [`State::Fresh`] — the sole state `mmz --is-fresh` passes.
+    pub(crate) const fn is_fresh(self) -> bool {
+        matches!(self, Self::Fresh)
+    }
+
+    /// Why a non-fresh rule would re-run, for the `--is-fresh` gate's message.
+    /// `None` when the rule is fresh.
+    pub(crate) const fn reason(self) -> Option<&'static str> {
+        match self {
+            Self::Fresh => None,
+            Self::Stale => Some("inputs changed since it last passed"),
+            Self::Never => Some("never run"),
+            Self::Failed => Some("last run failed"),
+            Self::NoInputs => Some("resolved no input files"),
         }
     }
 }
@@ -132,11 +149,7 @@ fn rule_status(
 ) -> Result<RuleStatus> {
     let globs = manifest.globs_for(rule)?;
     let files = resolve::expand(&globs, base, manifest.gitignore)?;
-    let cached = cache::read(cache_dir, &rule.name).map(|cached| CachedInfo {
-        digest: cached.digest,
-        ok: cached.ok,
-        ran_at: cached.ran_at,
-    });
+    let cached = read_cached(cache_dir, &rule.name);
     if files.is_empty() {
         return Ok(RuleStatus {
             name: rule.name.clone(),
@@ -148,12 +161,7 @@ fn rule_status(
     }
     let inputs = hashing::hash_each(base, &files)?;
     let digest = hashing::digest_hashes(&inputs);
-    let state = match &cached {
-        None => State::Never,
-        Some(record) if !record.ok => State::Failed,
-        Some(record) if record.digest == digest => State::Fresh,
-        Some(_) => State::Stale,
-    };
+    let state = verdict(cached.as_ref(), &digest);
     Ok(RuleStatus {
         name: rule.name.clone(),
         state,
@@ -161,6 +169,53 @@ fn rule_status(
         cached,
         inputs,
     })
+}
+
+/// Computes one rule's freshness without the per-input detail [`rule_status`]
+/// gathers: resolve the scopes, digest them, and compare to the record. The
+/// per-rule core the `mmz --is-fresh` gate evaluates.
+///
+/// # Errors
+///
+/// Returns a resolution or hashing error when a rule's globs are invalid or an
+/// input cannot be read.
+pub(crate) fn rule_state(
+    manifest: &Manifest,
+    rule: &Rule,
+    base: &Path,
+    cache_dir: &Path,
+) -> Result<State> {
+    let globs = manifest.globs_for(rule)?;
+    let files = resolve::expand(&globs, base, manifest.gitignore)?;
+    if files.is_empty() {
+        return Ok(State::NoInputs);
+    }
+    let digest = hashing::digest_files(base, &files)?;
+    Ok(verdict(
+        read_cached(cache_dir, &rule.name).as_ref(),
+        &digest,
+    ))
+}
+
+/// Reads `name`'s record from `cache_dir` as the trusted view shared by the
+/// status report and the freshness gate.
+fn read_cached(cache_dir: &Path, name: &str) -> Option<CachedInfo> {
+    cache::read(cache_dir, name).map(|cached| CachedInfo {
+        digest: cached.digest,
+        ok: cached.ok,
+        ran_at: cached.ran_at,
+    })
+}
+
+/// The freshness verdict for `digest` against a rule's stored record: fresh only
+/// when the record is present, succeeded, and its digest matches.
+fn verdict(cached: Option<&CachedInfo>, digest: &str) -> State {
+    match cached {
+        None => State::Never,
+        Some(record) if !record.ok => State::Failed,
+        Some(record) if record.digest == digest => State::Fresh,
+        Some(_) => State::Stale,
+    }
 }
 
 /// Renders the aligned `RULE / STATE / AGE` table. AGE is the time since the

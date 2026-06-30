@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-30
+
+### Added
+
+- `mmz --is-fresh [-- <command>]`: a freshness gate that asserts a command's
+  cache is fresh without running it. Exits 0 when the matched rule is fresh, 1
+  when it is not (stale, never run, last failed, or no inputs); a no-match is a
+  strict refusal (exit 3) and a missing or invalid manifest still exits 4. With
+  no command it gates every rule at once. It is the inverse of wrapping — where
+  `mmz <command>` runs a stale command, `mmz --is-fresh -- <command>` refuses it
+  — so a git hook can require that an expensive check was already run and
+  memoized without paying to run it on the spot.
+
 ## [0.2.0] - 2026-06-27
 
 ### Changed
