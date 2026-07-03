@@ -13,7 +13,7 @@ groups:
   dev-docs:
     source:
       Justfile: 34905bc5e53e3b711d1f6de2962073e27a282688c55ee697fc1c45ee76b8de06
-      flake.nix: 84b553c5b1481a4229bd3d32de5fa30b97340077f93f959e3479bc7b1b70e211
+      flake.nix: 95656a804b11b2fbc4f27f0bdb2af548eff76f1baabf866527e1ce2db63bd1e5
     dependents:
       .mmz/config.yaml: a60184c74a781e342843264d8c3cb79815f034ece0a903728eff2269b6c85307
       AGENTS.md: 3e294e43e17a257ef8cf8c5924b7404325b7295d989d975b5c16807bf5528a90
