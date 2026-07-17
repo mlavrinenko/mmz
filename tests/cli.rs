@@ -198,6 +198,41 @@ fn schema_prints_the_manifest_schema() {
 }
 
 #[test]
+fn parametric_rule_fans_over_a_scope_end_to_end() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    fs::create_dir(base.join("src")).expect("mkdir src");
+    fs::write(base.join("src/a.rs"), b"a").expect("a");
+    fs::write(base.join("src/b.rs"), b"b").expect("b");
+    // One declaration, fanned over src/**/*.rs; the command touches <file>.done.
+    write_manifest(
+        base,
+        "scopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: 'sh -c echo>>\"$1\".done sh {targets}'\n",
+    );
+
+    // --status enumerates one row per matched file.
+    mmz(base).arg("--status").assert().success().stdout(
+        predicate::str::contains("sh -c echo")
+            .and(predicate::str::contains("src/a.rs"))
+            .and(predicate::str::contains("src/b.rs")),
+    );
+
+    // Running one file records only that file; a re-run is a hit.
+    let run_a = ["sh", "-c", "echo>>\"$1\".done", "sh", "src/a.rs"];
+    mmz(base).args(run_a).assert().success();
+    mmz(base).args(run_a).assert().success();
+    assert_eq!(
+        fs::read(base.join("src/a.rs.done")).expect("done").len(),
+        1,
+        "second run is a cache hit"
+    );
+    assert!(
+        !base.join("src/b.rs.done").exists(),
+        "b was never invoked, so its record is independent"
+    );
+}
+
+#[test]
 fn status_reports_rule_freshness() {
     let dir = tempfile::tempdir().expect("tempdir");
     write_project(dir.path());

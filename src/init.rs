@@ -41,6 +41,15 @@ commands:
   - name: cargo test
     inputs: [rust]
 
+# A single {scope} macro in a name fans the rule over that scope's files: one
+# per-file cache record, each keyed by and scoped to its own file plus the
+# shared `inputs` pins. Best for commands that read only the one file (a
+# per-file lint/format); a whole-crate command under-declares this way.
+#   scopes:
+#     lint-targets: [\"src/**/*.rs\"]
+#   commands:
+#     - name: \"ruff check {lint-targets}\"
+
 # Printed to stderr when a command is skipped. `{cache:<field>}` pulls a field
 # straight from the cache record (command, ran_at, input_digest, ...). Set it per
 # command to override, or to \"\" to silence that one.

@@ -15,7 +15,7 @@ pub fn first_match<'a>(commands: &'a [Command], argv: &[String]) -> Option<&'a C
 
 /// True when `command` matches `argv` under its [`MatchMode`]. An empty matcher
 /// (a name with no tokens) never matches.
-fn matches(command: &Command, argv: &[String]) -> bool {
+pub(crate) fn matches(command: &Command, argv: &[String]) -> bool {
     let tokens: Vec<&str> = command.name.split_whitespace().collect();
     if tokens.is_empty() {
         return false;

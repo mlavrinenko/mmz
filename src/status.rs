@@ -15,8 +15,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-use crate::manifest::{Command as Rule, Manifest};
-use crate::{cache, hashing, resolve};
+use crate::manifest::Manifest;
+use crate::{cache, hashing, parametric, resolve};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
 /// `mmz --status=json-schema`.
@@ -112,9 +112,14 @@ fn collect(cwd: &Path) -> Result<Report> {
     let base = located.root.as_path();
 
     let cache_dir = base.join(&manifest.cache_dir);
-    let mut rules = Vec::with_capacity(manifest.commands.len());
+    let mut matches = Vec::with_capacity(manifest.commands.len());
     for rule in &manifest.commands {
-        rules.push(rule_status(manifest, rule, base, &cache_dir)?);
+        matches.extend(parametric::expand_rule(manifest, base, rule)?);
+    }
+    parametric::detect_collision(&matches)?;
+    let mut rules = Vec::with_capacity(matches.len());
+    for hit in &matches {
+        rules.push(rule_status(manifest, hit, base, &cache_dir)?);
     }
     Ok(Report {
         manifest: located.path.display().to_string(),
@@ -122,24 +127,30 @@ fn collect(cwd: &Path) -> Result<Report> {
     })
 }
 
-/// Computes one rule's status: resolve its inputs, hash them, and compare the
-/// digest against the stored record.
+/// Computes one expansion's status: resolve its inputs (shared pins plus any
+/// bound file), hash them, and compare the digest against the stored record.
 fn rule_status(
     manifest: &Manifest,
-    rule: &Rule,
+    hit: &parametric::Match,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<RuleStatus> {
-    let globs = manifest.globs_for(rule)?;
-    let files = resolve::expand(&globs, base, manifest.gitignore)?;
-    let cached = cache::read(cache_dir, &rule.name).map(|cached| CachedInfo {
+    let identity = hit.exp.identity.clone();
+    let globs = manifest.globs_for(hit.rule)?;
+    let mut files = resolve::expand(&globs, base, manifest.gitignore)?;
+    if let Some(file) = &hit.exp.file {
+        files.push(file.clone());
+        files.sort();
+        files.dedup();
+    }
+    let cached = cache::read(cache_dir, &identity).map(|cached| CachedInfo {
         digest: cached.digest,
         ok: cached.ok,
         ran_at: cached.ran_at,
     });
     if files.is_empty() {
         return Ok(RuleStatus {
-            name: rule.name.clone(),
+            name: identity,
             state: State::NoInputs,
             digest: None,
             cached,
@@ -155,7 +166,7 @@ fn rule_status(
         Some(_) => State::Stale,
     };
     Ok(RuleStatus {
-        name: rule.name.clone(),
+        name: identity,
         state,
         digest: Some(digest),
         cached,
@@ -311,6 +322,38 @@ mod tests {
     fn missing_manifest_is_an_error() {
         let dir = tempfile::tempdir().expect("tempdir");
         assert!(report(dir.path()).is_err());
+    }
+
+    #[test]
+    fn parametric_rule_enumerates_one_row_per_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        std::fs::create_dir(base.join("src")).expect("mkdir");
+        write(&base.join("src"), "a.rs", "a");
+        write(&base.join("src"), "b.rs", "b");
+        manifest(
+            base,
+            "scopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"lint {targets}\"\n",
+        );
+        let report = report(base).expect("report");
+        assert!(report.contains("lint src/a.rs"), "row for a: {report}");
+        assert!(report.contains("lint src/b.rs"), "row for b: {report}");
+        assert!(report.contains("never"), "each expansion has a verdict");
+    }
+
+    #[test]
+    fn colliding_expansions_are_an_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        write(base, "a.rs", "x");
+        manifest(
+            base,
+            "scopes:\n  wide: [\"*.rs\"]\n  narrow: [\"a.rs\"]\ncommands:\n  - name: \"do {wide}\"\n  - name: \"do {narrow}\"\n",
+        );
+        assert!(
+            report(base).is_err(),
+            "status surfaces a colliding-identity config proactively"
+        );
     }
 
     #[test]

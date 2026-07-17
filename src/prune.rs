@@ -8,9 +8,9 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use crate::cache;
 use crate::error::Result;
 use crate::manifest::Manifest;
+use crate::{cache, parametric};
 
 /// Prunes orphan cache records for the manifest governing `cwd`, returning a
 /// human-readable summary of what was removed.
@@ -22,12 +22,14 @@ use crate::manifest::Manifest;
 pub fn prune(cwd: &Path) -> Result<String> {
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
-    let cache_dir = located.root.join(&manifest.cache_dir);
-    let live: BTreeSet<String> = manifest
-        .commands
-        .iter()
-        .map(|rule| rule.name.clone())
-        .collect();
+    let base = located.root.as_path();
+    let cache_dir = base.join(&manifest.cache_dir);
+    let mut live: BTreeSet<String> = BTreeSet::new();
+    for rule in &manifest.commands {
+        for hit in parametric::expand_rule(manifest, base, rule)? {
+            live.insert(hit.exp.identity);
+        }
+    }
     let pruned = cache::prune(&cache_dir, &live)?;
     Ok(render(&pruned))
 }
@@ -81,6 +83,35 @@ mod tests {
         assert!(
             again.contains("no orphan"),
             "nothing left to prune: {again}"
+        );
+    }
+
+    #[test]
+    fn parametric_expansions_are_live_until_their_file_is_gone() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        std::fs::create_dir(base.join("src")).expect("mkdir");
+        std::fs::write(base.join("src/a.rs"), b"a").expect("a");
+        std::fs::write(base.join("src/b.rs"), b"b").expect("b");
+        manifest(
+            base,
+            "cache_dir: .cache\nscopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"run {targets}\"\n",
+        );
+        let cache_dir = base.join(".cache");
+        cache::write(&cache_dir, "run src/a.rs", "d", true);
+        cache::write(&cache_dir, "run src/b.rs", "d", true);
+
+        // Removing b's source orphans its per-file record; a's stays live.
+        std::fs::remove_file(base.join("src/b.rs")).expect("rm b");
+        let pruned = prune(base).expect("prune");
+        assert!(pruned.contains("run src/b.rs"), "orphan pruned: {pruned}");
+        assert!(
+            cache::read(&cache_dir, "run src/a.rs").is_some(),
+            "live expansion kept"
+        );
+        assert!(
+            cache::read(&cache_dir, "run src/b.rs").is_none(),
+            "orphan expansion gone"
         );
     }
 

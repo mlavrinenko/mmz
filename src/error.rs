@@ -62,6 +62,27 @@ pub enum Error {
     #[error("duplicate command name: {0} (command names must be unique)")]
     DuplicateCommand(String),
 
+    /// A command rule's `name` carries a malformed `{scope}` fan macro.
+    #[error("command `{name}` has a malformed `{{scope}}` macro: {reason}")]
+    MacroSyntax {
+        /// The offending rule name.
+        name: String,
+        /// What is wrong with the macro.
+        reason: String,
+    },
+
+    /// Two rules resolve to the same cache identity, so which one owns the
+    /// record — and its inputs — is ambiguous.
+    #[error(
+        "cache identity `{identity}` is claimed by multiple rules ({rules}); make their file sets or names disjoint"
+    )]
+    CollidingIdentity {
+        /// The shared expanded identity.
+        identity: String,
+        /// The colliding rule names, for the operator to reconcile.
+        rules: String,
+    },
+
     /// A glob pattern was invalid.
     #[error("invalid pattern `{pattern}`: {source}")]
     Pattern {

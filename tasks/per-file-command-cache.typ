@@ -8,7 +8,7 @@
     ease: 4,
   ),
   tags: ("tooling",),
-  status: proposed(2026, 7, 17),
+  status: done(2026, 7, 17),
 )
 
 == Summary

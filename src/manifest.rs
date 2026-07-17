@@ -183,6 +183,14 @@ impl Manifest {
                 return Err(Error::DuplicateCommand(command.name.clone()));
             }
             seen.push(command.name.as_str());
+            if let Some(mac) = crate::parametric::parse(&command.name)? {
+                if !self.scopes.contains_key(&mac.scope) {
+                    return Err(Error::UnknownScope {
+                        command: command.name.clone(),
+                        scope: mac.scope,
+                    });
+                }
+            }
             for scope in &command.inputs {
                 if !self.scopes.contains_key(scope) {
                     return Err(Error::UnknownScope {

@@ -24,11 +24,11 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Matcher and the cache identity."
+            "description": "Matcher and the cache identity. A single {scope} macro (one whitespace token, possibly embedded like --file={scope}) fans the rule over that scope's files: one per-file cache record per matched file, each keyed by the expanded name and scoped to that file plus the shared `inputs` pins."
           },
           "inputs": {
             "type": "array",
-            "description": "Scope names whose globs union into this rule's input set.",
+            "description": "Scope names whose globs union into this rule's input set. For a parametric rule these are the shared pins added to every per-file record; keep the fan scope out of them.",
             "items": { "type": "string" }
           },
           "match": {

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Parametric rules: a single `{scope}` macro in a command `name` fans the rule
+  over that scope's files, yielding one per-file cache record per matched file.
+  Each record is keyed by the expanded name and scoped to its own file plus the
+  rule's shared `inputs` pins, so a file busts only its own record — the
+  one-rule-per-file form without the hand-list. The macro is one whitespace
+  token (embeddable, e.g. `--file={scope}`); the bound file must be a member of
+  the scope. `mmz --status` enumerates the expansions and `mmz --prune` sweeps a
+  record once its file is gone. Two rules resolving to the same identity is a
+  hard error.
+
 ## [0.2.0] - 2026-06-27
 
 ### Changed

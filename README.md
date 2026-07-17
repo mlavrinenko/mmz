@@ -123,6 +123,39 @@ so `cargo test` and `cargo test --release` become separate cache identities. It
 only narrows a rule, never causing a wrongful skip: an unmatched invocation
 falls to the `no_match` case (error, or passthrough when relaxed).
 
+## Parametric rules (per-file fan)
+
+A single `{scope}` macro in a rule's `name` fans it over that scope's files: one
+per-file cache record per matched file, without hand-listing each as its own
+rule.
+
+```yaml
+scopes:
+  lint-targets: ["src/**/*.rs"]
+  rust-pins:    ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
+commands:
+  - name: "ruff check {lint-targets}"   # {scope} macro ⇒ parametric rule
+    inputs: [rust-pins]                 # shared pins added to every record
+```
+
+`ruff check {lint-targets}` stands for `ruff check src/a.rs`, `ruff check
+src/b.rs`, … — each a distinct cache identity. A record's inputs are the
+`inputs` pins plus its own file, so editing `src/a.rs` busts only that file's
+record. The macro is one whitespace token but may sit inside one
+(`--file={lint-targets}`). `mmz` stays a prefix — you drive the loop
+(`for f in src/**/*.rs; do mmz ruff check "$f"; done`).
+
+The bound file must be a member of the scope (gitignore-filtered), so an
+off-list path falls through to the no-match case rather than inventing a record.
+`mmz --status` enumerates one row per expanded file, `mmz --prune` drops a record
+once its file leaves the tree, and two rules resolving to the same expanded
+identity is an error, not a silently picked winner.
+
+Per-file scoping is only honest when the command depends on that one file plus
+the pins (a per-file lint/format/typecheck). A whole-crate command like `cargo
+mutants -f {scope}` compiles siblings, so a sibling edit can leave a file's
+record wrongly fresh — use the fan there knowing you trade correctness for speed.
+
 ## Correctness contract
 
 The governing asymmetry, because the failure is silent:

@@ -30,10 +30,10 @@
 //! callers that want the parsed model directly.
 //!
 //! Modules: the manifest ([`manifest`]), pattern resolution ([`resolve`]),
-//! content hashing ([`hashing`]), rule matching ([`matcher`]), the cache
-//! ([`cache`]), cache-hit notices ([`notice`]), and the orchestration engine
-//! ([`engine`]). The `mmz --…` actions live in [`init`], [`schema`],
-//! [`status`], and [`prune`].
+//! content hashing ([`hashing`]), rule matching ([`matcher`]), glob-fanned
+//! parametric rules ([`parametric`]), the cache ([`cache`]), cache-hit notices
+//! ([`notice`]), and the orchestration engine ([`engine`]). The `mmz --…`
+//! actions live in [`init`], [`schema`], [`status`], and [`prune`].
 
 pub mod cache;
 pub mod engine;
@@ -43,6 +43,7 @@ pub mod init;
 pub mod manifest;
 pub mod matcher;
 pub mod notice;
+pub mod parametric;
 pub mod prune;
 pub mod resolve;
 pub mod schema;

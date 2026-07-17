@@ -13,7 +13,7 @@ use std::process::{Command, ExitStatus};
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
-use crate::{cache, hashing, matcher, notice, resolve};
+use crate::{cache, hashing, notice, parametric, resolve};
 
 /// Runs `argv` (a program and its arguments) with memoization, from `cwd`.
 ///
@@ -30,8 +30,10 @@ pub fn run(argv: &[String], cwd: &Path) -> Result<u8> {
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
-    match matcher::first_match(&manifest.commands, argv) {
-        Some(rule) => memoized(manifest, rule, base, argv, cwd),
+    let matches = parametric::resolve_matches(manifest, base, argv)?;
+    parametric::detect_collision(&matches)?;
+    match matches.first() {
+        Some(hit) => memoized(manifest, hit, base, argv, cwd),
         None => no_match(manifest, argv, cwd),
     }
 }
@@ -47,36 +49,37 @@ fn no_match(manifest: &Manifest, argv: &[String], cwd: &Path) -> Result<u8> {
     exec(argv, cwd)
 }
 
-/// Memoizes a matched rule: skip when fresh, otherwise run and record.
+/// Memoizes a matched expansion: skip when fresh, otherwise run and record. The
+/// cache identity is the expansion's concrete name; a parametric expansion also
+/// folds its bound file into the inputs, so the record busts on that file alone.
 fn memoized(
     manifest: &Manifest,
-    rule: &Rule,
+    hit: &parametric::Match,
     base: &Path,
     argv: &[String],
     cwd: &Path,
 ) -> Result<u8> {
-    let Some(digest) = digest_inputs(manifest, rule, base)? else {
+    let identity = hit.exp.identity.as_str();
+    let rule = hit.rule;
+    let Some(digest) = digest_inputs(manifest, rule, hit.exp.file.as_deref(), base)? else {
         if manifest.strict.enforces(StrictCase::NoInputs) {
             return Err(Error::NoInputs {
-                rule: rule.name.clone(),
+                rule: identity.to_owned(),
             });
         }
-        log::warn!(
-            "mmz: `{}` matched no input files; running unmemoized",
-            rule.name
-        );
+        log::warn!("mmz: `{identity}` matched no input files; running unmemoized");
         return exec(argv, cwd);
     };
     let cache_dir = base.join(&manifest.cache_dir);
-    if let Some(cached) = cache::read(&cache_dir, &rule.name) {
+    if let Some(cached) = cache::read(&cache_dir, identity) {
         if cached.ok && cached.digest == digest {
-            log::info!("mmz: skip `{}` (inputs unchanged)", rule.name);
+            log::info!("mmz: skip `{identity}` (inputs unchanged)");
             announce_hit(manifest, rule, &cached);
             return Ok(0);
         }
     }
     let code = exec(argv, cwd)?;
-    cache::write(&cache_dir, &rule.name, &digest, code == 0);
+    cache::write(&cache_dir, identity, &digest, code == 0);
     Ok(code)
 }
 
@@ -94,11 +97,22 @@ fn announce_hit(manifest: &Manifest, rule: &Rule, cached: &cache::Cached) {
     eprintln!("{}", notice::expand(template, &cached.fields));
 }
 
-/// Resolves a rule's scopes to a content digest, or `None` when the rule
-/// matches no files on disk. A glob or I/O failure propagates (fail-closed).
-fn digest_inputs(manifest: &Manifest, rule: &Rule, base: &Path) -> Result<Option<String>> {
+/// Resolves a rule's scopes (plus an optional bound file for a parametric
+/// expansion) to a content digest, or `None` when nothing resolves on disk. A
+/// glob or I/O failure propagates (fail-closed).
+fn digest_inputs(
+    manifest: &Manifest,
+    rule: &Rule,
+    extra: Option<&str>,
+    base: &Path,
+) -> Result<Option<String>> {
     let globs = manifest.globs_for(rule)?;
-    let files = resolve::expand(&globs, base, manifest.gitignore)?;
+    let mut files = resolve::expand(&globs, base, manifest.gitignore)?;
+    if let Some(file) = extra {
+        files.push(file.to_owned());
+        files.sort();
+        files.dedup();
+    }
     if files.is_empty() {
         return Ok(None);
     }
@@ -286,6 +300,105 @@ mod tests {
             std::fs::read(base.join("runs.log")).expect("log").len(),
             2,
             "relaxed no-inputs never memoizes"
+        );
+    }
+
+    /// A parametric rule fanned over `src/**/*.rs`. The executed command appends
+    /// a byte to `<file>.ran` via sh's `$1`, so a run is observable while a
+    /// cache hit leaves the counter untouched.
+    fn write_fan(base: &std::path::Path) {
+        std::fs::create_dir_all(base.join("src")).expect("mkdir src");
+        std::fs::write(base.join("src/a.rs"), b"a").expect("a");
+        std::fs::write(base.join("src/b.rs"), b"b").expect("b");
+        write_manifest(
+            base,
+            "scopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: 'sh -c echo>>\"$1\".ran sh {targets}'\n",
+        );
+    }
+
+    fn fan_argv(file: &str) -> [String; 5] {
+        [
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "echo>>\"$1\".ran".to_owned(),
+            "sh".to_owned(),
+            file.to_owned(),
+        ]
+    }
+
+    fn ran_count(base: &std::path::Path, file: &str) -> usize {
+        std::fs::read(base.join(format!("{file}.ran"))).map_or(0, |bytes| bytes.len())
+    }
+
+    #[test]
+    fn parametric_rule_busts_only_its_own_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        write_fan(base);
+
+        assert_eq!(run(&fan_argv("src/a.rs"), base).expect("run a"), 0);
+        assert_eq!(ran_count(base, "src/a.rs"), 1, "a ran once");
+        assert_eq!(run(&fan_argv("src/a.rs"), base).expect("run a"), 0);
+        assert_eq!(ran_count(base, "src/a.rs"), 1, "a's second run is a hit");
+
+        // b has its own record, unaffected by a.
+        assert_eq!(run(&fan_argv("src/b.rs"), base).expect("run b"), 0);
+        assert_eq!(ran_count(base, "src/b.rs"), 1, "b ran once");
+        assert_eq!(ran_count(base, "src/a.rs"), 1, "a untouched by b");
+
+        // Editing b busts only b; a stays fresh (tight per-file scoping).
+        std::fs::write(base.join("src/b.rs"), b"edited").expect("edit b");
+        assert_eq!(run(&fan_argv("src/a.rs"), base).expect("run a"), 0);
+        assert_eq!(
+            ran_count(base, "src/a.rs"),
+            1,
+            "sibling edit did not bust a"
+        );
+        assert_eq!(run(&fan_argv("src/b.rs"), base).expect("run b"), 0);
+        assert_eq!(ran_count(base, "src/b.rs"), 2, "b's own edit re-ran it");
+    }
+
+    #[test]
+    fn off_domain_file_falls_through_to_no_match() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        write_fan(base);
+        // A .txt path is not in the `src/**/*.rs` domain, so no rule matches.
+        let argv = fan_argv("src/c.txt");
+        assert!(
+            matches!(run(&argv, base), Err(crate::Error::NoMatch { .. })),
+            "an off-domain file does not fan a record"
+        );
+    }
+
+    #[test]
+    fn colliding_parametric_expansions_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        std::fs::write(base.join("a.rs"), b"x").expect("a");
+        write_manifest(
+            base,
+            "scopes:\n  wide: [\"*.rs\"]\n  narrow: [\"a.rs\"]\ncommands:\n  - name: \"do {wide}\"\n  - name: \"do {narrow}\"\n",
+        );
+        let argv = ["do".to_owned(), "a.rs".to_owned()];
+        assert!(
+            matches!(
+                run(&argv, base),
+                Err(crate::Error::CollidingIdentity { .. })
+            ),
+            "two rules claiming `do a.rs` is a loud error, not a silent winner"
+        );
+    }
+
+    #[test]
+    fn malformed_macro_is_a_config_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        write_manifest(base, "commands:\n  - name: \"do {a} {b}\"\n");
+        let argv = ["do".to_owned(), "x".to_owned()];
+        assert!(
+            matches!(run(&argv, base), Err(crate::Error::MacroSyntax { .. })),
+            "a two-macro name is rejected at load"
         );
     }
 }

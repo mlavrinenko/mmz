@@ -207,6 +207,8 @@ fn exit_for(err: &Error) -> u8 {
         | Error::UnknownScope { .. }
         | Error::EmptyCommandName(_)
         | Error::DuplicateCommand(_)
+        | Error::MacroSyntax { .. }
+        | Error::CollidingIdentity { .. }
         | Error::Pattern { .. } => 4,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,
