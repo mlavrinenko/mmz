@@ -17,6 +17,11 @@
 - [outdatty.yaml](outdatty.yaml) couples sources to dependents. When `just check`
   reports drift, update the listed dependents, then run `just outdatty-update`
   to re-confirm. Add a group whenever you introduce files that must stay in sync.
+- Task tracking: MindTape. Backlog lives in [tasks/](tasks/), one Typst file per
+  task, ruled by [.mindtape/config.toml](.mindtape/config.toml). Drive it with
+  the `mt` CLI (`mt ls`, `mt add <title>`, `mt flip <status> <task>`, `mt check`)
+  — don't hand-edit task files to list or re-status. Not to be confused with
+  `.mmz/` (the command cache).
 - Commits: Conventional Commits, English, no `Refs:` footer (no external tracker
   by policy). See [CONTRIBUTING.md](CONTRIBUTING.md#commits).
 

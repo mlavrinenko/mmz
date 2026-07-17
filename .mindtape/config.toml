@@ -1,0 +1,95 @@
+# .mmz vs .mindtape: `.mmz/` is mmz's own command-cache; `.mindtape/` is the
+# MindTape task tracker. This file declares mmz's backlog rules. MindTape
+# constrains only what is declared here; omit a section to accept the defaults.
+
+[tasks]
+# One task per file under `tasks/`. `derive-tags` tags every task with the root
+# name `mmz`, and joins in any folder names once tasks nest into subfolders.
+[[tasks.roots]]
+path = "tasks"
+name = "mmz"
+derive-tags = true
+
+# Status legend in lifecycle order. `to` declares the allowed next statuses;
+# once any entry carries `to`, `mt flip` gates every move to a listed edge
+# (a same-status re-stamp and an unset->any first stamp stay exempt; `--force`
+# overrides). Terminal states end a task.
+[[tasks.status]]
+value = "proposed"
+glyph = "💡"
+color = "blue"
+to = ["accepted", "wip", "cancelled"]
+
+[[tasks.status]]
+value = "accepted"
+glyph = "📋"
+color = "cyan"
+to = ["wip", "cancelled"]
+
+[[tasks.status]]
+value = "wip"
+glyph = "🔨"
+color = "yellow"
+to = ["done", "failed", "accepted"]
+
+[[tasks.status]]
+value = "done"
+glyph = "✅"
+color = "green"
+terminal = true
+to = ["wip", "cancelled", "failed"]
+
+[[tasks.status]]
+value = "cancelled"
+glyph = "🚫"
+color = "magenta"
+terminal = true
+
+[[tasks.status]]
+value = "failed"
+glyph = "❌"
+color = "red"
+terminal = true
+to = ["wip"]
+
+# Priority: an ICE score on a 0..9 scale, classified into labelled bands.
+# `framework = "ice"` computes the score from `priority: ice(impact, confidence,
+# ease)` inputs. `allow-manual = false` forbids hand-set integers.
+[tasks.priority]
+kind = "int"
+min = 0
+max = 9
+required = "non-terminal"
+framework = "ice"
+allow-manual = false
+[[tasks.priority.bands]]
+label = "low"
+min = 0
+max = 2
+glyph = "🟢"
+color = "green"
+[[tasks.priority.bands]]
+label = "normal"
+min = 3
+max = 6
+glyph = "🟡"
+color = "yellow"
+[[tasks.priority.bands]]
+label = "high"
+min = 7
+max = 9
+glyph = "🔴"
+color = "red"
+
+[tasks.estimate]
+units = ["minutes", "hours", "days", "weeks"]
+
+[tasks.tags]
+# Area labels for the mmz backlog. `mmz` is the derived root tag on every task.
+allowed = ["mmz", "tooling", "cli", "cache", "config", "docs", "tests", "gating", "build"]
+
+# Every task carries exactly one Summary section.
+[[tasks.body.headers.rules]]
+path    = ["Summary"]
+action  = "unique"
+message = "every task must have exactly one Summary section"
