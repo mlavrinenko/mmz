@@ -75,12 +75,13 @@
     <a href="https://github.com/mlavrinenko/mmz/releases/latest">latest release</a>.</p>
 
   <h2>Usage</h2>
-  <pre><code>mmz --init        # write a starter .mmz/config.yaml
-mmz cargo test    # skipped when the declared inputs are unchanged
-mmz --status      # show each rule's freshness and record age
-mmz --status=json # the same, with inputs and hashes, for jq
-mmz --prune       # drop cache records whose rule no longer exists
-mmz --schema      # print the config JSON Schema</code></pre>
+  <pre><code>mmz --init            # write a starter .mmz/config.yaml
+mmz cargo test        # skipped when the declared inputs are unchanged
+mmz --status          # show each rule's freshness and record age
+mmz --status=json     # the same, with inputs and hashes, for jq
+mmz --is-fresh -- cmd # exit 0 if cmd's rule is fresh; runs nothing (gate hooks)
+mmz --prune           # drop cache records whose rule no longer exists
+mmz --schema          # print the config JSON Schema</code></pre>
 
   <p><code>mmz</code> fails closed: it errors when no manifest is found, the
     manifest is invalid, no rule matches, or a matched rule has no inputs. Relax

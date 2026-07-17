@@ -56,7 +56,7 @@ struct CachedInfo {
 /// A rule's freshness verdict.
 #[derive(Serialize, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
-enum State {
+pub(crate) enum State {
     Fresh,
     Stale,
     Never,
@@ -66,13 +66,30 @@ enum State {
 
 impl State {
     /// The label used in the human table; matches the JSON enum spelling.
-    const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::Fresh => "fresh",
             Self::Stale => "stale",
             Self::Never => "never",
             Self::Failed => "failed",
             Self::NoInputs => "no-inputs",
+        }
+    }
+
+    /// True only for [`State::Fresh`] — the sole state `mmz --is-fresh` passes.
+    pub(crate) const fn is_fresh(self) -> bool {
+        matches!(self, Self::Fresh)
+    }
+
+    /// Why a non-fresh rule would re-run, for the `--is-fresh` gate's message.
+    /// `None` when the rule is fresh.
+    pub(crate) const fn reason(self) -> Option<&'static str> {
+        match self {
+            Self::Fresh => None,
+            Self::Stale => Some("inputs changed since it last passed"),
+            Self::Never => Some("never run"),
+            Self::Failed => Some("last run failed"),
+            Self::NoInputs => Some("resolved no input files"),
         }
     }
 }
@@ -143,11 +160,7 @@ fn rule_status(
         files.sort();
         files.dedup();
     }
-    let cached = cache::read(cache_dir, &identity).map(|cached| CachedInfo {
-        digest: cached.digest,
-        ok: cached.ok,
-        ran_at: cached.ran_at,
-    });
+    let cached = read_cached(cache_dir, &identity);
     if files.is_empty() {
         return Ok(RuleStatus {
             name: identity,
@@ -159,12 +172,7 @@ fn rule_status(
     }
     let inputs = hashing::hash_each(base, &files)?;
     let digest = hashing::digest_hashes(&inputs);
-    let state = match &cached {
-        None => State::Never,
-        Some(record) if !record.ok => State::Failed,
-        Some(record) if record.digest == digest => State::Fresh,
-        Some(_) => State::Stale,
-    };
+    let state = verdict(cached.as_ref(), &digest);
     Ok(RuleStatus {
         name: identity,
         state,
@@ -172,6 +180,53 @@ fn rule_status(
         cached,
         inputs,
     })
+}
+
+/// Computes one rule's freshness without the per-input detail [`rule_status`]
+/// gathers: resolve the scopes, digest them, and compare to the record. The
+/// per-rule core the `mmz --is-fresh` gate evaluates.
+///
+/// # Errors
+///
+/// Returns a resolution or hashing error when a rule's globs are invalid or an
+/// input cannot be read.
+pub(crate) fn rule_state(
+    manifest: &Manifest,
+    rule: &crate::manifest::Command,
+    base: &Path,
+    cache_dir: &Path,
+) -> Result<State> {
+    let globs = manifest.globs_for(rule)?;
+    let files = resolve::expand(&globs, base, manifest.gitignore)?;
+    if files.is_empty() {
+        return Ok(State::NoInputs);
+    }
+    let digest = hashing::digest_files(base, &files)?;
+    Ok(verdict(
+        read_cached(cache_dir, &rule.name).as_ref(),
+        &digest,
+    ))
+}
+
+/// Reads `name`'s record from `cache_dir` as the trusted view shared by the
+/// status report and the freshness gate.
+fn read_cached(cache_dir: &Path, name: &str) -> Option<CachedInfo> {
+    cache::read(cache_dir, name).map(|cached| CachedInfo {
+        digest: cached.digest,
+        ok: cached.ok,
+        ran_at: cached.ran_at,
+    })
+}
+
+/// The freshness verdict for `digest` against a rule's stored record: fresh only
+/// when the record is present, succeeded, and its digest matches.
+fn verdict(cached: Option<&CachedInfo>, digest: &str) -> State {
+    match cached {
+        None => State::Never,
+        Some(record) if !record.ok => State::Failed,
+        Some(record) if record.digest == digest => State::Fresh,
+        Some(_) => State::Stale,
+    }
 }
 
 /// Renders the aligned `RULE / STATE / AGE` table. AGE is the time since the
@@ -231,181 +286,5 @@ fn now_secs() -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{SCHEMA, humanize_age, report, report_json};
-
-    fn write(dir: &std::path::Path, name: &str, body: &str) {
-        std::fs::write(dir.join(name), body).expect("write");
-    }
-
-    fn manifest(root: &std::path::Path, body: &str) {
-        let dir = root.join(".mmz");
-        std::fs::create_dir_all(&dir).expect("mkdir .mmz");
-        std::fs::write(dir.join("config.yaml"), body).expect("write manifest");
-    }
-
-    #[test]
-    fn humanize_age_scales_by_unit() {
-        assert_eq!(humanize_age(5), "5s ago");
-        assert_eq!(humanize_age(90), "1m ago");
-        assert_eq!(humanize_age(3 * 3600), "3h ago");
-        assert_eq!(humanize_age(2 * 86_400), "2d ago");
-    }
-
-    #[test]
-    fn reports_never_then_fresh_then_stale() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let base = dir.path();
-        write(base, "a.txt", "one");
-        manifest(
-            base,
-            "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
-        );
-
-        let never = report(base).expect("report");
-        assert!(never.contains("sh") && never.contains("never"));
-
-        let argv = ["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
-        crate::run(&argv, base).expect("recorded run");
-        assert!(
-            report(base).expect("report").contains("fresh"),
-            "fresh after a recorded run"
-        );
-
-        write(base, "a.txt", "two");
-        assert!(
-            report(base).expect("report").contains("stale"),
-            "stale after an input changes"
-        );
-    }
-
-    #[test]
-    fn text_shows_age_after_a_run_and_json_reports_ran_at() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let base = dir.path();
-        write(base, "a.txt", "one");
-        manifest(
-            base,
-            "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
-        );
-        let argv = ["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
-        crate::run(&argv, base).expect("recorded run");
-
-        assert!(
-            report(base).expect("report").contains("ago"),
-            "table shows a record age once a run is recorded"
-        );
-        let json: serde_json::Value =
-            serde_json::from_str(&report_json(base).expect("json")).expect("valid json");
-        let ran_at = json
-            .pointer("/rules/0/cached/ran_at")
-            .expect("ran_at present");
-        assert!(
-            ran_at.as_u64().is_some_and(|secs| secs > 0),
-            "ran_at is a unix timestamp"
-        );
-    }
-
-    #[test]
-    fn reports_no_inputs_for_empty_scopes() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let base = dir.path();
-        manifest(
-            base,
-            "scopes:\n  none: [\"*.none\"]\ncommands:\n  - name: sh\n    inputs: [none]\n",
-        );
-        let report = report(base).expect("report");
-        assert!(report.contains("sh") && report.contains("no-inputs"));
-    }
-
-    #[test]
-    fn missing_manifest_is_an_error() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        assert!(report(dir.path()).is_err());
-    }
-
-    #[test]
-    fn parametric_rule_enumerates_one_row_per_file() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let base = dir.path();
-        std::fs::create_dir(base.join("src")).expect("mkdir");
-        write(&base.join("src"), "a.rs", "a");
-        write(&base.join("src"), "b.rs", "b");
-        manifest(
-            base,
-            "scopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"lint {targets}\"\n",
-        );
-        let report = report(base).expect("report");
-        assert!(report.contains("lint src/a.rs"), "row for a: {report}");
-        assert!(report.contains("lint src/b.rs"), "row for b: {report}");
-        assert!(report.contains("never"), "each expansion has a verdict");
-    }
-
-    #[test]
-    fn colliding_expansions_are_an_error() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let base = dir.path();
-        write(base, "a.rs", "x");
-        manifest(
-            base,
-            "scopes:\n  wide: [\"*.rs\"]\n  narrow: [\"a.rs\"]\ncommands:\n  - name: \"do {wide}\"\n  - name: \"do {narrow}\"\n",
-        );
-        assert!(
-            report(base).is_err(),
-            "status surfaces a colliding-identity config proactively"
-        );
-    }
-
-    #[test]
-    fn json_lists_inputs_with_hashes_and_state() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let base = dir.path();
-        write(base, "a.txt", "one");
-        manifest(
-            base,
-            "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
-        );
-
-        let json: serde_json::Value =
-            serde_json::from_str(&report_json(base).expect("json")).expect("valid json");
-        let rule = json.pointer("/rules/0").expect("first rule");
-        let str_at = |value: &serde_json::Value, key: &str| {
-            value
-                .get(key)
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned)
-        };
-        assert_eq!(str_at(rule, "name").as_deref(), Some("sh"));
-        assert_eq!(str_at(rule, "state").as_deref(), Some("never"));
-        let input = rule.pointer("/inputs/0").expect("first input");
-        assert_eq!(str_at(input, "path").as_deref(), Some("a.txt"));
-        assert_eq!(
-            str_at(input, "hash").as_deref().map(str::len),
-            Some(64),
-            "per-file blake3 hex is reported"
-        );
-        assert!(
-            rule.get("cached").is_none(),
-            "no record yet, cached omitted"
-        );
-    }
-
-    #[test]
-    fn schema_is_valid_json_describing_the_output() {
-        let schema: serde_json::Value = serde_json::from_str(SCHEMA).expect("schema is json");
-        assert_eq!(
-            schema.get("$schema").and_then(serde_json::Value::as_str),
-            Some("https://json-schema.org/draft/2020-12/schema")
-        );
-        for key in [
-            "manifest",
-            "rules",
-            "state",
-            "inputs",
-            "no-inputs",
-            "ran_at",
-        ] {
-            assert!(SCHEMA.contains(key), "schema mentions `{key}`");
-        }
-    }
-}
+#[path = "status_tests.rs"]
+mod tests;

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-18
+
 ### Added
 
 - Parametric rules: a single `{scope}` macro in a command `name` fans the rule
@@ -18,6 +20,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the scope. `mmz --status` enumerates the expansions and `mmz --prune` sweeps a
   record once its file is gone. Two rules resolving to the same identity is a
   hard error.
+- MindTape task tracking: adopt MindTape for project task tracking
+  (`tasks/`, driven via `mt` CLI).
+
+### Changed
+
+- Build QA: replaced ad-hoc Nix dev shell tooling with `qahq` for shared QA
+  tools.
+- Dropped `sccache` from the build — the `RUSTC_WRAPPER` env var is no longer
+  set, making sandboxed and downstream builds simpler without the wrapper.
+
+## [0.3.0] - 2026-06-30
+
+### Added
+
+- `mmz --is-fresh [-- <command>]`: a freshness gate that asserts a command's
+  cache is fresh without running it. Exits 0 when the matched rule is fresh, 1
+  when it is not (stale, never run, last failed, or no inputs); a no-match is a
+  strict refusal (exit 3) and a missing or invalid manifest still exits 4. With
+  no command it gates every rule at once. It is the inverse of wrapping — where
+  `mmz <command>` runs a stale command, `mmz --is-fresh -- <command>` refuses it
+  — so a git hook can require that an expensive check was already run and
+  memoized without paying to run it on the spot.
 
 ## [0.2.0] - 2026-06-27
 
