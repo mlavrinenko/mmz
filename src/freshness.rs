@@ -14,12 +14,15 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
-use crate::matcher;
-use crate::status::{State, rule_state};
+use crate::parametric;
+use crate::status::{State, expansion_state};
 
-/// One rule's freshness, the unit a gate reports on.
+/// One expansion's freshness, the unit a gate reports on. For a parametric
+/// rule this is one per-file expansion; for a static rule, the rule itself.
 pub struct Verdict {
-    /// The rule's name (its cache identity).
+    /// The expansion's cache identity: the bare rule name for a static rule,
+    /// or the rule name with its `{scope}` macro substituted for a
+    /// parametric expansion.
     pub rule: String,
     state: State,
 }
@@ -46,21 +49,31 @@ impl Verdict {
     }
 }
 
-/// Evaluates freshness against the nearest manifest above `cwd`, running nothing.
+/// Evaluates freshness against the nearest manifest above `cwd`, running
+/// nothing. A parametric rule (a `{scope}`-fanned `name`) expands exactly as
+/// `mmz --status` does: one [`Verdict`] per file its scope resolves to,
+/// keyed on that expansion's concrete identity rather than the rule's literal
+/// template name.
 ///
-/// With `argv` given and `tags` empty, returns the single [`Verdict`] for the
-/// rule `argv` matches. With `tags` non-empty, returns one verdict per rule
-/// that carries every listed tag (an AND filter — a rule with no tags never
-/// matches); `argv` must be `None` in that case, since a targeted command
-/// already resolves to a single rule. With both empty, returns one verdict per
-/// rule in manifest order, so a caller can gate the whole manifest at once.
+/// With `argv` given and `tags` empty, resolves the single expansion `argv`
+/// binds to (via [`parametric::resolve_matches`]) and returns its lone
+/// verdict — for a parametric rule this gates the one per-file expansion
+/// `argv` names, not the whole rule. With `tags` non-empty, expands every
+/// rule that carries every listed tag (an AND filter — a rule with no tags
+/// never matches) and returns one verdict per expansion; `argv` must be
+/// `None` in that case, since a targeted command already resolves to a
+/// single expansion. With both empty, expands every rule in manifest order
+/// and returns one verdict per expansion, so a caller can gate the whole
+/// manifest at once.
 ///
 /// # Errors
 ///
 /// Returns [`Error::TagWithCommand`] when `tags` is non-empty and `argv` is
 /// also given, [`Error::NoManifest`] when no manifest is found, a manifest
 /// error when one cannot be loaded, [`Error::NoMatch`] when `argv` matches no
-/// rule, or a resolution/hashing error when a rule's inputs cannot be read.
+/// rule, [`Error::CollidingIdentity`] when two expansions share a cache
+/// identity, or a resolution/hashing error when a rule's inputs cannot be
+/// read.
 pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<Vec<Verdict>> {
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
@@ -71,41 +84,66 @@ pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<
         if argv.is_some() {
             return Err(Error::TagWithCommand);
         }
-        return manifest
-            .commands
-            .iter()
-            .filter(|rule| tags.iter().all(|tag| rule.tags.contains(tag)))
-            .map(|rule| verdict_for(manifest, rule, base, &cache_dir))
-            .collect();
+        let matches = expand_matching(manifest, base, |rule| {
+            tags.iter().all(|tag| rule.tags.contains(tag))
+        })?;
+        return verdicts_for(manifest, &matches, base, &cache_dir);
     }
 
-    match argv {
-        Some(argv) => {
-            let rule =
-                matcher::first_match(&manifest.commands, argv).ok_or_else(|| Error::NoMatch {
-                    command: argv.join(" "),
-                })?;
-            Ok(vec![verdict_for(manifest, rule, base, &cache_dir)?])
-        }
-        None => manifest
-            .commands
-            .iter()
-            .map(|rule| verdict_for(manifest, rule, base, &cache_dir))
-            .collect(),
+    if let Some(argv) = argv {
+        let matches = parametric::resolve_matches(manifest, base, argv)?;
+        parametric::detect_collision(&matches)?;
+        let hit = matches.first().ok_or_else(|| Error::NoMatch {
+            command: argv.join(" "),
+        })?;
+        return Ok(vec![verdict_for(manifest, hit, base, &cache_dir)?]);
     }
+
+    let matches = expand_matching(manifest, base, |_| true)?;
+    verdicts_for(manifest, &matches, base, &cache_dir)
 }
 
-/// Builds one rule's [`Verdict`] — the step every branch of [`evaluate`] needs
-/// once it has settled on which rules to report.
+/// Expands every rule passing `keep` into its parametric matches (one per
+/// domain file, or the rule itself when static), then checks the collected
+/// expansions for a colliding identity — the untargeted and tag-filtered
+/// gates share this shape, differing only in which rules they keep.
+fn expand_matching<'a>(
+    manifest: &'a Manifest,
+    base: &Path,
+    keep: impl Fn(&Command) -> bool,
+) -> Result<Vec<parametric::Match<'a>>> {
+    let mut matches = Vec::new();
+    for rule in manifest.commands.iter().filter(|rule| keep(rule)) {
+        matches.extend(parametric::expand_rule(manifest, base, rule)?);
+    }
+    parametric::detect_collision(&matches)?;
+    Ok(matches)
+}
+
+/// Builds one [`Verdict`] per expansion in `matches`.
+fn verdicts_for(
+    manifest: &Manifest,
+    matches: &[parametric::Match],
+    base: &Path,
+    cache_dir: &Path,
+) -> Result<Vec<Verdict>> {
+    matches
+        .iter()
+        .map(|hit| verdict_for(manifest, hit, base, cache_dir))
+        .collect()
+}
+
+/// Builds one expansion's [`Verdict`] — the step every branch of [`evaluate`]
+/// needs once it has settled on which expansion(s) to report.
 fn verdict_for(
     manifest: &Manifest,
-    rule: &Command,
+    hit: &parametric::Match,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<Verdict> {
     Ok(Verdict {
-        rule: rule.name.clone(),
-        state: rule_state(manifest, rule, base, cache_dir)?,
+        rule: hit.exp.identity.clone(),
+        state: expansion_state(manifest, hit, base, cache_dir)?,
     })
 }
 
@@ -273,5 +311,136 @@ mod tests {
             ),
             "a tag filter plus a targeted command is redundant, so it errors"
         );
+    }
+
+    /// A parametric rule (`sh -c true sh {targets}`, fanned over `src/*.rs`)
+    /// plus two candidate files, neither yet recorded.
+    fn parametric_project(dir: &Path) {
+        write_manifest(
+            dir,
+            "scopes:\n  targets: [\"src/*.rs\"]\ncommands:\n  - name: \"sh -c true sh {targets}\"\n",
+        );
+        std::fs::create_dir_all(dir.join("src")).expect("mkdir src");
+        std::fs::write(dir.join("src/a.rs"), b"a").expect("write a");
+        std::fs::write(dir.join("src/b.rs"), b"b").expect("write b");
+    }
+
+    /// Records a successful run of the parametric rule bound to `file`.
+    fn record_file(dir: &Path, file: &str) {
+        let argv = [
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "true".to_owned(),
+            "sh".to_owned(),
+            file.to_owned(),
+        ];
+        crate::run(&argv, dir).expect("recorded run");
+    }
+
+    #[test]
+    fn untargeted_parametric_gate_reports_one_verdict_per_expansion() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        parametric_project(base);
+        record_file(base, "src/a.rs");
+
+        let verdicts = evaluate(base, None, &[]).expect("evaluate");
+        assert_eq!(verdicts.len(), 2, "one verdict per per-file expansion");
+        assert!(
+            verdicts
+                .iter()
+                .all(|verdict| !verdict.rule.contains("{targets}")),
+            "no verdict is keyed on the literal template: {:?}",
+            verdicts
+                .iter()
+                .map(|verdict| &verdict.rule)
+                .collect::<Vec<_>>()
+        );
+
+        let a = verdicts
+            .iter()
+            .find(|verdict| verdict.rule == "sh -c true sh src/a.rs")
+            .expect("a verdict for the recorded file");
+        assert!(a.is_fresh(), "the recorded file is fresh");
+
+        let b = verdicts
+            .iter()
+            .find(|verdict| verdict.rule == "sh -c true sh src/b.rs")
+            .expect("a verdict for the unrecorded sibling");
+        assert!(!b.is_fresh(), "the unrecorded sibling is not fresh");
+        assert_eq!(b.state(), "never");
+    }
+
+    #[test]
+    fn targeted_parametric_gate_matches_the_bound_expansion() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        parametric_project(base);
+        record_file(base, "src/a.rs");
+
+        let argv_a = [
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "true".to_owned(),
+            "sh".to_owned(),
+            "src/a.rs".to_owned(),
+        ];
+        let fresh = evaluate(base, Some(&argv_a), &[]).expect("evaluate");
+        assert_eq!(fresh.len(), 1, "one verdict for the resolved expansion");
+        assert!(
+            fresh.first().expect("one verdict").is_fresh(),
+            "the recorded expansion is fresh"
+        );
+
+        let argv_b = [
+            "sh".to_owned(),
+            "-c".to_owned(),
+            "true".to_owned(),
+            "sh".to_owned(),
+            "src/b.rs".to_owned(),
+        ];
+        let never = evaluate(base, Some(&argv_b), &[]).expect("evaluate");
+        assert!(
+            !never.first().expect("one verdict").is_fresh(),
+            "the unrecorded expansion is not fresh"
+        );
+    }
+
+    /// A parametric rule tagged `gate` (fanned over `src/*.rs`) plus an
+    /// untagged static rule, so a tag filter must expand only the former.
+    fn tagged_parametric_project(dir: &Path) {
+        write_manifest(
+            dir,
+            "scopes:\n  targets: [\"src/*.rs\"]\ncommands:\n  - name: \"sh -c true sh {targets}\"\n    tags: [gate]\n  - name: cat\n",
+        );
+        std::fs::create_dir_all(dir.join("src")).expect("mkdir src");
+        std::fs::write(dir.join("src/a.rs"), b"a").expect("write a");
+        std::fs::write(dir.join("src/b.rs"), b"b").expect("write b");
+    }
+
+    #[test]
+    fn tag_filter_expands_a_parametric_rule_per_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path();
+        tagged_parametric_project(base);
+        record_file(base, "src/a.rs");
+
+        let gated = evaluate(base, None, &["gate".to_owned()]).expect("evaluate");
+        assert_eq!(
+            gated.len(),
+            2,
+            "one verdict per file expansion under the tag filter"
+        );
+        assert!(
+            gated
+                .iter()
+                .all(|verdict| verdict.rule.starts_with("sh -c true sh src/")),
+            "the untagged `cat` rule never contributes a verdict"
+        );
+        let a = gated
+            .iter()
+            .find(|verdict| verdict.rule == "sh -c true sh src/a.rs")
+            .expect("a verdict");
+        assert!(a.is_fresh(), "the recorded file is fresh under the filter");
     }
 }

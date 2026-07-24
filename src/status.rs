@@ -151,6 +151,24 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     })
 }
 
+/// Resolves one expansion's full input set: the rule's shared `inputs` globs
+/// unioned with the expansion's bound file (for a parametric expansion). The
+/// file set both [`rule_status`] and [`expansion_state`] digest.
+fn expansion_files(
+    manifest: &Manifest,
+    hit: &parametric::Match,
+    base: &Path,
+) -> Result<Vec<String>> {
+    let globs = manifest.globs_for(hit.rule)?;
+    let mut files = resolve::expand(&globs, base, manifest.gitignore)?;
+    if let Some(file) = &hit.exp.file {
+        files.push(file.clone());
+        files.sort();
+        files.dedup();
+    }
+    Ok(files)
+}
+
 /// Computes one expansion's status: resolve its inputs (shared pins plus any
 /// bound file), hash them, and compare the digest against the stored record.
 fn rule_status(
@@ -160,13 +178,7 @@ fn rule_status(
     cache_dir: &Path,
 ) -> Result<RuleStatus> {
     let identity = hit.exp.identity.clone();
-    let globs = manifest.globs_for(hit.rule)?;
-    let mut files = resolve::expand(&globs, base, manifest.gitignore)?;
-    if let Some(file) = &hit.exp.file {
-        files.push(file.clone());
-        files.sort();
-        files.dedup();
-    }
+    let files = expansion_files(manifest, hit, base)?;
     let cached = read_cached(cache_dir, &identity);
     if files.is_empty() {
         return Ok(RuleStatus {
@@ -189,28 +201,32 @@ fn rule_status(
     })
 }
 
-/// Computes one rule's freshness without the per-input detail [`rule_status`]
-/// gathers: resolve the scopes, digest them, and compare to the record. The
-/// per-rule core the `mmz --is-fresh` gate evaluates.
+/// Computes one expansion's freshness without the per-input detail
+/// [`rule_status`] gathers: resolve its inputs (shared pins plus any bound
+/// file), digest them, and compare to the record keyed on the expansion's
+/// identity. The per-expansion core the `mmz --is-fresh` gate evaluates,
+/// keying static and parametric rules alike on [`parametric::Match`] —
+/// `parametric::expand_rule` yields a single match whose identity is the bare
+/// rule name for a static rule, so this collapses to `rule_state`'s old
+/// behaviour there.
 ///
 /// # Errors
 ///
-/// Returns a resolution or hashing error when a rule's globs are invalid or an
-/// input cannot be read.
-pub(crate) fn rule_state(
+/// Returns a resolution or hashing error when the rule's globs are invalid or
+/// an input cannot be read.
+pub(crate) fn expansion_state(
     manifest: &Manifest,
-    rule: &crate::manifest::Command,
+    hit: &parametric::Match,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<State> {
-    let globs = manifest.globs_for(rule)?;
-    let files = resolve::expand(&globs, base, manifest.gitignore)?;
+    let files = expansion_files(manifest, hit, base)?;
     if files.is_empty() {
         return Ok(State::NoInputs);
     }
     let digest = hashing::digest_files(base, &files)?;
     Ok(verdict(
-        read_cached(cache_dir, &rule.name).as_ref(),
+        read_cached(cache_dir, &hit.exp.identity).as_ref(),
         &digest,
     ))
 }

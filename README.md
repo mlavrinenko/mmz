@@ -175,9 +175,12 @@ record. The macro is one whitespace token but may sit inside one
 
 The bound file must be a member of the scope (gitignore-filtered), so an
 off-list path falls through to the no-match case rather than inventing a record.
-`mmz --status` enumerates one row per expanded file, `mmz --prune` drops a record
-once its file leaves the tree, and two rules resolving to the same expanded
-identity is an error, not a silently picked winner.
+`mmz --status` enumerates one row per expanded file, `mmz --is-fresh` gates one
+verdict per expanded file (a bare `--is-fresh` over a parametric rule passes
+only when every one of its expansions is fresh; a targeted `--is-fresh --
+<command> <file>` gates the one expansion `<file>` binds to), `mmz --prune`
+drops a record once its file leaves the tree, and two rules resolving to the
+same expanded identity is an error, not a silently picked winner.
 
 Per-file scoping is only honest when the command depends on that one file plus
 the pins (a per-file lint/format/typecheck). A whole-crate command like `cargo
