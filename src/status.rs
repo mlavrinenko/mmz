@@ -9,13 +9,14 @@
 //! content hash, so an operator can diff runs or `jq` out the changed file. The
 //! JSON shape is described by [`SCHEMA`], printed by `mmz --status=json-schema`.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-use crate::manifest::Manifest;
+use crate::manifest::{Command, Manifest};
 use crate::{cache, hashing, parametric, resolve};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
@@ -134,16 +135,21 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
 
     let cache_dir = base.join(&manifest.cache_dir);
     let mut matches = Vec::with_capacity(manifest.commands.len());
+    let mut shared_by_rule: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for rule in &manifest.commands {
         if !tags.is_empty() && !tags.iter().all(|tag| rule.tags.contains(tag)) {
             continue;
         }
+        shared_by_rule.insert(rule.name.clone(), shared_inputs(manifest, rule, base)?);
         matches.extend(parametric::expand_rule(manifest, base, rule)?);
     }
     parametric::detect_collision(&matches)?;
     let mut rules = Vec::with_capacity(matches.len());
     for hit in &matches {
-        rules.push(rule_status(manifest, hit, base, &cache_dir)?);
+        let shared = shared_by_rule
+            .get(hit.rule.name.as_str())
+            .expect("shared inputs resolved for every kept rule");
+        rules.push(rule_status(hit, shared, base, &cache_dir)?);
     }
     Ok(Report {
         manifest: located.path.display().to_string(),
@@ -151,34 +157,48 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     })
 }
 
-/// Resolves one expansion's full input set: the rule's shared `inputs` globs
-/// unioned with the expansion's bound file (for a parametric expansion). The
-/// file set both [`rule_status`] and [`expansion_state`] digest.
-fn expansion_files(
+/// Resolves a rule's shared `inputs` glob set: one filesystem walk, run once
+/// per rule regardless of how many expansions (parametric fan-outs) it has.
+/// [`expansion_files`] unions this cached set with each expansion's bound
+/// file, so the walk itself never repeats per expansion.
+///
+/// # Errors
+///
+/// Returns a resolution error when the rule's globs are invalid.
+pub(crate) fn shared_inputs(
     manifest: &Manifest,
-    hit: &parametric::Match,
+    rule: &Command,
     base: &Path,
 ) -> Result<Vec<String>> {
-    let globs = manifest.globs_for(hit.rule)?;
-    let mut files = resolve::expand(&globs, base, manifest.gitignore)?;
+    resolve::expand(&manifest.globs_for(rule)?, base, manifest.gitignore)
+}
+
+/// Combines a rule's pre-resolved shared inputs with one expansion's bound
+/// file (if any), sorted and deduped. Pure: it does no filesystem walk of its
+/// own — callers resolve `shared` once per rule via [`shared_inputs`] and
+/// reuse it across every expansion. The file set both [`rule_status`] and
+/// [`expansion_state`] digest.
+fn expansion_files(shared: &[String], hit: &parametric::Match) -> Vec<String> {
+    let mut files = shared.to_vec();
     if let Some(file) = &hit.exp.file {
         files.push(file.clone());
         files.sort();
         files.dedup();
     }
-    Ok(files)
+    files
 }
 
-/// Computes one expansion's status: resolve its inputs (shared pins plus any
-/// bound file), hash them, and compare the digest against the stored record.
+/// Computes one expansion's status: combine its pre-resolved shared inputs
+/// with any bound file, hash them, and compare the digest against the stored
+/// record.
 fn rule_status(
-    manifest: &Manifest,
     hit: &parametric::Match,
+    shared: &[String],
     base: &Path,
     cache_dir: &Path,
 ) -> Result<RuleStatus> {
     let identity = hit.exp.identity.clone();
-    let files = expansion_files(manifest, hit, base)?;
+    let files = expansion_files(shared, hit);
     let cached = read_cached(cache_dir, &identity);
     if files.is_empty() {
         return Ok(RuleStatus {
@@ -202,25 +222,24 @@ fn rule_status(
 }
 
 /// Computes one expansion's freshness without the per-input detail
-/// [`rule_status`] gathers: resolve its inputs (shared pins plus any bound
-/// file), digest them, and compare to the record keyed on the expansion's
-/// identity. The per-expansion core the `mmz --is-fresh` gate evaluates,
-/// keying static and parametric rules alike on [`parametric::Match`] —
-/// `parametric::expand_rule` yields a single match whose identity is the bare
-/// rule name for a static rule, so this collapses to `rule_state`'s old
-/// behaviour there.
+/// [`rule_status`] gathers: combine its pre-resolved shared inputs with any
+/// bound file, digest them, and compare to the record keyed on the
+/// expansion's identity. The per-expansion core the `mmz --is-fresh` gate
+/// evaluates, keying static and parametric rules alike on
+/// [`parametric::Match`] — `parametric::expand_rule` yields a single match
+/// whose identity is the bare rule name for a static rule, so this collapses
+/// to `rule_state`'s old behaviour there.
 ///
 /// # Errors
 ///
-/// Returns a resolution or hashing error when the rule's globs are invalid or
-/// an input cannot be read.
+/// Returns a hashing error when an input cannot be read.
 pub(crate) fn expansion_state(
-    manifest: &Manifest,
     hit: &parametric::Match,
+    shared: &[String],
     base: &Path,
     cache_dir: &Path,
 ) -> Result<State> {
-    let files = expansion_files(manifest, hit, base)?;
+    let files = expansion_files(shared, hit);
     if files.is_empty() {
         return Ok(State::NoInputs);
     }

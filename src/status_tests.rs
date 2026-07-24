@@ -108,6 +108,59 @@ fn parametric_rule_enumerates_one_row_per_file() {
 }
 
 #[test]
+fn parametric_expansion_inputs_are_shared_pin_union_bound_file() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write(base, "shared.txt", "pin");
+    std::fs::create_dir(base.join("src")).expect("mkdir");
+    write(&base.join("src"), "a.rs", "a");
+    write(&base.join("src"), "b.rs", "b");
+    manifest(
+        base,
+        "scopes:\n  pin: [\"shared.txt\"]\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"lint {targets}\"\n    inputs: [pin]\n",
+    );
+
+    let json: serde_json::Value =
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
+    let rules = json
+        .pointer("/rules")
+        .and_then(serde_json::Value::as_array)
+        .expect("rules array");
+    let row = rules
+        .iter()
+        .find(|rule| rule.get("name").and_then(serde_json::Value::as_str) == Some("lint src/a.rs"))
+        .expect("row for the a.rs expansion");
+
+    let input_paths: Vec<&str> = row
+        .pointer("/inputs")
+        .and_then(serde_json::Value::as_array)
+        .expect("inputs array")
+        .iter()
+        .map(|input| {
+            input
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+                .expect("path")
+        })
+        .collect();
+    assert_eq!(
+        input_paths,
+        vec!["shared.txt", "src/a.rs"],
+        "the shared pin and the bound file, sorted, and nothing from the \
+         sibling expansion's bound file"
+    );
+
+    let expected =
+        crate::hashing::digest_files(base, &["shared.txt".to_owned(), "src/a.rs".to_owned()])
+            .expect("expected digest");
+    assert_eq!(
+        row.get("digest").and_then(serde_json::Value::as_str),
+        Some(expected.as_str()),
+        "digest is over the shared pin plus the bound file, in sorted order"
+    );
+}
+
+#[test]
 fn colliding_expansions_are_an_error() {
     let dir = tempfile::tempdir().expect("tempdir");
     let base = dir.path();
