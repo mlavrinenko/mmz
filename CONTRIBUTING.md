@@ -82,8 +82,9 @@ the recipe, mirror it in `.mmz/config.yaml` so the rule still matches.
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for the
   subject line, in English (matching this repo's history).
-- Do not add a `Refs:` footer. This project tracks no external issue tracker, so
-  commits carry no task reference by policy. Add no other trailers either.
+- Add a `Refs: tasks/<stem>.typ` footer naming the MindTape task file the
+  commit closes or advances (see [tasks/](tasks/)). File a task first if none
+  exists yet for the work; never guess a stem. Add no other trailers.
 
 ## Submitting Changes
 

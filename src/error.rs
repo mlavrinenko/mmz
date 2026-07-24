@@ -62,6 +62,22 @@ pub enum Error {
     #[error("duplicate command name: {0} (command names must be unique)")]
     DuplicateCommand(String),
 
+    /// A command rule declares the same tag twice.
+    #[error("command `{command}` declares tag `{tag}` twice")]
+    DuplicateTag {
+        /// Name of the offending command.
+        command: String,
+        /// The duplicated tag.
+        tag: String,
+    },
+
+    /// `--is-fresh` (or another tag-filtered action) was given both a `--tag`
+    /// filter and a specific command to target.
+    #[error(
+        "`--tag` cannot be combined with a command; a command already resolves to a single rule"
+    )]
+    TagWithCommand,
+
     /// A command rule's `name` carries a malformed `{scope}` fan macro.
     #[error("command `{name}` has a malformed `{{scope}}` macro: {reason}")]
     MacroSyntax {

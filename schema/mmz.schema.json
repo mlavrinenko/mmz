@@ -37,6 +37,11 @@
             "default": "prefix",
             "description": "How name matches argv. prefix (default): name's tokens are a leading slice of the command. exact: the whole command equals name's tokens."
           },
+          "tags": {
+            "type": "array",
+            "description": "Free-form labels for filtering with `mmz --is-fresh --tag <tag>` (and `--status --tag <tag>`); repeat --tag to require every listed tag (AND). A rule with no tags never matches a --tag filter. Each tag is trimmed and blank entries are dropped; duplicates within one rule are rejected.",
+            "items": { "type": "string" }
+          },
           "on_hit": {
             "type": "string",
             "description": "Overrides the top-level on_hit for this rule. An empty string suppresses the cache-hit notice."

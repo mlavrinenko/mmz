@@ -28,19 +28,19 @@ fn reports_never_then_fresh_then_stale() {
         "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
     );
 
-    let never = report(base).expect("report");
+    let never = report(base, &[]).expect("report");
     assert!(never.contains("sh") && never.contains("never"));
 
     let argv = ["sh".to_owned(), "-c".to_owned(), "exit 0".to_owned()];
     crate::run(&argv, base).expect("recorded run");
     assert!(
-        report(base).expect("report").contains("fresh"),
+        report(base, &[]).expect("report").contains("fresh"),
         "fresh after a recorded run"
     );
 
     write(base, "a.txt", "two");
     assert!(
-        report(base).expect("report").contains("stale"),
+        report(base, &[]).expect("report").contains("stale"),
         "stale after an input changes"
     );
 }
@@ -58,11 +58,11 @@ fn text_shows_age_after_a_run_and_json_reports_ran_at() {
     crate::run(&argv, base).expect("recorded run");
 
     assert!(
-        report(base).expect("report").contains("ago"),
+        report(base, &[]).expect("report").contains("ago"),
         "table shows a record age once a run is recorded"
     );
     let json: serde_json::Value =
-        serde_json::from_str(&report_json(base).expect("json")).expect("valid json");
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
     let ran_at = json
         .pointer("/rules/0/cached/ran_at")
         .expect("ran_at present");
@@ -80,14 +80,14 @@ fn reports_no_inputs_for_empty_scopes() {
         base,
         "scopes:\n  none: [\"*.none\"]\ncommands:\n  - name: sh\n    inputs: [none]\n",
     );
-    let report = report(base).expect("report");
+    let report = report(base, &[]).expect("report");
     assert!(report.contains("sh") && report.contains("no-inputs"));
 }
 
 #[test]
 fn missing_manifest_is_an_error() {
     let dir = tempfile::tempdir().expect("tempdir");
-    assert!(report(dir.path()).is_err());
+    assert!(report(dir.path(), &[]).is_err());
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn parametric_rule_enumerates_one_row_per_file() {
         base,
         "scopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"lint {targets}\"\n",
     );
-    let report = report(base).expect("report");
+    let report = report(base, &[]).expect("report");
     assert!(report.contains("lint src/a.rs"), "row for a: {report}");
     assert!(report.contains("lint src/b.rs"), "row for b: {report}");
     assert!(report.contains("never"), "each expansion has a verdict");
@@ -117,7 +117,7 @@ fn colliding_expansions_are_an_error() {
         "scopes:\n  wide: [\"*.rs\"]\n  narrow: [\"a.rs\"]\ncommands:\n  - name: \"do {wide}\"\n  - name: \"do {narrow}\"\n",
     );
     assert!(
-        report(base).is_err(),
+        report(base, &[]).is_err(),
         "status surfaces a colliding-identity config proactively"
     );
 }
@@ -133,7 +133,7 @@ fn json_lists_inputs_with_hashes_and_state() {
     );
 
     let json: serde_json::Value =
-        serde_json::from_str(&report_json(base).expect("json")).expect("valid json");
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
     let rule = json.pointer("/rules/0").expect("first rule");
     let str_at = |value: &serde_json::Value, key: &str| {
         value
@@ -153,6 +153,34 @@ fn json_lists_inputs_with_hashes_and_state() {
     assert!(
         rule.get("cached").is_none(),
         "no record yet, cached omitted"
+    );
+}
+
+#[test]
+fn tag_filter_narrows_the_table_and_excludes_untagged_rules() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write(base, "a.txt", "one");
+    manifest(
+        base,
+        "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n    tags: [gate]\n  - name: cat\n    inputs: [src]\n",
+    );
+
+    let tagged = report(base, &["gate".to_owned()]).expect("report");
+    assert!(tagged.contains("sh"), "tagged rule reported: {tagged}");
+    assert!(
+        !tagged.contains("cat"),
+        "untagged rule excluded under a --tag filter: {tagged}"
+    );
+
+    let json: serde_json::Value =
+        serde_json::from_str(&report_json(base, &["gate".to_owned()]).expect("json"))
+            .expect("valid json");
+    let rules = json.pointer("/rules").and_then(serde_json::Value::as_array);
+    assert_eq!(
+        rules.map(Vec::len),
+        Some(1),
+        "json report is filtered the same way"
     );
 }
 

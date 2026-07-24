@@ -346,6 +346,109 @@ fn is_fresh_without_a_manifest_is_a_config_error() {
         .stderr(predicate::str::contains("no .mmz/config.yaml"));
 }
 
+/// One tagged rule (`sh`, tagged `gate`) and one untagged rule (`true`), each
+/// on its own scope, so a change to one never busts the other.
+fn write_gate_project(dir: &Path) {
+    write_manifest(
+        dir,
+        "scopes:\n  a: [\"a.txt\"]\n  b: [\"b.txt\"]\ncommands:\n  - name: sh\n    inputs: [a]\n    tags: [gate]\n  - name: \"true\"\n    inputs: [b]\n",
+    );
+    fs::write(dir.join("a.txt"), b"one").expect("write a.txt");
+    fs::write(dir.join("b.txt"), b"one").expect("write b.txt");
+}
+
+/// [`write_gate_project`] plus a second tagged rule (`env`, tagged `gate` and
+/// `slow`) sharing scope `a` with `sh`, for exercising a multi-tag AND filter.
+fn write_tagged_project(dir: &Path) {
+    write_manifest(
+        dir,
+        "scopes:\n  a: [\"a.txt\"]\n  b: [\"b.txt\"]\ncommands:\n  - name: sh\n    inputs: [a]\n    tags: [gate]\n  - name: env\n    inputs: [a]\n    tags: [gate, slow]\n  - name: \"true\"\n    inputs: [b]\n",
+    );
+    fs::write(dir.join("a.txt"), b"one").expect("write a.txt");
+    fs::write(dir.join("b.txt"), b"one").expect("write b.txt");
+}
+
+#[test]
+fn is_fresh_tag_filter_ignores_a_stale_untagged_rule_but_catches_a_stale_tagged_one() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write_gate_project(base);
+
+    // Record every rule fresh.
+    mmz(base).args(["sh", "-c", "exit 0"]).assert().success();
+    mmz(base).arg("true").assert().success();
+
+    // Only the untagged rule (`true`) goes stale; `--tag gate` never looks at
+    // it, so the gate still passes.
+    fs::write(base.join("b.txt"), b"two").expect("rewrite b.txt");
+    mmz(base)
+        .args(["--is-fresh", "--tag", "gate"])
+        .assert()
+        .success();
+    // A bare, untagged gate still catches it.
+    mmz(base).arg("--is-fresh").assert().code(1);
+
+    // Re-record `true`, then bust the tagged rule's own scope instead: only
+    // the tagged rule is now stale, and the tag gate must catch it.
+    mmz(base).arg("true").assert().success();
+    fs::write(base.join("a.txt"), b"two").expect("rewrite a.txt");
+    mmz(base)
+        .args(["--is-fresh", "--tag", "gate"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("`sh` is stale"));
+}
+
+#[test]
+fn is_fresh_two_tags_and_together_not_or() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write_tagged_project(base);
+
+    // `sh` carries only `gate`; `env` carries `gate` and `slow`. Filtering on
+    // both tags must resolve to `env` alone, not `sh`.
+    mmz(base).args(["env", "true"]).assert().success();
+    mmz(base)
+        .args(["--is-fresh", "--tag", "gate", "--tag", "slow"])
+        .assert()
+        .success();
+
+    // Both rules share scope `a`; busting it leaves the two-tag gate
+    // reporting only `env`, the rule that actually carries both tags.
+    fs::write(base.join("a.txt"), b"two").expect("rewrite a.txt");
+    mmz(base)
+        .args(["--is-fresh", "--tag", "gate", "--tag", "slow"])
+        .assert()
+        .code(1)
+        .stderr(
+            predicate::str::contains("`env` is stale").and(predicate::str::contains("`sh`").not()),
+        );
+}
+
+#[test]
+fn is_fresh_tag_with_a_command_is_a_usage_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write_tagged_project(base);
+    mmz(base)
+        .args(["--is-fresh", "--tag", "gate", "--", "sh"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("--tag"));
+}
+
+#[test]
+fn status_tag_filter_excludes_untagged_rules() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write_tagged_project(base);
+    mmz(base)
+        .args(["--status", "--tag", "gate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sh").and(predicate::str::contains("true").not()));
+}
+
 #[test]
 fn unknown_option_is_a_usage_error() {
     Command::cargo_bin("mmz")

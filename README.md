@@ -28,17 +28,17 @@ Or download a pre-built binary from the
 ## Usage
 
 ```
-mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
-mmz --init                write a starter .mmz/config.yaml in the current directory
-mmz --status              show each rule's freshness as a table
-mmz --status=json         the same as JSON, with each rule's inputs and hashes
-mmz --status=json-schema  print the JSON Schema for --status=json
-mmz --is-fresh [-- cmd]   exit 0 if cmd's rule (or every rule) is fresh; runs nothing
-mmz --prune               delete cache records whose rule no longer exists
-mmz --schema              print the config JSON Schema
-mmz --version             print version
-mmz --help                print help
-mmz -- <command> [args]   run a command whose name begins with a dash
+mmz <command> [args...]      run a command, skipping it when its inputs are unchanged
+mmz --init                   write a starter .mmz/config.yaml in the current directory
+mmz --status [--tag t]...    show each rule's freshness as a table
+mmz --status=json            the same as JSON, with each rule's inputs and hashes
+mmz --status=json-schema     print the JSON Schema for --status=json
+mmz --is-fresh [--tag t]... [-- cmd]   exit 0 if cmd's rule (or every/tagged rule) is fresh
+mmz --prune                  delete cache records whose rule no longer exists
+mmz --schema                 print the config JSON Schema
+mmz --version                print version
+mmz --help                   print help
+mmz -- <command> [args]      run a command whose name begins with a dash
 ```
 
 Scaffold a manifest, then wrap commands wherever memoization is wanted — a
@@ -105,6 +105,33 @@ every referenced scope must be defined, and `strict` names must be known. Run
 it, not `main`, so a project keeps validating against the schema its mmz was
 built for even when different projects pin different mmz versions. `mmz --help`
 and `mmz --version` report the running version.
+
+## Tags
+
+A command rule can carry `tags: [..]`; `mmz --is-fresh --tag <tag>` and `mmz
+--status --tag <tag>` then narrow to rules carrying every listed tag, instead
+of every rule in the manifest. Repeat `--tag`/`-t` to require more than one —
+repeats AND together (there is no OR: call `mmz --is-fresh` once per tag for
+that). A rule with no `tags:` never matches a `--tag` filter; a bare `mmz
+--is-fresh` (no `--tag`, no command) still gates every rule regardless of tags.
+
+```yaml
+commands:
+  - name: cargo test
+    inputs: [rust]
+    tags: [gate]
+  - name: cargo bench
+    inputs: [rust]
+    tags: [bench]
+```
+
+`mmz --is-fresh --tag gate` here checks only `cargo test`; a bare `mmz
+--is-fresh` still checks both. One manifest can then hold a gating subset
+(wired into `just check` or a pre-push hook) alongside other memoized commands
+a gate should ignore, instead of splitting `.mmz/config.yaml` per concern.
+
+Tags are case-faithful, trimmed, and blank entries are dropped; declaring the
+same tag twice on one rule is a manifest error.
 
 ## Matching
 

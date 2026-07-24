@@ -16,21 +16,26 @@ const USAGE: &str = concat!(
     " — memoized command runner
 
 Usage:
-    mmz <command> [args...]   run a command, skipping it when its inputs are unchanged
-    mmz --init                write a starter .mmz/config.yaml in the current directory
-    mmz --status              show each rule's freshness as a table
-    mmz --status=json         the same as JSON, with each rule's inputs and hashes
-    mmz --status=json-schema  print the JSON Schema for --status=json
-    mmz --is-fresh [-- cmd]   exit 0 if cmd's rule (or every rule) is fresh; runs nothing
-    mmz --prune               delete cache records whose rule no longer exists
-    mmz --schema              print the config JSON Schema
-    mmz --version             print version
-    mmz --help                print this help
-    mmz -- <command> [args]   run a command whose name begins with a dash
+    mmz <command> [args...]           run a command, skipping it when its inputs are unchanged
+    mmz --init                        write a starter .mmz/config.yaml in the current directory
+    mmz --status [--tag t]...         show each rule's freshness as a table
+    mmz --status=json [--tag t]...    the same as JSON, with each rule's inputs and hashes
+    mmz --status=json-schema          print the JSON Schema for --status=json
+    mmz --is-fresh [--tag t]... [-- cmd]
+                                      exit 0 if cmd's rule (or every/tagged rule) is fresh; runs nothing
+    mmz --prune                       delete cache records whose rule no longer exists
+    mmz --schema                      print the config JSON Schema
+    mmz --version                     print version
+    mmz --help                        print this help
+    mmz -- <command> [args]           run a command whose name begins with a dash
 
 Config lives in .mmz/config.yaml (nearest one, searching upward). mmz errors when no
 manifest is found, the manifest is invalid, no rule matches, or a matched rule
 has no inputs; relax the last two per project with the `strict` list.
+
+`--tag`/`-t <tag>` (repeatable) narrows --is-fresh/--status to rules carrying
+every listed tag (AND, not OR); untagged rules never match. Combining --tag
+with a targeted command is a usage error — a command already resolves to one rule.
 
 Exit codes:
     0    fresh, skipped, or succeeded        4    manifest missing or invalid
@@ -121,6 +126,10 @@ fn run_prune(rest: &[String]) -> ExitCode {
 /// Handles `--status`, `--status=json`, and `--status=json-schema`. `arg` is the
 /// full token, so its `=suffix` selects the rendering.
 fn run_status(arg: &str, rest: &[String]) -> ExitCode {
+    let (tags, rest) = match parse_tags(rest) {
+        Ok(parsed) => parsed,
+        Err(code) => return code,
+    };
     if !rest.is_empty() {
         return usage("`--status` takes no arguments");
     }
@@ -140,9 +149,9 @@ fn run_status(arg: &str, rest: &[String]) -> ExitCode {
         Err(code) => return code,
     };
     let rendered = if format == "=json" {
-        mmz::status::report_json(&cwd)
+        mmz::status::report_json(&cwd, &tags)
     } else {
-        mmz::status::report(&cwd)
+        mmz::status::report(&cwd, &tags)
     };
     match rendered {
         Ok(text) => emit(&text),
@@ -150,21 +159,47 @@ fn run_status(arg: &str, rest: &[String]) -> ExitCode {
     }
 }
 
-/// Handles `mmz --is-fresh [-- <command>]`: assert freshness without running.
-/// A bare `--is-fresh` gates every rule; a trailing command (optionally behind
-/// `--`, to allow a leading dash) gates the one rule it matches. Exit 0 when
-/// fresh, 1 when not, or a library error's code.
+/// Handles `mmz --is-fresh [--tag t]... [-- <command>]`: assert freshness
+/// without running. A bare `--is-fresh` gates every rule; a `--tag` filter
+/// (repeatable, `ANDed`) narrows that to rules carrying every listed tag; a
+/// trailing command (optionally behind `--`, to allow a leading dash) gates
+/// the one rule it matches — combining a command with `--tag` is a library
+/// usage error. Exit 0 when fresh, 1 when not, or a library error's code.
 fn run_is_fresh(rest: &[String]) -> ExitCode {
     let cwd = match current_dir() {
         Ok(dir) => dir,
         Err(code) => return code,
     };
+    let (tags, rest) = match parse_tags(rest) {
+        Ok(parsed) => parsed,
+        Err(code) => return code,
+    };
     let argv = strip_separator(rest);
     let target = if argv.is_empty() { None } else { Some(argv) };
-    match mmz::freshness::evaluate(&cwd, target) {
+    match mmz::freshness::evaluate(&cwd, target, &tags) {
         Ok(verdicts) => report_freshness(&verdicts),
         Err(err) => report_error(&err),
     }
+}
+
+/// Peels leading `-t`/`--tag <value>` pairs off `rest`, one tag per occurrence
+/// (repeats AND together — a rule must carry every listed tag). Stops at the
+/// first token that isn't a tag flag, leaving the remainder for
+/// [`strip_separator`] to resolve into the wrapped command.
+fn parse_tags(rest: &[String]) -> Result<(Vec<String>, &[String]), ExitCode> {
+    let mut tags = Vec::new();
+    let mut cursor = rest;
+    while let Some((flag, tail)) = cursor.split_first() {
+        if flag != "-t" && flag != "--tag" {
+            break;
+        }
+        let Some((value, after)) = tail.split_first() else {
+            return Err(usage(&format!("`{flag}` requires a value")));
+        };
+        tags.push(value.clone());
+        cursor = after;
+    }
+    Ok((tags, cursor))
 }
 
 /// Drops a leading `--` separator, so `--is-fresh -- just check` and
@@ -249,13 +284,14 @@ fn report_error(err: &Error) -> ExitCode {
 /// Maps a library error to its documented exit code.
 fn exit_for(err: &Error) -> u8 {
     match err {
-        Error::EmptyCommand | Error::ManifestExists { .. } => 2,
+        Error::EmptyCommand | Error::ManifestExists { .. } | Error::TagWithCommand => 2,
         Error::NoMatch { .. } | Error::NoInputs { .. } => 3,
         Error::NoManifest { .. }
         | Error::ManifestParse { .. }
         | Error::UnknownScope { .. }
         | Error::EmptyCommandName(_)
         | Error::DuplicateCommand(_)
+        | Error::DuplicateTag { .. }
         | Error::MacroSyntax { .. }
         | Error::CollidingIdentity { .. }
         | Error::Pattern { .. } => 4,

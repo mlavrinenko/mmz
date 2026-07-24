@@ -22,7 +22,8 @@
   the `mt` CLI (`mt ls`, `mt add <title>`, `mt flip <status> <task>`, `mt check`)
   — don't hand-edit task files to list or re-status. Not to be confused with
   `.mmz/` (the command cache).
-- Commits: Conventional Commits, English, no `Refs:` footer (no external tracker
-  by policy). See [CONTRIBUTING.md](CONTRIBUTING.md#commits).
+- Commits: Conventional Commits, English, `Refs: tasks/<stem>.typ` footer
+  naming the MindTape task (file one first if none exists; never guess a
+  stem). See [CONTRIBUTING.md](CONTRIBUTING.md#commits).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for project conventions and code standards.

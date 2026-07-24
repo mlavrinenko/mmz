@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-24
+
+### Added
+
+- Tags: a command rule can carry `tags: [..]`, and `mmz --is-fresh --tag <tag>`
+  (repeatable `--tag`/`-t`, ANDed across repeats) narrows the gate to rules
+  carrying every listed tag instead of the whole manifest; untagged rules
+  never match. `mmz --status`/`--status=json` support the same filter. One
+  manifest can now hold both a gating subset and other memoized commands a
+  gate should ignore. Tags are trimmed, case-faithful, and duplicates within
+  one rule are rejected at load.
+
+### Changed
+
+- Breaking (library): `mmz::freshness::evaluate` takes a third `tags: &[String]`
+  parameter. Passing `Some(argv)` alongside a non-empty tag filter is now a
+  usage error (`Error::TagWithCommand`) — a targeted command already resolves
+  to one rule. `mmz::status::report` and `report_json` likewise take a `tags`
+  parameter.
+
 ## [0.4.0] - 2026-07-18
 
 ### Added

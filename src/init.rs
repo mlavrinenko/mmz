@@ -50,6 +50,20 @@ commands:
 #   commands:
 #     - name: \"ruff check {lint-targets}\"
 
+# Optional labels on a rule. `mmz --is-fresh --tag <tag>` (and
+# `mmz --status --tag <tag>`) then gates only the rules carrying every listed
+# tag, instead of every rule in the manifest — so one manifest can hold both
+# a gating subset (wired into a pre-push hook or `just check`) and other
+# memoized commands (e.g. bench) that a gate should ignore. Untagged rules
+# never match a --tag filter; repeat --tag to require more than one.
+#   commands:
+#     - name: cargo test
+#       inputs: [rust]
+#       tags: [gate]
+#     - name: cargo bench
+#       inputs: [rust]
+#       tags: [bench]
+
 # Printed to stderr when a command is skipped. `{cache:<field>}` pulls a field
 # straight from the cache record (command, ran_at, input_digest, ...). Set it per
 # command to override, or to \"\" to silence that one.

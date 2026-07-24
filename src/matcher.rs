@@ -44,6 +44,7 @@ mod tests {
             name: name.to_owned(),
             inputs: Vec::new(),
             match_mode: MatchMode::Prefix,
+            tags: Vec::new(),
             on_hit: None,
         }
     }
@@ -53,6 +54,7 @@ mod tests {
             name: name.to_owned(),
             inputs: Vec::new(),
             match_mode: MatchMode::Exact,
+            tags: Vec::new(),
             on_hit: None,
         }
     }

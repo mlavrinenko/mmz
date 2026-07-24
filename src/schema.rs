@@ -22,6 +22,7 @@ mod tests {
             "cache_dir",
             "match",
             "exact",
+            "tags",
             "strict",
             "no_match",
             "no_inputs",

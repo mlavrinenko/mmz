@@ -95,13 +95,15 @@ impl State {
 }
 
 /// Builds the human-readable status table for the manifest governing `cwd`.
+/// When `tags` is non-empty, only rules carrying every listed tag are
+/// reported (an AND filter; untagged rules are skipped).
 ///
 /// # Errors
 ///
 /// Returns [`Error::NoManifest`] when none is found, a manifest error when one
 /// cannot be loaded, or a resolution error when a rule's globs are invalid.
-pub fn report(cwd: &Path) -> Result<String> {
-    let report = collect(cwd)?;
+pub fn report(cwd: &Path, tags: &[String]) -> Result<String> {
+    let report = collect(cwd, tags)?;
     if report.rules.is_empty() {
         return Ok(format!("no rules defined in {}\n", report.manifest));
     }
@@ -110,20 +112,22 @@ pub fn report(cwd: &Path) -> Result<String> {
 
 /// Builds the `mmz --status=json` report: the same model as [`report`],
 /// serialized to pretty JSON with each rule's resolved inputs and hashes.
+/// `tags` filters as in [`report`].
 ///
 /// # Errors
 ///
 /// Same as [`report`], plus [`Error::Internal`] if serialization fails.
-pub fn report_json(cwd: &Path) -> Result<String> {
-    let report = collect(cwd)?;
+pub fn report_json(cwd: &Path, tags: &[String]) -> Result<String> {
+    let report = collect(cwd, tags)?;
     let text = serde_json::to_string_pretty(&report)
         .map_err(|err| Error::Internal(format!("serializing status json: {err}")))?;
     Ok(format!("{text}\n"))
 }
 
 /// Resolves the manifest and computes every rule's status once, for either
-/// rendering to consume.
-fn collect(cwd: &Path) -> Result<Report> {
+/// rendering to consume. When `tags` is non-empty, a rule is skipped unless
+/// it carries every listed tag.
+fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
@@ -131,6 +135,9 @@ fn collect(cwd: &Path) -> Result<Report> {
     let cache_dir = base.join(&manifest.cache_dir);
     let mut matches = Vec::with_capacity(manifest.commands.len());
     for rule in &manifest.commands {
+        if !tags.is_empty() && !tags.iter().all(|tag| rule.tags.contains(tag)) {
+            continue;
+        }
         matches.extend(parametric::expand_rule(manifest, base, rule)?);
     }
     parametric::detect_collision(&matches)?;
