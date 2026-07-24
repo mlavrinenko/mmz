@@ -221,15 +221,17 @@ or removing a rule orphans its record; `mmz --prune` sweeps the unclaimed ones.
 
 `mmz --is-fresh -- <command>` gates a command on its cache without running it:
 exit 0 when its rule is already fresh, exit 1 otherwise. With no command,
-`mmz --is-fresh` gates every rule at once. It is the inverse of wrapping — where
-`mmz <command>` runs a stale command, `mmz --is-fresh -- <command>` refuses it —
-so a git hook can require that an expensive check was already run (and memoized)
-without paying to run it on the spot:
+`mmz --is-fresh` gates every rule at once. It is the inverse of wrapping —
+`mmz <command>` runs a stale command, `--is-fresh` refuses it — so a git hook
+can require that an expensive check was already run (and memoized) without
+re-running it on the spot:
 
 ```bash
 # pre-push: refuse the push if the VM checks were not run, but never run them here
 mmz --is-fresh -- just check-vm || { echo "stale: run 'just check-vm' first" >&2; exit 1; }
 ```
+
+A non-fresh gate prints one `mmz: \`<rule>\` is <state> (<reason>)` line per offender, then a single hint to re-run the listed commands under mmz (e.g. `mmz just check`) to record a pass — a standalone run is not tracked, so the rule stays stale or `never`. (A `no-inputs` offender names no run record.)
 
 | Code | Meaning |
 | ---- | ------- |

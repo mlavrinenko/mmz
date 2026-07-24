@@ -52,6 +52,15 @@ impl Verdict {
     pub const fn reason(&self) -> Option<&'static str> {
         self.state.reason()
     }
+
+    /// True for the non-fresh states a recorded pass can clear (`stale`,
+    /// `never`, `failed`). A gate prints its one-line remediation hint once
+    /// when any verdict is remediable; a `no-inputs` verdict is not, since a
+    /// wrapped run records nothing against an empty input set.
+    #[must_use]
+    pub const fn is_remediable(&self) -> bool {
+        self.state.is_remediable()
+    }
 }
 
 /// Evaluates freshness against the nearest manifest above `cwd`, running

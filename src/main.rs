@@ -213,9 +213,12 @@ fn strip_separator(rest: &[String]) -> &[String] {
 
 /// Reports a freshness gate: each not-fresh rule on stderr, then exit 0 when all
 /// are fresh, 1 otherwise. The stale lines name the rule and why it would re-run,
-/// so a hook can point the user at the command to run.
+/// and a single remediation hint follows them when any non-fresh verdict is
+/// remediable, since mmz only observes a command it wraps — a standalone pass is
+/// not tracked and leaves the rule stale or `never`.
 fn report_freshness(verdicts: &[mmz::freshness::Verdict]) -> ExitCode {
     let mut fresh = true;
+    let mut any_remediable = false;
     for verdict in verdicts {
         if verdict.is_fresh() {
             continue;
@@ -223,12 +226,17 @@ fn report_freshness(verdicts: &[mmz::freshness::Verdict]) -> ExitCode {
         fresh = false;
         let reason = verdict.reason().unwrap_or("not fresh");
         eprintln!("mmz: `{}` is {} ({reason})", verdict.rule, verdict.state());
+        any_remediable |= verdict.is_remediable();
     }
     if fresh {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
+        return ExitCode::SUCCESS;
     }
+    if any_remediable {
+        eprintln!(
+            "mmz: re-run each listed command under mmz (e.g. `mmz just check`) to record a pass — a standalone run is not tracked"
+        );
+    }
+    ExitCode::from(1)
 }
 
 /// Writes `text` to stdout, treating a closed pipe (e.g. `mmz --schema | head`)

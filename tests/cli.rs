@@ -300,6 +300,69 @@ fn is_fresh_without_a_manifest_is_a_config_error() {
         .stderr(predicate::str::contains("no .mmz/config.yaml"));
 }
 
+/// The remediation hint names the cure once after the per-rule lines: mmz tracks
+/// only a pass it wraps, so a standalone run never records and the gate stays
+/// stale/never. Stated once, not repeated per rule.
+#[test]
+fn is_fresh_non_fresh_output_hints_to_run_under_mmz_once() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write_tagged_project(base);
+
+    // Both `gate`-tagged rules are `never` (unrecorded). The gate fails and the
+    // stderr ends with exactly one remediation hint naming `mmz` as the prefix.
+    let output = mmz_cmd(base, &["--is-fresh", "--tag", "gate"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "an unrecorded gate is not fresh"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let hint = "re-run each listed command under mmz";
+    let count = stderr.lines().filter(|line| line.contains(hint)).count();
+    assert_eq!(count, 1, "remediation hint printed exactly once:\n{stderr}");
+    assert!(
+        stderr.contains("`sh` is never"),
+        "per-rule lines precede the hint:\n{stderr}"
+    );
+}
+
+/// A `no-inputs` rule cannot be cleared by wrapping a run — the engine records
+/// nothing against an empty input set, so the hint would misdirect. It is
+/// suppressed when every non-fresh verdict is `no-inputs`.
+#[test]
+fn is_fresh_no_inputs_only_rules_do_not_get_the_run_under_mmz_hint() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write_manifest(
+        base,
+        "scopes:\n  none: [\"*.none\"]\ncommands:\n  - name: sh\n    inputs: [none]\n",
+    );
+
+    let output = mmz_cmd(base, &["--is-fresh"]);
+    assert_eq!(output.status.code(), Some(1), "no-inputs is not fresh");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("no-inputs"),
+        "the rule's own line names no-inputs:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("re-run each listed command under mmz"),
+        "the run-under-mmz hint is suppressed when no verdict is remediable:\n{stderr}",
+    );
+}
+
+/// Re-runs the built `mmz` binary in `cwd` with the given args, returning the
+/// captured output (without asserting the exit code — the callers inspect it).
+fn mmz_cmd(cwd: &Path, args: &[&str]) -> std::process::Output {
+    let bin = assert_cmd::cargo::cargo_bin("mmz");
+    std::process::Command::new(bin)
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .expect("ran mmz")
+}
+
 /// One tagged rule (`sh`, tagged `gate`) and one untagged rule (`true`), each
 /// on its own scope, so a change to one never busts the other.
 fn write_gate_project(dir: &Path) {

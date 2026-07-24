@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A non-fresh `mmz --is-fresh` gate now prints one remediation line after the
+  per-rule reasons: `re-run each listed command under mmz (e.g. \`mmz just
+  check\`) to record a pass — a standalone run is not tracked`. mmz only
+  observes a command it wraps, so a pass run standalone is invisible to the
+  cache and the rule stays stale or `never`; the new hint names the cure once,
+  not per rule. It is suppressed when every offending rule is `no-inputs`,
+  whose fix is in the manifest, not a re-run.
 - `mmz --status` and `mmz --is-fresh` resolve a rule's shared `inputs` glob set
   once per rule instead of once per expansion, so enumerating a parametric rule
   over a large tree no longer re-walks the filesystem per fanned file. Output

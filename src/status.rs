@@ -82,6 +82,15 @@ impl State {
         matches!(self, Self::Fresh)
     }
 
+    /// True for the non-fresh states a recorded pass can clear: `Stale`,
+    /// `Never`, and `Failed`. `NoInputs` never has inputs to digest, so a
+    /// wrapped run records nothing (or is refused under the `no_inputs`
+    /// strictness) and the rule stays `NoInputs` — its remedy is fixing the
+    /// manifest, not re-running under mmz.
+    pub(crate) const fn is_remediable(self) -> bool {
+        matches!(self, Self::Stale | Self::Never | Self::Failed)
+    }
+
     /// Why a non-fresh rule would re-run, for the `--is-fresh` gate's message.
     /// `None` when the rule is fresh.
     pub(crate) const fn reason(self) -> Option<&'static str> {
