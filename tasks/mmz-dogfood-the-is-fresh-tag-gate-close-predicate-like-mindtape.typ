@@ -8,7 +8,7 @@
     ease: 6,
   ),
   tags: ("config", "gating", "build"),
-  status: proposed(2026, 7, 24),
+  status: done(2026, 7, 24),
 )
 
 == Summary
