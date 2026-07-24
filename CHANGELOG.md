@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `mmz --is-fresh` now expands parametric (`{scope}`-fanned) rules, the way
+  `--status` and `--prune` already did. A bare or `--tag`-filtered gate reports
+  one verdict per per-file expansion (keyed on the expanded identity, not the
+  literal template), and a targeted `--is-fresh -- <command> <file>` gates the
+  single expansion `<file>` binds to. Previously any manifest with a parametric
+  rule wedged the gate: it reported the unexpandable `{scope}` template as
+  `never` and a targeted invocation returned `no rule matches`.
+- Glob input resolution now includes a symlink that resolves to a regular file,
+  matching how a literal path is already resolved (symlinked directories are
+  still not traversed). Previously a symlinked source matched by a glob was
+  silently dropped from the input set, so edits to its target could skip the
+  cache undetected.
+
+### Changed
+
+- `mmz --status` and `mmz --is-fresh` resolve a rule's shared `inputs` glob set
+  once per rule instead of once per expansion, so enumerating a parametric rule
+  over a large tree no longer re-walks the filesystem per fanned file. Output
+  is unchanged.
+
 ## [0.5.0] - 2026-07-24
 
 ### Added
