@@ -8,7 +8,10 @@
   and `just check` wraps `cargo test`/`clippy`/`fmt`/`machete` with the locally
   built binary (`_mmz` recipe builds it first), so a no-op `just check` skips
   them. When you add or rename a check command in the recipe, update
-  .mmz/config.yaml's rules to match.
+  .mmz/config.yaml's rules to match. The four rules are tagged `gate`, and
+  closing a task runs `mmz --is-fresh --tag gate` (`.mindtape/config.toml`'s
+  `[[on.flip]]`): run `just check` to record a pass before `mt flip done`, or
+  `--force` to waive.
 - Tests: inline `#[cfg(test)]` units; CLI/integration in `tests/` (`assert_cmd` + `predicates`). `just fix-check` auto-ejects inline tests from oversized files via `ejectest`.
 - Coverage and CRAP gates run separately (CI + locally): `just cover` then
   `just crap`. If `just crap` flags a function, add tests or reduce its

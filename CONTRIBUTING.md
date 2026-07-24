@@ -78,6 +78,14 @@ builds it first). A no-op `just check` then skips those commands. State lives in
 the git-ignored `.mmz/cache` directory. If you add or rename a wrapped command in
 the recipe, mirror it in `.mmz/config.yaml` so the rule still matches.
 
+Each of those four rules is tagged `gate`, and mmz gates its own MindTape
+backlog with them: closing a task (`mt flip done|cancelled|failed`) runs
+`mmz --is-fresh --tag gate` via [.mindtape/config.toml](.mindtape/config.toml)'s
+`[[on.flip]]` hook, which passes only when every gate rule last succeeded with
+its inputs unchanged. Run `just check` first to record a pass, then flip; pass
+`--force` to waive the gate (it records the waiver in the note). This is mmz
+dogfooding `--is-fresh` on its own repo.
+
 ## Commits
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for the

@@ -93,3 +93,22 @@ allowed = ["mmz", "tooling", "cli", "cache", "config", "docs", "tests", "gating"
 path    = ["Summary"]
 action  = "unique"
 message = "every task must have exactly one Summary section"
+
+# Closing a task asserts the build already passed against this worktree rather
+# than re-running it here. `mmz --is-fresh --tag gate` exits 0 only when every
+# `gate`-tagged rule in .mmz/config.yaml last passed with its inputs unchanged;
+# `just check` writes those records (each arm wraps its command in mmz). This is
+# mmz dogfooding its own headline feature on its own backlog. `--force` waives
+# the gate and records the waiver in the note.
+#
+# The action calls the locally built binary (`target/debug/mmz`, the same one
+# the Justfile's `{{mmz}}` and `just check` use) because mmz is not installed on
+# PATH in this repo's dev shell — it is the crate under development. `just check`
+# builds it via the `_mmz` recipe, so it exists whenever a pass was just
+# recorded. mt runs the action from the project root, so the relative path
+# resolves.
+[[on.flip]]
+when = 'into("done") || into("cancelled") || into("failed")'
+actions = [
+  { run = "target/debug/mmz --is-fresh --tag gate", gate = true, message = "checks have not passed against this worktree — run `just check`, then flip again (`--force` waives it)" },
+]

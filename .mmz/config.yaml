@@ -1,24 +1,47 @@
 # yaml-language-server: $schema=../schema/mmz.schema.json
 # mmz memoizes its own checks (dogfood). `just check` wraps the slow, read-only
 # checks with the locally built mmz binary; a no-op `just check` then skips them.
+#
+# Every check rule is tagged `gate`. Closing a MindTape task runs
+# `mmz --is-fresh --tag gate` (see .mindtape/config.toml's `[[on.flip]]`), which
+# asserts each gate rule last passed against this worktree instead of re-running
+# it — the predicate a review wants is proof of a passing build, not a re-run at
+# the least convenient moment. Record a pass by running `just check`; every arm
+# wraps its command in mmz, so the record is written on success.
+#
+# Scope note: the `gate` tag covers the four cargo checks — the substantive,
+# slow ones (test/clippy especially). `check-file-size` and `outdatty-check`
+# stay un-memoized in the recipe (fast, deterministic; `just check` and CI run
+# them anyway); wrapping them into the gate is a possible follow-up.
 
 scopes:
-  # Everything cargo test / clippy / machete read: sources, the manifest and
-  # lockfile, and the toolchain pins (rust-toolchain plus the nix flake.lock
-  # that actually selects rustc in the dev shell).
+  # Everything cargo test / clippy read: sources, the manifest and lockfile, and
+  # the toolchain pins (rust-toolchain plus the nix flake.lock that actually
+  # selects rustc in the dev shell).
   rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "flake.lock"]
   clippy: ["clippy.toml"]
   fmt: ["rustfmt.toml"]
+  # cargo-machete reads the Cargo manifests, not the sources, so a source-only
+  # edit must not bust it.
+  manifests: ["Cargo.toml", "Cargo.lock"]
+  # The Justfile holds each check's recipe body; add it to every rule so a
+  # recipe edit re-runs the gate it wraps. An unchanged Justfile hashes stable,
+  # so it adds no churn in the common case.
+  gates-meta: ["Justfile"]
 
 # Note printed to stderr on a cache hit, pulling the rule name from the record.
 on_hit: "mmz: skipped {cache:command} (inputs unchanged)"
 
 commands:
   - name: cargo test
-    inputs: [rust]
+    inputs: [rust, gates-meta]
+    tags: [gate]
   - name: cargo clippy
-    inputs: [rust, clippy]
+    inputs: [rust, clippy, gates-meta]
+    tags: [gate]
   - name: cargo machete
-    inputs: [rust]
+    inputs: [manifests, gates-meta]
+    tags: [gate]
   - name: cargo fmt
-    inputs: [rust, fmt]
+    inputs: [rust, fmt, gates-meta]
+    tags: [gate]
