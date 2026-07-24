@@ -9,7 +9,7 @@ groups:
       src/main.rs: 1e53e6ba4e5845f730e03280395446fcae73094a0c2f96cea83def0d45a053e9
       src/manifest.rs: 04c15cbd63bf4c38abb1a65bbbff6bf908529a6ed3013572fd76df4bc8da91ae
     dependents:
-      README.md: 1d424e416fd1ccf4896e25fba37122aca76856de3e71571ef142d5635787d4c8
+      README.md: 658a045672bd5272b8a545879cd12747e08eae0af365d778bc20ac3274b584b3
       www/index.html: f440142131cb19dced4968811a094cfca37fc0b919b90332685b757a37c89b62
   dev-docs:
     source:
@@ -26,9 +26,9 @@ groups:
       schema/mmz.schema.json: be36c79b1b3955aeff6a0acc2985536dd11f0518d8853395ed56fe84ebd18f73
   release-notes:
     source:
-      Cargo.toml: 94b1d3e33f0f7152942eb62715d6087309c0671eb263fe27e0ff32759fcd8c7d
+      Cargo.toml: 000c275fc8bbad84daa71d4178e3654ca88274e6b172582b0e1c344258c72b66
     dependents:
-      CHANGELOG.md: 4e171cd80c9f1badab1c7edfe6d76ce270fe03621748f12d3fbec3b5af1c5236
+      CHANGELOG.md: 50809e05bf48f635995be3cb8a4f5904d000265192bc5d70f6fe3282cf55ef62
   status-schema:
     source:
       src/status.rs: 476f6ef98a30ec68f01b23ce6c8e50bbe93d6a07e1a440a2cdc42089121b5f73
