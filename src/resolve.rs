@@ -19,8 +19,11 @@ pub fn is_glob(pattern: &str) -> bool {
 /// Glob patterns may match zero files. A literal path absent on disk is skipped
 /// with a warning (a removed input then shifts the digest rather than erroring).
 /// When `gitignore` is true, glob matches ignored by git are dropped; explicitly
-/// listed literals are always kept. The `.git` directory is never traversed and
-/// symlinks are not followed. Paths use forward slashes.
+/// listed literals are always kept. The `.git` directory is never traversed.
+/// Symlinked directories are never traversed, but a symlink that resolves to a
+/// regular file is treated as a file (matching literal-path resolution), so a
+/// symlinked source is not silently dropped from a glob's input set. Paths use
+/// forward slashes.
 ///
 /// # Errors
 ///
@@ -59,10 +62,19 @@ fn expand_globs(globs: &[&str], base: &Path, gitignore: bool, out: &mut Vec<Stri
     let mut matched = vec![false; globs.len()];
     for entry in build_walker(base, gitignore) {
         let Ok(entry) = entry else { continue };
-        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+        let path = entry.path();
+        // `follow_links(false)` keeps the walker from descending into a
+        // symlinked directory (its own file_type stays "symlink", not
+        // "file"), but a symlink that resolves to a regular file is still
+        // accepted here so it matches `expand_literal`'s
+        // `base.join(pattern).is_file()`, which follows the link.
+        let is_regular_file = entry.file_type().is_some_and(|kind| kind.is_file());
+        let is_symlinked_file = !is_regular_file
+            && entry.file_type().is_some_and(|kind| kind.is_symlink())
+            && path.is_file();
+        if !is_regular_file && !is_symlinked_file {
             continue;
         }
-        let path = entry.path();
         let rel = path.strip_prefix(base).unwrap_or(path);
         let candidate = normalize(&rel.to_string_lossy());
         let hits = set.matches(&candidate);
@@ -187,5 +199,61 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let gone = expand(&["absent.txt".to_owned()], dir.path(), true).expect("resolve");
         assert!(gone.is_empty(), "missing literal is not an error");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn glob_includes_symlinked_file_like_literal_does() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(dir.path().join("real")).expect("mkdir");
+        touch(&dir.path().join("real"), "target.rs");
+        symlink(
+            dir.path().join("real/target.rs"),
+            dir.path().join("link.rs"),
+        )
+        .expect("symlink");
+
+        let via_glob = expand(&["*.rs".to_owned()], dir.path(), true).expect("resolve glob");
+        let via_literal =
+            expand(&["link.rs".to_owned()], dir.path(), true).expect("resolve literal");
+
+        assert!(
+            via_glob.contains(&"link.rs".to_owned()),
+            "glob should include a symlink that resolves to a file, same as a literal path: {via_glob:?}"
+        );
+        assert_eq!(
+            via_glob
+                .iter()
+                .filter(|path| *path == "link.rs")
+                .collect::<Vec<_>>(),
+            via_literal.iter().collect::<Vec<_>>(),
+            "glob and literal resolution must agree on a symlinked file"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn glob_does_not_traverse_symlinked_directory() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir(dir.path().join("real_dir")).expect("mkdir");
+        touch(&dir.path().join("real_dir"), "inside.rs");
+        symlink(dir.path().join("real_dir"), dir.path().join("linked_dir")).expect("symlink");
+        touch(dir.path(), "top.rs");
+
+        let matches = expand(&["**/*.rs".to_owned()], dir.path(), true).expect("resolve");
+
+        assert!(
+            !matches.iter().any(|path| path.starts_with("linked_dir/")),
+            "walker must not descend into a symlinked directory: {matches:?}"
+        );
+        assert_eq!(
+            matches,
+            vec!["real_dir/inside.rs".to_owned(), "top.rs".to_owned()],
+            "only the real tree and top-level file are found, not the symlinked dir's contents a second time"
+        );
     }
 }
