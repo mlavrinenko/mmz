@@ -8,7 +8,7 @@
     ease: 6,
   ),
   tags: ("cli", "efficiency"),
-  status: proposed(2026, 7, 24),
+  status: wip(2026, 7, 24),
 )
 
 == Summary
@@ -25,6 +25,13 @@ So `mmz --status` on a parametric rule over a large source tree does
 O(M x tree_size) work where O(tree_size) would do: the shared inputs are the
 same for every expansion and need resolving once.
 
+Update: after the `--is-fresh` parametric fix
+(`mmz-is-fresh-ignores-parametric-rules`), `src/freshness.rs::evaluate` routes
+its enumerating (untargeted and tag-filtered) paths through the same
+`status::expansion_files` helper, so it inherited the identical per-expansion
+re-walk. The fix therefore belongs to the shared helper and both enumerating
+readers, not `--status` alone.
+
 == Why
 
 Not a correctness bug (the digests come out right), but `--status` is meant to
@@ -36,11 +43,14 @@ hit; only the enumerating readers (`--status`) pay the multiplier.
 
 - `src/status.rs`: resolve each rule's shared `inputs` glob set once (keyed by
   rule), then per expansion only hash that cached set plus the bound file,
-  rather than re-walking in `rule_status`.
+  rather than re-walking inside `expansion_files` per expansion.
+- `src/freshness.rs`: apply the same per-rule hoist to the untargeted and
+  tag-filtered enumerating paths, which share the helper.
 - Confirm `parametric::expand_rule` need not re-walk the domain redundantly
   alongside the shared-input resolution.
-- Keep the per-file digest identical (a golden/JSON assertion in
-  `src/status_tests.rs`) so the optimization is behaviour-preserving.
+- Keep the per-file digest and the `--status`/`--status=json` output identical
+  (assertions in `src/status_tests.rs`) so the optimization is
+  behaviour-preserving.
 
 == Home
 
