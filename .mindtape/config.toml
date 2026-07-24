@@ -86,7 +86,7 @@ units = ["minutes", "hours", "days", "weeks"]
 
 [tasks.tags]
 # Area labels for the mmz backlog. `mmz` is the derived root tag on every task.
-allowed = ["mmz", "tooling", "cli", "cache", "config", "docs", "tests", "gating", "build"]
+allowed = ["mmz", "tooling", "cli", "cache", "config", "docs", "tests", "gating", "build", "efficiency"]
 
 # Every task carries exactly one Summary section.
 [[tasks.body.headers.rules]]
