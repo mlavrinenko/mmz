@@ -8,7 +8,7 @@
     ease: 5,
   ),
   tags: ("cli", "gating"),
-  status: wip(2026, 7, 24),
+  status: done(2026, 7, 24),
 )
 
 == Summary

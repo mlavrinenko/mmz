@@ -8,7 +8,7 @@
     ease: 6,
   ),
   tags: ("cache", "config"),
-  status: wip(2026, 7, 24),
+  status: done(2026, 7, 24),
 )
 
 == Summary
