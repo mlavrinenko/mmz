@@ -9,41 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Command-driven inputs: a top-level `probes:` map declares named commands whose
+  stdout is hashed into the input digest of every rule whose `inputs:` names
+  them — one namespace with scopes, so the two cannot share a name. That is how
+  a rule depends on part of a file (one recipe body out of a `Justfile`) or on
+  something that is not a file (`rustc -vV`). A probe runs under `sh -c` from the
+  project root with stdin closed, once per invocation however many rules name it.
+  A non-zero exit, a failed spawn, or — without `allow_empty: true` — empty
+  stdout exits 6 naming the probe, consuming no output and writing no record.
+  A wrong scope costs time, a wrong probe can lie, so correctness stays yours:
+  assert the shape in the probe (`jq -e`) and a bad shape becomes a failed exit.
+  A stale gate names the probe that moved; `--status=json` reports each digest.
 - A command rule may declare `outputs:` — literal artifact paths relative to the
   project root — and is fresh only when its inputs still hash the same AND every
   declared output exists. A record claims a command exited 0 while its inputs
-  hashed to H; for a producer command that claim carries a side effect, and the
-  effect can be undone without touching an input (`cargo clean`, a fresh clone,
-  a pruned `target/`). Such a record is not stale, it is void — and it used to
-  read fresh forever. Existence only: mmz never hashes an output. Outputs are
-  stat-ed, never walked, so the `gitignore` filter never applies to them and an
-  artifact under an ignored tree needs no per-scope opt-out; a glob in an output
-  is a manifest error rather than a pattern that silently never matches. A
-  voided record reports the state `missing-output` and
-  names the path: in the `--is-fresh` reason, in a `MISSING OUTPUT` column of the
-  `--status` table (present only when some record is voided), and as
-  `missing_output` in `--status=json`, whose `cached.outputs` also lists what
-  the recorded run promised.
+  hashed to H, and for a producer command that claim can be undone without
+  touching an input (`cargo clean`, a fresh clone, a pruned `target/`): such a
+  record is not stale, it is void, and it used to read fresh forever. Existence
+  only, stat-ed never walked, so `gitignore` never applies and a glob is an
+  error. A voided record reports `missing-output` and names the path in the
+  `--is-fresh` reason, the `--status` table, and `--status=json`.
 - Exit code `5`: a wrapped command exited 0 without producing a declared output.
-  mmz names the missing path and writes no cache record — silently skipping the
-  record would leave a rule that quietly never hits again, the exact failure
-  `outputs` exists to end. A failing run is unaffected, recorded as a failure.
+  mmz names the missing path and writes no record — skipping it silently would
+  leave a rule that quietly never hits again. A failing run is unaffected.
 - A scope value may now be an object — `globs:` plus an optional `gitignore:` —
-  which overrides the manifest-level `gitignore` for that scope alone. The array
-  form is unchanged and inherits the manifest setting, whose default stays
-  `true`. This is what lets a rule depend on a build artifact: artifacts live in
-  git-ignored paths by definition, so under the filter such a scope expanded to
-  nothing and the rule referencing it reported fresh forever — silently, since
-  an empty resolution is only an error when every scope in the rule is empty. A
-  rule may mix both kinds; each scope resolves under its own setting. An object
-  without `globs`, or with an empty `globs` list, is a manifest error.
+  overriding the manifest-level `gitignore` for that scope alone; the array form
+  is unchanged and inherits it. That is what lets a rule depend on a build
+  artifact, which lives in a git-ignored path by definition and so resolved to
+  nothing, leaving its rule fresh forever. A rule may mix both kinds. An object
+  without `globs`, or with an empty `globs`, is a manifest error.
 
 ### Changed
 
-- Library API: `Manifest::scopes` maps to the new `manifest::Scope` rather than
-  `Vec<String>`, and `Manifest::globs_for` is replaced by `Manifest::glob_groups`,
-  which returns the rule's patterns bucketed by effective `gitignore` setting for
-  the new `resolve::expand_groups`. The `mmz` CLI surface is unaffected.
+- Library API: `Manifest::scopes` maps to `manifest::Scope`, `Manifest::globs_for`
+  is replaced by `Manifest::glob_groups` (feeding `resolve::expand_groups`), and
+  `cache::write` takes a `cache::Outcome`. The `mmz` CLI surface is unaffected.
 
 ## [0.5.1] - 2026-07-24
 

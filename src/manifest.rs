@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
+use crate::probe::Probe;
 use crate::resolve::GlobGroup;
 
 /// Directory holding mmz's per-project state, found by walking upward. The
@@ -201,6 +202,16 @@ pub struct Manifest {
     #[serde(default)]
     pub scopes: BTreeMap<String, Scope>,
 
+    /// Named commands whose stdout is an input. A rule's `inputs:` references a
+    /// probe by name exactly as it references a scope, and the probe's stdout
+    /// hash joins that rule's input digest — which is how a rule depends on
+    /// part of a file, or on something that is not a file at all. One
+    /// namespace: a probe sharing a name with a scope is a load error. See
+    /// [`crate::probe`], including what a probe can get wrong that a file hash
+    /// cannot.
+    #[serde(default)]
+    pub probes: BTreeMap<String, Probe>,
+
     /// Ordered command rules. The first rule whose `name` is a token-prefix of
     /// the invoked command wins; its inputs determine the cache.
     #[serde(default)]
@@ -239,7 +250,9 @@ pub struct Command {
     /// beginning with the tokens `cargo test` (see [`Command::match_mode`]).
     pub name: String,
 
-    /// Scope names whose globs, unioned, are this command's inputs.
+    /// Input names, each either a scope (whose globs union into this command's
+    /// file set) or a probe (whose stdout hash joins its digest). One
+    /// namespace, so the two kinds are written identically here.
     #[serde(default)]
     pub inputs: Vec<String>,
 
@@ -282,7 +295,8 @@ impl Manifest {
     ///
     /// Returns [`Error::ManifestParse`] when the file cannot be parsed, or a
     /// validation error ([`Error::EmptyCommandName`], [`Error::DuplicateCommand`],
-    /// [`Error::UnknownScope`]) when its contents are inconsistent.
+    /// [`Error::UnknownInput`], [`Error::NameCollision`]) when its contents are
+    /// inconsistent.
     pub fn load(path: &Path) -> Result<Self> {
         let text = fs::read_to_string(path)?;
         let manifest: Self =
@@ -294,16 +308,18 @@ impl Manifest {
         Ok(manifest)
     }
 
-    /// Checks invariants the schema cannot express: command names are present,
-    /// unique, and reference only defined scopes; tags are unique per command;
-    /// declared outputs are literal paths.
+    /// Checks invariants the schema cannot express: no probe shadows a scope;
+    /// command names are present, unique, and reference only declared inputs;
+    /// tags are unique per command; declared outputs are literal paths.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::EmptyCommandName`], [`Error::DuplicateCommand`],
-    /// [`Error::UnknownScope`], [`Error::DuplicateTag`], or
+    /// Returns [`Error::NameCollision`], [`Error::EmptyCommandName`],
+    /// [`Error::DuplicateCommand`], [`Error::UnknownScope`],
+    /// [`Error::UnknownInput`], [`Error::DuplicateTag`], or
     /// [`Error::InvalidOutput`].
     pub fn validate(&self) -> Result<()> {
+        crate::probe::validate(&self.probes, &self.scopes)?;
         let mut seen: Vec<&str> = Vec::new();
         for (index, command) in self.commands.iter().enumerate() {
             if command.name.trim().is_empty() {
@@ -321,11 +337,11 @@ impl Manifest {
                     });
                 }
             }
-            for scope in &command.inputs {
-                if !self.scopes.contains_key(scope) {
-                    return Err(Error::UnknownScope {
+            for input in &command.inputs {
+                if !self.scopes.contains_key(input) && !self.probes.contains_key(input) {
+                    return Err(Error::UnknownInput {
                         command: command.name.clone(),
-                        scope: scope.clone(),
+                        input: input.clone(),
                     });
                 }
             }
@@ -352,17 +368,26 @@ impl Manifest {
     /// Bucketing rather than one group per scope keeps the filesystem walk
     /// count at two in the worst case, however many scopes a rule references.
     ///
+    /// An `inputs` entry naming a probe contributes no patterns and is skipped
+    /// here; [`crate::probe::Resolver`] owns that half of the input set.
+    ///
     /// # Errors
     ///
-    /// Returns [`Error::UnknownScope`] if a referenced scope is undefined.
+    /// Returns [`Error::UnknownInput`] if an entry is neither a declared scope
+    /// nor a declared probe.
     pub fn glob_groups(&self, command: &Command) -> Result<Vec<GlobGroup>> {
         let mut honoured: Vec<String> = Vec::new();
         let mut opted_out: Vec<String> = Vec::new();
         for name in &command.inputs {
-            let scope = self.scopes.get(name).ok_or_else(|| Error::UnknownScope {
-                command: command.name.clone(),
-                scope: name.clone(),
-            })?;
+            let Some(scope) = self.scopes.get(name) else {
+                if self.probes.contains_key(name) {
+                    continue;
+                }
+                return Err(Error::UnknownInput {
+                    command: command.name.clone(),
+                    input: name.clone(),
+                });
+            };
             let bucket = if scope.honours_gitignore(self.gitignore) {
                 &mut honoured
             } else {

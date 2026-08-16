@@ -41,6 +41,21 @@ commands:
   - name: cargo test
     inputs: [rust]
 
+# Named commands whose stdout is hashed into the input digest of every rule
+# naming them in `inputs` — how a rule depends on part of a file, or on
+# something that is not a file. One namespace with scopes: a probe may not
+# share a name with one. Weigh the trade before reaching for this: a wrong
+# scope costs time, a wrong probe can lie. A non-zero exit, a failed spawn, or
+# empty stdout (unless `allow_empty: true`) is a hard error and records
+# nothing; content correctness stays yours, so assert the shape in the probe
+# (`jq -e`) and a bad shape becomes a non-zero exit.
+#   probes:
+#     fmt-recipe:
+#       run: just --dump --dump-format json | jq -e -c '.recipes[\"fmt-check\"]'
+#   commands:
+#     - name: just fmt-check
+#       inputs: [rust, fmt-recipe]
+
 # A single {scope} macro in a name fans the rule over that scope's files: one
 # per-file cache record, each keyed by and scoped to its own file plus the
 # shared `inputs` pins. Best for commands that read only the one file (a

@@ -36,10 +36,13 @@ enum Status {
 ///
 /// `outputs` is the artifact list the rule declared when the run was recorded,
 /// so `mmz --status` can report a missing artifact against the run that
-/// promised it. It defaults to empty, which is exactly what a record written
-/// before the field existed (or by a rule declaring no outputs) means, so it
-/// needs no [`FORMAT`] bump: freshness is decided against the manifest's
-/// current declaration, never against the stored list.
+/// promised it. `probes` is the same idea for command-driven inputs: the digest
+/// each named probe produced at that moment, so a later stale verdict can name
+/// the probe that moved instead of sending a reader to diff files that did not.
+/// Both default to empty, which is exactly what a record written before the
+/// field existed (or by a rule declaring neither) means, so neither needs a
+/// [`FORMAT`] bump: freshness is decided against the manifest's current
+/// declaration, never against the stored lists.
 #[derive(Debug, Serialize, Deserialize)]
 struct Record {
     format: u32,
@@ -50,6 +53,26 @@ struct Record {
     ran_at: u64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     outputs: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    probes: BTreeMap<String, String>,
+}
+
+/// What a completed run records: the digest it was measured against, whether it
+/// succeeded, the artifacts its rule declared, and the probe digests that fed
+/// the input digest.
+///
+/// A struct rather than five positional arguments so a new recorded fact costs
+/// a field, not another parameter at every call site.
+#[derive(Default)]
+pub struct Outcome<'a> {
+    /// The input digest the run was measured against.
+    pub digest: &'a str,
+    /// Whether the run exited 0.
+    pub ok: bool,
+    /// Artifact paths the rule declared when the run was recorded.
+    pub outputs: &'a [PathBuf],
+    /// Digest of each probe the rule names, by probe name.
+    pub probes: BTreeMap<String, String>,
 }
 
 /// A trusted view of a stored record, for inspection by `mmz --status`.
@@ -63,6 +86,9 @@ pub struct Cached {
     /// The outputs the rule declared when this run was recorded, as written.
     /// Empty for a rule that declares none.
     pub outputs: Vec<String>,
+    /// The digest each named probe produced when this run was recorded. Empty
+    /// for a rule that names none.
+    pub probes: BTreeMap<String, String>,
     /// Every stored record field as a string, keyed by field name, for cache-hit
     /// notice macros (`{cache:<field>}`). Driven off serialization, so a new
     /// record field becomes a macro automatically.
@@ -88,6 +114,7 @@ pub fn read(dir: &Path, command: &str) -> Option<Cached> {
         digest: record.input_digest,
         ran_at: record.ran_at,
         outputs: record.outputs,
+        probes: record.probes,
         fields,
     })
 }
@@ -122,21 +149,28 @@ pub fn is_fresh(dir: &Path, command: &str, digest: &str) -> bool {
     read(dir, command).is_some_and(|cached| cached.ok && cached.digest == digest)
 }
 
-/// Records the outcome of a run under `dir`, along with the artifact paths the
-/// rule declared at that moment. Best-effort: a write failure is logged, never
-/// propagated, because the command has already run and its exit code stands.
-pub fn write(dir: &Path, command: &str, digest: &str, ok: bool, outputs: &[PathBuf]) {
+/// Records the outcome of a run under `dir`, along with the artifact paths and
+/// probe digests the rule carried at that moment. Best-effort: a write failure
+/// is logged, never propagated, because the command has already run and its exit
+/// code stands.
+pub fn write(dir: &Path, command: &str, outcome: &Outcome) {
     let record = Record {
         format: FORMAT,
         algorithm: ALGORITHM.to_owned(),
         command: command.to_owned(),
-        input_digest: digest.to_owned(),
-        status: if ok { Status::Ok } else { Status::Failed },
+        input_digest: outcome.digest.to_owned(),
+        status: if outcome.ok {
+            Status::Ok
+        } else {
+            Status::Failed
+        },
         ran_at: now_secs(),
-        outputs: outputs
+        outputs: outcome
+            .outputs
             .iter()
             .map(|output| output.display().to_string())
             .collect(),
+        probes: outcome.probes.clone(),
     };
     if let Err(err) = try_write(dir, command, &record) {
         log::warn!("mmz: could not write cache for `{command}`: {err}");
@@ -242,15 +276,23 @@ fn now_secs() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
 
-    use super::{is_fresh, prune, read, slug, write as write_record};
+    use super::{Outcome, is_fresh, prune, read, slug, write as write_record};
 
-    /// Records a run declaring no outputs — every case here but the one that
-    /// checks the declared list is stored.
+    /// Records a run declaring no outputs and naming no probes — every case
+    /// here but the two that check those lists.
     fn write(dir: &Path, command: &str, digest: &str, ok: bool) {
-        write_record(dir, command, digest, ok, &[]);
+        write_record(
+            dir,
+            command,
+            &Outcome {
+                digest,
+                ok,
+                ..Outcome::default()
+            },
+        );
     }
 
     #[test]
@@ -304,9 +346,12 @@ mod tests {
         write_record(
             dir.path(),
             "just cover",
-            "d1",
-            true,
-            &[PathBuf::from("target/coverage/lcov.info")],
+            &Outcome {
+                digest: "d1",
+                ok: true,
+                outputs: &[PathBuf::from("target/coverage/lcov.info")],
+                ..Outcome::default()
+            },
         );
         let cached = read(dir.path(), "just cover").expect("record");
         assert_eq!(
@@ -320,6 +365,36 @@ mod tests {
         assert!(
             bare.outputs.is_empty(),
             "a rule declaring no outputs records none"
+        );
+    }
+
+    #[test]
+    fn probe_digests_are_stored_with_the_record() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let probes: BTreeMap<String, String> = [("fmt-recipe".to_owned(), "abc".to_owned())]
+            .into_iter()
+            .collect();
+        write_record(
+            dir.path(),
+            "just fmt-check",
+            &Outcome {
+                digest: "d1",
+                ok: true,
+                probes: probes.clone(),
+                ..Outcome::default()
+            },
+        );
+        let cached = read(dir.path(), "just fmt-check").expect("record");
+        assert_eq!(
+            cached.probes, probes,
+            "the record remembers what each probe printed, so a later stale verdict can name the one that moved"
+        );
+
+        write(dir.path(), "cargo test", "d2", true);
+        let bare = read(dir.path(), "cargo test").expect("record");
+        assert!(
+            bare.probes.is_empty(),
+            "a rule naming no probes records none"
         );
     }
 

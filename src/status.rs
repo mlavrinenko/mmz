@@ -17,16 +17,21 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
-use crate::{cache, hashing, outputs, parametric, resolve};
+use crate::{cache, hashing, outputs, parametric, probe, resolve};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
 /// `mmz --status=json-schema`.
 pub const SCHEMA: &str = include_str!("../schema/status.schema.json");
 
-/// The full status report: the governing manifest and every rule's state.
+/// The full status report: the governing manifest, every probe mmz resolved,
+/// and every rule's state.
 #[derive(Serialize)]
 struct Report {
     manifest: String,
+    /// Each resolved probe's current digest, by name, so a consumer can see
+    /// exactly what mmz saw. Omitted when no rule in the report named one.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    probes: BTreeMap<String, String>,
     rules: Vec<RuleStatus>,
 }
 
@@ -60,6 +65,11 @@ struct CachedInfo {
     /// it declared none.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     outputs: Vec<String>,
+    /// The digest each named probe produced when the run was recorded, so a
+    /// consumer can diff it against the report's current `probes`; omitted
+    /// when the rule named none.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    probes: BTreeMap<String, String>,
 }
 
 /// A rule's freshness verdict.
@@ -75,11 +85,13 @@ pub(crate) enum State {
 }
 
 /// A verdict plus the detail behind it: the declared output that voided the
-/// record, when there is one. The state alone cannot carry it — a reader told
-/// only "stale" goes looking at the inputs, which is the wrong place.
+/// record, or the probe whose output moved, when there is one. The state alone
+/// cannot carry either — a reader told only "stale" goes looking at the input
+/// files, which in both cases is the wrong place.
 pub(crate) struct Assessment {
     pub(crate) state: State,
     pub(crate) missing_output: Option<String>,
+    pub(crate) changed_probe: Option<String>,
 }
 
 impl State {
@@ -130,12 +142,16 @@ impl State {
 
 impl Assessment {
     /// The verdict's one-line explanation, naming the missing artifact when
-    /// that is what voided the record. `None` when the rule is fresh.
+    /// that is what voided the record, or the probe when that is what moved.
+    /// `None` when the rule is fresh.
     pub(crate) fn reason(&self) -> Option<String> {
-        match self.missing_output.as_deref() {
-            Some(path) => Some(format!("declared output `{path}` is missing")),
-            None => self.state.reason().map(str::to_owned),
+        if let Some(path) = self.missing_output.as_deref() {
+            return Some(format!("declared output `{path}` is missing"));
         }
+        if let Some(name) = self.changed_probe.as_deref() {
+            return Some(format!("probe `{name}` changed since it last passed"));
+        }
+        self.state.reason().map(str::to_owned)
     }
 }
 
@@ -179,12 +195,16 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
 
     let cache_dir = base.join(&manifest.cache_dir);
     let mut matches = Vec::with_capacity(manifest.commands.len());
-    let mut shared_by_rule: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut shared_by_rule: BTreeMap<String, Shared> = BTreeMap::new();
+    let mut probes = probe::Resolver::new(manifest, base);
     for rule in &manifest.commands {
         if !tags.is_empty() && !tags.iter().all(|tag| rule.tags.contains(tag)) {
             continue;
         }
-        shared_by_rule.insert(rule.name.clone(), shared_inputs(manifest, rule, base)?);
+        shared_by_rule.insert(
+            rule.name.clone(),
+            shared_inputs(manifest, rule, base, &mut probes)?,
+        );
         matches.extend(parametric::expand_rule(manifest, base, rule)?);
     }
     parametric::detect_collision(&matches)?;
@@ -197,34 +217,53 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     }
     Ok(Report {
         manifest: located.path.display().to_string(),
+        probes: probes.resolved().clone(),
         rules,
     })
 }
 
-/// Resolves a rule's shared `inputs` glob set, run once per rule regardless of
-/// how many expansions (parametric fan-outs) it has. [`expansion_files`] unions
-/// this cached set with each expansion's bound file, so the walk itself never
-/// repeats per expansion. One walk, or two when the rule mixes scopes that
-/// honour the gitignore filter with scopes that opted out.
+/// A rule's resolved shared inputs: the files its `inputs:` scopes expand to,
+/// plus the digest of every probe those same `inputs:` name.
+///
+/// Resolved once per rule — the file set is unioned with each expansion's bound
+/// file by [`expansion_files`], and a rule's probe digests are identical across
+/// all of its expansions.
+pub(crate) struct Shared {
+    files: Vec<String>,
+    probes: BTreeMap<String, String>,
+}
+
+/// Resolves a rule's shared `inputs` — its glob set and its probes — run once
+/// per rule regardless of how many expansions (parametric fan-outs) it has.
+/// [`expansion_files`] unions the cached file set with each expansion's bound
+/// file, so the walk itself never repeats per expansion. One walk, or two when
+/// the rule mixes scopes that honour the gitignore filter with scopes that
+/// opted out. `probes` carries its memo across rules, so a probe eighteen rules
+/// share still runs once.
 ///
 /// # Errors
 ///
-/// Returns a resolution error when the rule's globs are invalid.
+/// Returns a resolution error when the rule's globs are invalid, or a probe
+/// error when one of its probes fails, cannot be run, or prints nothing.
 pub(crate) fn shared_inputs(
     manifest: &Manifest,
     rule: &Command,
     base: &Path,
-) -> Result<Vec<String>> {
-    resolve::expand_groups(&manifest.glob_groups(rule)?, base)
+    probes: &mut probe::Resolver,
+) -> Result<Shared> {
+    Ok(Shared {
+        files: resolve::expand_groups(&manifest.glob_groups(rule)?, base)?,
+        probes: probes.for_rule(rule)?,
+    })
 }
 
-/// Combines a rule's pre-resolved shared inputs with one expansion's bound
+/// Combines a rule's pre-resolved shared files with one expansion's bound
 /// file (if any), sorted and deduped. Pure: it does no filesystem walk of its
 /// own — callers resolve `shared` once per rule via [`shared_inputs`] and
 /// reuse it across every expansion. The file set both [`rule_status`] and
 /// [`expansion_state`] digest.
-fn expansion_files(shared: &[String], hit: &parametric::Match) -> Vec<String> {
-    let mut files = shared.to_vec();
+fn expansion_files(shared: &Shared, hit: &parametric::Match) -> Vec<String> {
+    let mut files = shared.files.clone();
     if let Some(file) = &hit.exp.file {
         files.push(file.clone());
         files.sort();
@@ -238,14 +277,14 @@ fn expansion_files(shared: &[String], hit: &parametric::Match) -> Vec<String> {
 /// record.
 fn rule_status(
     hit: &parametric::Match,
-    shared: &[String],
+    shared: &Shared,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<RuleStatus> {
     let identity = hit.exp.identity.clone();
     let files = expansion_files(shared, hit);
     let cached = read_cached(cache_dir, &identity);
-    if files.is_empty() {
+    if files.is_empty() && shared.probes.is_empty() {
         return Ok(RuleStatus {
             name: identity,
             state: State::NoInputs,
@@ -256,9 +295,9 @@ fn rule_status(
         });
     }
     let inputs = hashing::hash_each(base, &files)?;
-    let digest = hashing::digest_hashes(&inputs);
+    let digest = hashing::digest_all(&inputs, &shared.probes);
     let missing = outputs::first_missing(base, &hit.rule.outputs);
-    let assessed = verdict(cached.as_ref(), &digest, missing);
+    let assessed = verdict(cached.as_ref(), &digest, missing, &shared.probes);
     Ok(RuleStatus {
         name: identity,
         state: assessed.state,
@@ -283,22 +322,24 @@ fn rule_status(
 /// Returns a hashing error when an input cannot be read.
 pub(crate) fn expansion_state(
     hit: &parametric::Match,
-    shared: &[String],
+    shared: &Shared,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<Assessment> {
     let files = expansion_files(shared, hit);
-    if files.is_empty() {
+    if files.is_empty() && shared.probes.is_empty() {
         return Ok(Assessment {
             state: State::NoInputs,
             missing_output: None,
+            changed_probe: None,
         });
     }
-    let digest = hashing::digest_files(base, &files)?;
+    let digest = hashing::digest_with(base, &files, &shared.probes)?;
     Ok(verdict(
         read_cached(cache_dir, &hit.exp.identity).as_ref(),
         &digest,
         outputs::first_missing(base, &hit.rule.outputs),
+        &shared.probes,
     ))
 }
 
@@ -310,6 +351,7 @@ fn read_cached(cache_dir: &Path, name: &str) -> Option<CachedInfo> {
         ok: cached.ok,
         ran_at: cached.ran_at,
         outputs: cached.outputs,
+        probes: cached.probes,
     })
 }
 
@@ -321,8 +363,16 @@ fn read_cached(cache_dir: &Path, name: &str) -> Option<CachedInfo> {
 /// A missing artifact outranks a digest mismatch. Both would re-run the rule,
 /// but only one of them is a fact a reader would otherwise never guess — an
 /// input change is the assumption they already hold — so the verdict names the
-/// gone artifact rather than sending them to diff the inputs.
-fn verdict(cached: Option<&CachedInfo>, digest: &str, missing: Option<String>) -> Assessment {
+/// gone artifact rather than sending them to diff the inputs. A stale verdict
+/// gets the same treatment for probes: when the record's stored probe digests
+/// show one moved, `probes` is compared against them and the culprit is named,
+/// because no file changed and diffing the files would find nothing.
+fn verdict(
+    cached: Option<&CachedInfo>,
+    digest: &str,
+    missing: Option<String>,
+    probes: &BTreeMap<String, String>,
+) -> Assessment {
     let state = match cached {
         None => State::Never,
         Some(record) if !record.ok => State::Failed,
@@ -334,9 +384,14 @@ fn verdict(cached: Option<&CachedInfo>, digest: &str, missing: Option<String>) -
         State::MissingOutput => missing,
         _ => None,
     };
+    let changed_probe = match state {
+        State::Stale => cached.and_then(|record| probe::first_changed(&record.probes, probes)),
+        _ => None,
+    };
     Assessment {
         state,
         missing_output,
+        changed_probe,
     }
 }
 

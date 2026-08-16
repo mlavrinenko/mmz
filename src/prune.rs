@@ -57,6 +57,20 @@ mod tests {
         std::fs::write(dir.join("config.yaml"), body).expect("write manifest");
     }
 
+    /// Writes a successful record for `command`, declaring no outputs and
+    /// naming no probes.
+    fn record(cache_dir: &std::path::Path, command: &str) {
+        cache::write(
+            cache_dir,
+            command,
+            &cache::Outcome {
+                digest: "d",
+                ok: true,
+                ..cache::Outcome::default()
+            },
+        );
+    }
+
     #[test]
     fn prunes_records_for_rules_not_in_the_manifest() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -64,8 +78,8 @@ mod tests {
         // The manifest knows only `cargo test`, in a custom cache directory.
         manifest(base, "cache_dir: .cache\ncommands:\n  - name: cargo test\n");
         let cache_dir = base.join(".cache");
-        cache::write(&cache_dir, "cargo test", "d", true, &[]);
-        cache::write(&cache_dir, "cargo bench", "d", true, &[]); // orphan
+        record(&cache_dir, "cargo test");
+        record(&cache_dir, "cargo bench"); // orphan
 
         let first = prune(base).expect("prune");
         assert!(first.contains("cargo bench"), "orphan reported: {first}");
@@ -98,8 +112,8 @@ mod tests {
             "cache_dir: .cache\nscopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"run {targets}\"\n",
         );
         let cache_dir = base.join(".cache");
-        cache::write(&cache_dir, "run src/a.rs", "d", true, &[]);
-        cache::write(&cache_dir, "run src/b.rs", "d", true, &[]);
+        record(&cache_dir, "run src/a.rs");
+        record(&cache_dir, "run src/b.rs");
 
         // Removing b's source orphans its per-file record; a's stays live.
         std::fs::remove_file(base.join("src/b.rs")).expect("rm b");

@@ -14,6 +14,7 @@ groups:
       - src/manifest.rs
       - src/init.rs
       - src/freshness.rs
+      - src/probe.rs
     dependents:
       - README.md
       - www/index.html
@@ -23,6 +24,7 @@ groups:
   - name: manifest-schema
     source:
       - src/manifest.rs
+      - src/probe.rs
     dependents:
       - schema/mmz.schema.json
 

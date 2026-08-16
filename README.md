@@ -66,9 +66,11 @@ so a project gains one entry and its root `.gitignore` stays untouched.
 # yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/v0.1.0/schema/mmz.schema.json
 scopes:
   rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
+# probes:                  # named commands whose stdout is an input
+#   toolchain: { run: rustc -vV }
 commands:
   - name: cargo test       # matcher and cache identity
-    inputs: [rust]
+    inputs: [rust]         # scope names, probe names, or both
 #   outputs: [target/coverage/lcov.info]   # artifacts the run must leave behind
 #   match: exact           # match only the bare command, no trailing args (default prefix)
 #   on_hit: "tests fresh"  # per-rule cache-hit note, overriding the global one below
@@ -83,11 +85,15 @@ on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a h
   stays within a directory, `**` crosses directories. A scope is either an array
   of patterns or an object naming them under `globs` (see
   [Artifact scopes](#artifact-scopes-per-scope-gitignore)).
+- `probes`: named commands whose stdout is hashed into the input digest of every
+  rule referencing them — how a rule depends on part of a file, or on something
+  that is not a file at all. One namespace with `scopes`. Weigh the trade first:
+  see [Command inputs](#command-inputs-probes).
 - `commands`: ordered rules. Each has a `name` (the matcher and cache identity),
-  `inputs` (scope names whose globs, unioned, are the rule's input set), and an
-  optional `match` (`prefix`, the default, or `exact`; see [Matching](#matching))
-  and `outputs` (literal artifact paths the run must produce; see
-  [Declared outputs](#declared-outputs)).
+  `inputs` (scope and probe names; the scopes' globs, unioned, are the rule's
+  file set), and an optional `match` (`prefix`, the default, or `exact`; see
+  [Matching](#matching)) and `outputs` (literal artifact paths the run must
+  produce; see [Declared outputs](#declared-outputs)).
 - `gitignore` (default `true`): glob expansion skips git-ignored paths, so build
   artifacts never enter an input set. Explicitly listed literal paths are always
   kept. The `.git` directory is never traversed; symlinks are not followed. One
@@ -105,8 +111,9 @@ on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a h
   global note, or to `""` to silence one. `mmz --init` scaffolds a default.
 
 The manifest is validated at load: command names must be non-empty and unique,
-every referenced scope must be defined, and `strict` names must be known. Run
-`mmz --schema` for the full JSON Schema.
+every `inputs` entry must name a defined scope or probe (and no name may be
+both), and `strict` names must be known. Run `mmz --schema` for the full JSON
+Schema.
 
 `mmz --init` pins the `$schema` URL to the `v{version}` tag of the mmz that wrote
 it, not `main`, so a project keeps validating against the schema its mmz was
@@ -142,6 +149,74 @@ A rule may mix both kinds of scope — each is expanded under its own setting, s
 the sibling scopes in the same rule keep filtering. Absent means inherit; the
 manifest-level default stays `true`. An object without `globs`, or with an empty
 `globs` list, is a manifest error.
+
+## Command inputs (probes)
+
+A scope can only name whole files, so a rule that depends on *part* of a file
+has to hash all of it — one recipe body in a `Justfile` busts every rule that
+pins the `Justfile`. A `probes:` entry closes that gap: `run` is a command line,
+its stdout is hashed, and `inputs:` references the probe by name exactly as it
+references a scope.
+
+```yaml
+probes:
+  fmt-recipe:
+    run: just --dump --dump-format json | jq -c '.recipes["fmt-check"]'
+
+commands:
+  - name: just fmt-check
+    inputs: [rust, fmt-recipe]
+```
+
+Nothing else about the rule changes: the probe's digest joins the rest of its
+input digest, so `just fmt-check` re-runs when its own recipe body moves and
+ignores every other recipe in the same file. The same shape covers a toolchain
+fingerprint (`rustc -vV`), a resolved dependency set, or anything else a project
+can print deterministically.
+
+**Read this before reaching for one: a wrong scope costs time, a wrong probe can
+lie.** Over-declaring a scope buys an unnecessary re-run — harmless. A probe that
+prints the wrong bytes buys a wrongly *fresh* rule, which is the failure `mmz`
+exists to prevent. So every way a probe can fail visibly is a hard stop:
+
+- A probe that exits non-zero is an error naming the probe, its exit code, and
+  its stderr. `mmz` exits 6 without consuming the output and without writing a
+  record — a failed command never reaches the hasher.
+- A probe that cannot be spawned is the same error.
+- Empty stdout is an error by default; `allow_empty: true` opts in. It is the
+  cheapest catch for a selector that matched nothing.
+
+Content correctness and determinism are **yours, not `mmz`'s**. A probe that
+prints valid but wrong output, or that varies run to run, is a manifest bug and
+`mmz` cannot see it: pin the ordering, strip the timestamps, and assert the
+shape inside the probe so a bad shape becomes a non-zero exit and hits the rule
+above.
+
+```yaml
+probes:
+  fmt-recipe:                                       # note the -e
+    run: just --dump --dump-format json | jq -e -c '.recipes["fmt-check"]'
+```
+
+`jq -e` exits non-zero when its selector yields `null` or `false`, turning a
+renamed recipe into a loud probe failure instead of a digest that quietly stops
+tracking anything. `mmz` does not validate meaning, and will not learn to.
+
+Mechanics: `run` is executed by `sh -c` from the project root (the directory
+holding `.mmz`), with stdin closed so a probe waiting on input fails instead of
+hanging a gate, and stderr captured for the failure message. A probe is resolved
+once per `mmz` invocation however many rules name it, so eighteen rules sharing
+one probe cost one process — the shape that matters, since a bare
+`mmz --is-fresh` gates every rule and runs in git hooks. A declared probe that no
+rule names is never run.
+
+`inputs:` has one namespace: a probe sharing a name with a scope is a manifest
+error, so a reader never has to guess which kind a name is, and an entry that is
+neither is refused at load. A rule whose only input is a probe has inputs — it is
+memoized, not `no-inputs`. When a probe is what changed, `mmz --is-fresh` says
+``probe `<name>` changed since it last passed`` rather than "inputs changed",
+and `mmz --status=json` reports every resolved probe's current digest under
+`probes` (with what each record saw under `cached.probes`).
 
 ## Declared outputs
 
@@ -291,7 +366,9 @@ So a rule's scopes must be a superset of every file any matching invocation
 could depend on. When in doubt, broaden the scope. Toolchain sensitivity is
 modeled as ordinary inputs: add `rust-toolchain.toml` or `flake.lock` to a scope
 and a toolchain bump busts the cache. `mmz` trusts file content, not the ambient
-environment.
+environment — and a [probe](#command-inputs-probes) only shifts who is trusted,
+from a file's bytes to a command's stdout, which is why its content is the
+manifest author's to get right.
 
 `mmz` fails closed: a missing or invalid manifest always errors, and unmatched
 commands or matched rules with no inputs error too unless `strict` relaxes them
@@ -337,6 +414,7 @@ A non-fresh gate prints one `mmz: \`<rule>\` is <state> (<reason>)` line per off
 | 3    | strict refusal (no matching rule, or a matched rule with no inputs) |
 | 4    | manifest missing or invalid |
 | 5    | the command succeeded without producing a declared output; nothing recorded |
+| 6    | a probe failed, could not be run, or printed nothing; nothing recorded |
 | 70   | internal error |
 | 127  | command could not be spawned |
 

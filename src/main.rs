@@ -38,10 +38,11 @@ every listed tag (AND, not OR); untagged rules never match. Combining --tag
 with a targeted command is a usage error — a command already resolves to one rule.
 
 Exit codes:
-    0    fresh, skipped, or succeeded        4    manifest missing or invalid
-    1    --is-fresh: not fresh               5    declared output missing after a
-    2    usage error                              successful run (nothing recorded)
-    3    strict refusal (no rule / inputs)   70   internal error
+    0    fresh, skipped, or succeeded        5    declared output missing after a
+    1    --is-fresh: not fresh                    successful run (nothing recorded)
+    2    usage error                         6    a probe failed, could not run, or
+    3    strict refusal (no rule / inputs)        printed nothing (nothing recorded)
+    4    manifest missing or invalid         70   internal error
                                              127  command could not be spawned
     otherwise the wrapped command's own exit code"
 );
@@ -298,6 +299,8 @@ fn exit_for(err: &Error) -> u8 {
         Error::NoManifest { .. }
         | Error::ManifestParse { .. }
         | Error::UnknownScope { .. }
+        | Error::UnknownInput { .. }
+        | Error::NameCollision { .. }
         | Error::EmptyCommandName(_)
         | Error::DuplicateCommand(_)
         | Error::DuplicateTag { .. }
@@ -306,6 +309,7 @@ fn exit_for(err: &Error) -> u8 {
         | Error::CollidingIdentity { .. }
         | Error::Pattern { .. } => 4,
         Error::MissingOutput { .. } => 5,
+        Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,
     }

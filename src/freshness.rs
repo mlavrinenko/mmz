@@ -15,12 +15,13 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
-use crate::parametric;
-use crate::status::{self, Assessment, expansion_state};
+use crate::status::{self, Assessment, Shared, expansion_state};
+use crate::{parametric, probe};
 
 /// Every kept rule's parametric matches, plus its pre-resolved shared
-/// `inputs` file set keyed by rule name — [`expand_matching`]'s result.
-type Expanded<'a> = (Vec<parametric::Match<'a>>, BTreeMap<String, Vec<String>>);
+/// `inputs` (files and probe digests) keyed by rule name —
+/// [`expand_matching`]'s result.
+type Expanded<'a> = (Vec<parametric::Match<'a>>, BTreeMap<String, Shared>);
 
 /// One expansion's freshness, the unit a gate reports on. For a parametric
 /// rule this is one per-file expansion; for a static rule, the rule itself.
@@ -114,7 +115,8 @@ pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<
         let hit = matches.first().ok_or_else(|| Error::NoMatch {
             command: argv.join(" "),
         })?;
-        let shared = status::shared_inputs(manifest, hit.rule, base)?;
+        let mut probes = probe::Resolver::new(manifest, base);
+        let shared = status::shared_inputs(manifest, hit.rule, base, &mut probes)?;
         return Ok(vec![verdict_for(hit, &shared, base, &cache_dir)?]);
     }
 
@@ -128,7 +130,10 @@ pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<
 /// gates share this shape, differing only in which rules they keep. Also
 /// resolves each kept rule's shared `inputs` once, keyed by rule name, so
 /// every expansion a rule fans into reuses the same resolved file set
-/// instead of re-walking the tree per expansion.
+/// instead of re-walking the tree per expansion. One [`probe::Resolver`] spans
+/// the whole sweep, so a probe many rules share costs one process for the
+/// gate — the shape that matters, since a bare `mmz --is-fresh` gates every
+/// rule and runs in git hooks.
 fn expand_matching<'a>(
     manifest: &'a Manifest,
     base: &Path,
@@ -136,10 +141,11 @@ fn expand_matching<'a>(
 ) -> Result<Expanded<'a>> {
     let mut matches = Vec::new();
     let mut shared = BTreeMap::new();
+    let mut probes = probe::Resolver::new(manifest, base);
     for rule in manifest.commands.iter().filter(|rule| keep(rule)) {
         shared.insert(
             rule.name.clone(),
-            status::shared_inputs(manifest, rule, base)?,
+            status::shared_inputs(manifest, rule, base, &mut probes)?,
         );
         matches.extend(parametric::expand_rule(manifest, base, rule)?);
     }
@@ -151,17 +157,17 @@ fn expand_matching<'a>(
 /// expansion's rule up in `shared` for its pre-resolved shared inputs.
 fn verdicts_for(
     matches: &[parametric::Match],
-    shared: &BTreeMap<String, Vec<String>>,
+    shared: &BTreeMap<String, Shared>,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<Vec<Verdict>> {
     matches
         .iter()
         .map(|hit| {
-            let files = shared
+            let inputs = shared
                 .get(hit.rule.name.as_str())
                 .expect("shared inputs resolved for every kept rule");
-            verdict_for(hit, files, base, cache_dir)
+            verdict_for(hit, inputs, base, cache_dir)
         })
         .collect()
 }
@@ -171,7 +177,7 @@ fn verdicts_for(
 /// that expansion's rule's shared inputs.
 fn verdict_for(
     hit: &parametric::Match,
-    shared: &[String],
+    shared: &Shared,
     base: &Path,
     cache_dir: &Path,
 ) -> Result<Verdict> {

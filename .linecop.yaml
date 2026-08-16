@@ -14,4 +14,4 @@ overrides:
   # rules, and the correctness contract — so it carries more than the 200-line
   # Markdown budget meant for a doc page.
   - pattern: ./README.md
-    limit: 400
+    limit: 500

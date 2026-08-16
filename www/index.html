@@ -98,6 +98,28 @@ mmz --schema          # print the config JSON Schema</code></pre>
     gitignore: false           # this scope only
     globs: ["target/coverage/lcov.info"]</code></pre>
 
+  <p>A scope can only name whole files, so a rule depending on <em>part</em> of
+    one has to hash all of it. A <code>probes:</code> entry closes that gap: its
+    <code>run</code> line is executed, its stdout is hashed, and
+    <code>inputs:</code> names the probe exactly as it names a scope:</p>
+  <pre><code>probes:
+  fmt-recipe:
+    run: just --dump --dump-format json | jq -e -c '.recipes["fmt-check"]'
+
+commands:
+  - name: just fmt-check
+    inputs: [rust, fmt-recipe]</code></pre>
+
+  <p>Weigh the trade first: a wrong scope costs time, a wrong probe can lie. A
+    probe that exits non-zero, cannot be spawned, or (without
+    <code>allow_empty: true</code>) prints nothing is a hard error naming the
+    probe — <code>mmz</code> exits 6, consumes no output and writes no record, so
+    a failed command never reaches the hasher. Content correctness and
+    determinism stay the manifest author's: assert the shape inside the probe
+    (the <code>jq -e</code> above) so a bad shape becomes a non-zero exit.
+    <code>mmz</code> does not validate meaning. Each probe is resolved once per
+    invocation, however many rules name it.</p>
+
   <p>A rule may also declare the artifacts its run produces. It is fresh only
     while its inputs hash the same <em>and</em> every declared output exists, so
     a <code>cargo clean</code> between two runs voids the record instead of

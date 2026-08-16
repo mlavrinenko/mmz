@@ -37,6 +37,26 @@
         ]
       }
     },
+    "probes": {
+      "description": "Named commands whose stdout is an input. A rule's inputs references a probe by name exactly as it references a scope, and the hash of the probe's stdout joins that rule's input digest — which is how a rule depends on part of a file (one recipe body out of a Justfile) or on something that is not a file at all (a toolchain fingerprint). One namespace with scopes: a probe sharing a name with a scope is a manifest error. A probe is resolved once per mmz invocation, however many rules name it. Weigh the trade before reaching for one: a wrong scope costs time, a wrong probe can lie.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run"],
+        "properties": {
+          "run": {
+            "type": "string",
+            "description": "The command line whose stdout is hashed, run by `sh -c` from the project root with stdin closed. A non-zero exit is a hard error naming the probe, its exit code, and its stderr: mmz exits without consuming the output and without writing a record, so a failed command never reaches the hasher. A probe that cannot be spawned is the same error. Content correctness and determinism are the manifest author's, not mmz's — pin the ordering, strip the timestamps, and assert the shape inside the probe (jq -e, a schema check) so a bad shape becomes a non-zero exit."
+          },
+          "allow_empty": {
+            "type": "boolean",
+            "default": false,
+            "description": "Accept stdout that is empty (or only whitespace) as a valid input. By default it is an error, because it is the cheapest catch for a selector that matched nothing."
+          }
+        }
+      }
+    },
     "commands": {
       "description": "Ordered command rules; the first token-prefix match wins.",
       "type": "array",
@@ -51,7 +71,7 @@
           },
           "inputs": {
             "type": "array",
-            "description": "Scope names whose globs union into this rule's input set. For a parametric rule these are the shared pins added to every per-file record; keep the fan scope out of them.",
+            "description": "Input names, each either a scope (whose globs union into this rule's file set) or a probe (whose stdout hash joins its digest) — one namespace, written identically. For a parametric rule these are the shared pins added to every per-file record; keep the fan scope out of them.",
             "items": { "type": "string" }
           },
           "outputs": {

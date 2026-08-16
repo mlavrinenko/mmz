@@ -11,6 +11,11 @@
       "type": "string",
       "description": "Path of the manifest governing the working directory."
     },
+    "probes": {
+      "type": "object",
+      "description": "Each probe mmz resolved for this report, name to the lowercase hex blake3 of its stdout — what mmz actually saw. A declared probe that no reported rule names in its inputs is never run, so it is absent here. Absent entirely when the report named none.",
+      "additionalProperties": { "type": "string" }
+    },
     "rules": {
       "type": "array",
       "description": "One entry per command rule, in manifest order.",
@@ -25,12 +30,12 @@
           },
           "state": {
             "type": "string",
-            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files. `missing-output`: a declared output is gone, so the record is void whatever the inputs hash — it outranks `stale`, since an input change is the assumption a reader already holds.",
+            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed — a file, or a probe whose stdout moved. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files and names no probe. `missing-output`: a declared output is gone, so the record is void whatever the inputs hash — it outranks `stale`, since an input change is the assumption a reader already holds.",
             "enum": ["fresh", "stale", "never", "failed", "no-inputs", "missing-output"]
           },
           "digest": {
             "type": "string",
-            "description": "Digest of the current inputs. Absent when the rule resolves to no files."
+            "description": "Digest of the current inputs — its resolved files folded with the digest of every probe it names. Absent when the rule resolves to no files and names no probe."
           },
           "missing_output": {
             "type": "string",
@@ -59,6 +64,11 @@
                 "type": "array",
                 "description": "The outputs the rule declared when this run was recorded, so a missing one is reported against the run that promised it. Absent when the rule declared none.",
                 "items": { "type": "string" }
+              },
+              "probes": {
+                "type": "object",
+                "description": "The digest each named probe produced when this run was recorded, so it can be diffed against the report's top-level `probes` — which is how a stale verdict names the probe that moved rather than sending a reader to diff files that did not. Absent when the rule named none.",
+                "additionalProperties": { "type": "string" }
               }
             }
           },

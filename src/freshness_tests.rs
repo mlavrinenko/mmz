@@ -371,3 +371,88 @@ fn tag_filter_expands_a_parametric_rule_per_file() {
         .expect("a verdict");
     assert!(a.is_fresh(), "the recorded file is fresh under the filter");
 }
+
+#[test]
+fn a_changed_probe_busts_the_rule_and_the_reason_names_it() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    std::fs::write(base.join("a.txt"), b"one").expect("write input");
+    std::fs::write(base.join("pinned.txt"), b"v1").expect("write probe source");
+    write_manifest(
+        base,
+        concat!(
+            "scopes:\n  src: [\"a.txt\"]\n",
+            "probes:\n  tool:\n    run: cat pinned.txt\n",
+            "commands:\n  - name: sh\n    inputs: [src, tool]\n",
+        ),
+    );
+    record_ok(base);
+    let argv = ["sh".to_owned()];
+    assert!(
+        evaluate(base, Some(&argv), &[])
+            .expect("evaluate")
+            .first()
+            .is_some_and(super::Verdict::is_fresh),
+        "a stable probe leaves the rule fresh"
+    );
+
+    // Only the probe's output moves; every input file stays byte-identical.
+    std::fs::write(base.join("pinned.txt"), b"v2").expect("rewrite probe source");
+    let stale = evaluate(base, Some(&argv), &[]).expect("evaluate");
+    let verdict = stale.first().expect("one verdict");
+    assert!(!verdict.is_fresh(), "the probe's output feeds the digest");
+    assert_eq!(verdict.state(), "stale");
+    assert_eq!(
+        verdict.reason().as_deref(),
+        Some("probe `tool` changed since it last passed"),
+        "naming the probe keeps a reader from diffing files that never moved"
+    );
+}
+
+#[test]
+fn a_changed_file_does_not_blame_an_unchanged_probe() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    std::fs::write(base.join("a.txt"), b"one").expect("write input");
+    write_manifest(
+        base,
+        concat!(
+            "scopes:\n  src: [\"a.txt\"]\n",
+            "probes:\n  tool:\n    run: printf stable\n",
+            "commands:\n  - name: sh\n    inputs: [src, tool]\n",
+        ),
+    );
+    record_ok(base);
+
+    std::fs::write(base.join("a.txt"), b"two").expect("rewrite input");
+    let stale = evaluate(base, Some(&["sh".to_owned()]), &[]).expect("evaluate");
+    let verdict = stale.first().expect("one verdict");
+    assert_eq!(verdict.state(), "stale");
+    assert_eq!(
+        verdict.reason().as_deref(),
+        Some("inputs changed since it last passed"),
+        "an unchanged probe is never blamed for a file edit"
+    );
+}
+
+#[test]
+fn a_failing_probe_stops_the_gate_rather_than_reporting_stale() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    std::fs::write(base.join("a.txt"), b"one").expect("write input");
+    write_manifest(
+        base,
+        concat!(
+            "scopes:\n  src: [\"a.txt\"]\n",
+            "probes:\n  broken:\n    run: exit 7\n",
+            "commands:\n  - name: sh\n    inputs: [src, broken]\n",
+        ),
+    );
+    let Err(err) = evaluate(base, None, &[]) else {
+        panic!("a broken probe is a hard error, not a verdict");
+    };
+    assert!(
+        matches!(err, Error::ProbeFailed { .. }),
+        "fail closed: the gate cannot honestly answer without the probe, got {err}"
+    );
+}

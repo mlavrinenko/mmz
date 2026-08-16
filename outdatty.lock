@@ -3,14 +3,15 @@ algorithm: blake3
 groups:
   cli-docs:
     source:
-      src/freshness.rs: e9f6eb062f13b19ec582d16252cf3592e9c65c8d41b9a3f634b6f467a6cc4705
-      src/init.rs: f038108b2d9ad217e2a4b4a8f0a0dd8d22e6288a8267a3f0933d6781a0c17a59
-      src/lib.rs: 16f1efba5fc4b72fc0d750b7a13035d36d124a9722790c654ea6a577e3836229
-      src/main.rs: 85d35322487e1c7fc181206dcaa3f6e5686237873637b4fccee25260d1d56bfd
-      src/manifest.rs: 4eacc0cb1c50ddc0a652593351e2a2f6db287bb5906791f3833bbaabea6a4d13
+      src/freshness.rs: cef3045a7a7fadaa42bb884546a9f9a18b1957ef2cbc6ed69f1fdb542d9a4a0b
+      src/init.rs: 1d898d3d9d9eb5edbd462dba36734316938c43cc75852389930c9905707f36a6
+      src/lib.rs: 01344735ed85de057c3ccbbd022103790fa5538009c4ca97feb6cc3bce12481e
+      src/main.rs: 60dab4e628d5f7f9473eb28d195dac0eee595305627d9e541deab65fdb6b8374
+      src/manifest.rs: 9b3e4e88a81fcbf42c3bfc0001ad0653dd970b6e0456b0961f055603da0ff113
+      src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
     dependents:
-      README.md: 1993503c0dea905d8a1dd704093e87051ef378da269985f506a8e75b31ce7904
-      www/index.html: 59cf1b128c1ae081b2fc2134b3fa538819883c515a33446efb6d58ec1c783170
+      README.md: 43ad6542afb070a6255cb0789547bcfa9c127e1cc673a6bc06cce85ba711d51d
+      www/index.html: 6f09b4140faa966c8367b01d27e7dceaf2b1d0b119dd09ce536ee46627b3b4bf
   dev-docs:
     source:
       Justfile: 34905bc5e53e3b711d1f6de2962073e27a282688c55ee697fc1c45ee76b8de06
@@ -21,16 +22,17 @@ groups:
       CONTRIBUTING.md: a90bfa47c26ca61ac15877bd03c4e6045fa2825b27ff9efd7fd0eceb912c9502
   manifest-schema:
     source:
-      src/manifest.rs: 4eacc0cb1c50ddc0a652593351e2a2f6db287bb5906791f3833bbaabea6a4d13
+      src/manifest.rs: 9b3e4e88a81fcbf42c3bfc0001ad0653dd970b6e0456b0961f055603da0ff113
+      src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
     dependents:
-      schema/mmz.schema.json: a8afbcb54f9f1699e9cb92487c52303304954de3e8c9b4ef786b78d8fd8bf839
+      schema/mmz.schema.json: 64bd2f3da6f76b4b2893de0be356bc7265a7068533fbfdb0a6d6f4c1d092b15a
   release-notes:
     source:
       Cargo.toml: 000c275fc8bbad84daa71d4178e3654ca88274e6b172582b0e1c344258c72b66
     dependents:
-      CHANGELOG.md: 0b7da0eb49f4cede403d771bf6a5ff587ee880bc0b73cf01836c0073557a859b
+      CHANGELOG.md: 45f04b7b4cc476c5f1fc048d3e8e90d492293091ba089496e3047b57667c47a2
   status-schema:
     source:
-      src/status.rs: 2c4be8ae51b65360abbe4f6b4fe4eef196cf01a9af669c0886b247be3fd8e65a
+      src/status.rs: fec059720fe62752fdd45391d5f40e734855d959b174f9c30445426fcea892fd
     dependents:
-      schema/status.schema.json: 276b157f7b45a0f44a6ef42583fed0d754512c21503cd707f7f35e1a09194c10
+      schema/status.schema.json: 4908c44ebc98d890688def6e8e6ad604d90fc630dfd840828167c4bdb66d88a4

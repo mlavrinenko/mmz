@@ -8,12 +8,22 @@
 //! is fresh; the asymmetry it protects is silent under-skipping, not loud
 //! refusal.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
-use crate::{cache, hashing, notice, outputs, parametric, resolve};
+use crate::{cache, hashing, notice, outputs, parametric, probe, resolve};
+
+/// A rule's resolved input digest and the probe digests that fed it.
+///
+/// The record stores both: a stale verdict can only name the probe that moved
+/// when the last run's per-probe digests sit beside its input digest.
+struct Digested {
+    digest: String,
+    probes: BTreeMap<String, String>,
+}
 
 /// Runs `argv` (a program and its arguments) with memoization, from `cwd`.
 ///
@@ -61,7 +71,7 @@ fn memoized(
 ) -> Result<u8> {
     let identity = hit.exp.identity.as_str();
     let rule = hit.rule;
-    let Some(digest) = digest_inputs(manifest, rule, hit.exp.file.as_deref(), base)? else {
+    let Some(resolved) = digest_inputs(manifest, rule, hit.exp.file.as_deref(), base)? else {
         if manifest.strict.enforces(StrictCase::NoInputs) {
             return Err(Error::NoInputs {
                 rule: identity.to_owned(),
@@ -70,6 +80,7 @@ fn memoized(
         log::warn!("mmz: `{identity}` matched no input files; running unmemoized");
         return exec(argv, cwd);
     };
+    let digest = resolved.digest;
     let cache_dir = base.join(&manifest.cache_dir);
     if let Some(cached) = cache::read(&cache_dir, identity) {
         let voided = outputs::first_missing(base, &rule.outputs);
@@ -84,7 +95,16 @@ fn memoized(
     }
     let code = exec(argv, cwd)?;
     confirm_outputs(rule, identity, base, code)?;
-    cache::write(&cache_dir, identity, &digest, code == 0, &rule.outputs);
+    cache::write(
+        &cache_dir,
+        identity,
+        &cache::Outcome {
+            digest: &digest,
+            ok: code == 0,
+            outputs: &rule.outputs,
+            probes: resolved.probes,
+        },
+    );
     Ok(code)
 }
 
@@ -126,15 +146,21 @@ fn announce_hit(manifest: &Manifest, rule: &Rule, cached: &cache::Cached) {
     eprintln!("{}", notice::expand(template, &cached.fields));
 }
 
-/// Resolves a rule's scopes (plus an optional bound file for a parametric
-/// expansion) to a content digest, or `None` when nothing resolves on disk. A
-/// glob or I/O failure propagates (fail-closed).
+/// Resolves a rule's whole input set — its scopes, its probes, plus an optional
+/// bound file for a parametric expansion — to a content digest, or `None` when
+/// nothing resolves at all. A glob, probe, or I/O failure propagates
+/// (fail-closed), so a probe that failed stops the run before the command is
+/// spawned and before any record is written.
+///
+/// A rule that names only probes still has inputs: `None` means no files *and*
+/// no probes, never "no files".
 fn digest_inputs(
     manifest: &Manifest,
     rule: &Rule,
     extra: Option<&str>,
     base: &Path,
-) -> Result<Option<String>> {
+) -> Result<Option<Digested>> {
+    let probes = probe::Resolver::new(manifest, base).for_rule(rule)?;
     let groups = manifest.glob_groups(rule)?;
     let mut files = resolve::expand_groups(&groups, base)?;
     if let Some(file) = extra {
@@ -142,10 +168,13 @@ fn digest_inputs(
         files.sort();
         files.dedup();
     }
-    if files.is_empty() {
+    if files.is_empty() && probes.is_empty() {
         return Ok(None);
     }
-    Ok(Some(hashing::digest_files(base, &files)?))
+    Ok(Some(Digested {
+        digest: hashing::digest_with(base, &files, &probes)?,
+        probes,
+    }))
 }
 
 /// Spawns the command with inherited stdio and returns its exit code.

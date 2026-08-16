@@ -330,6 +330,79 @@ fn tag_filter_narrows_the_table_and_excludes_untagged_rules() {
 }
 
 #[test]
+fn json_exposes_each_resolved_probe_digest() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write(base, "a.txt", "one");
+    write(base, "pinned.txt", "v1");
+    manifest(
+        base,
+        concat!(
+            "scopes:\n  src: [\"a.txt\"]\n",
+            "probes:\n  tool:\n    run: cat pinned.txt\n",
+            "commands:\n  - name: sh\n    inputs: [src, tool]\n",
+        ),
+    );
+
+    let json: serde_json::Value =
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
+    let seen = json
+        .pointer("/probes/tool")
+        .and_then(serde_json::Value::as_str)
+        .expect("the report exposes what mmz saw the probe print")
+        .to_owned();
+    assert_eq!(
+        seen,
+        crate::hashing::hash_bytes(b"v1"),
+        "the exposed digest is the hash of the probe's stdout"
+    );
+
+    write(base, "pinned.txt", "v2");
+    let moved: serde_json::Value =
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
+    assert_ne!(
+        moved
+            .pointer("/probes/tool")
+            .and_then(serde_json::Value::as_str),
+        Some(seen.as_str()),
+        "a consumer can diff runs because the digest tracks the output"
+    );
+}
+
+#[test]
+fn a_manifest_without_probes_reports_the_shape_it_always_did() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path();
+    write(root, "a.txt", "one");
+    manifest(
+        root,
+        "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
+    );
+
+    let json: serde_json::Value =
+        serde_json::from_str(&report_json(root, &[]).expect("json")).expect("valid json");
+    assert!(
+        json.get("probes").is_none(),
+        "the key is absent, not an empty object, so existing consumers see no change"
+    );
+}
+
+#[test]
+fn a_probe_only_rule_is_not_no_inputs() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    manifest(
+        base,
+        "probes:\n  tool:\n    run: printf v1\ncommands:\n  - name: sh\n    inputs: [tool]\n",
+    );
+    let text = report(base, &[]).expect("report");
+    assert!(
+        text.contains("never") && !text.contains("no-inputs"),
+        "a rule whose only input is a probe has inputs: {text}"
+    );
+}
+
+#[test]
 fn schema_is_valid_json_describing_the_output() {
     let schema: serde_json::Value = serde_json::from_str(SCHEMA).expect("schema is json");
     assert_eq!(
@@ -346,6 +419,7 @@ fn schema_is_valid_json_describing_the_output() {
         "missing-output",
         "missing_output",
         "outputs",
+        "probes",
     ] {
         assert!(SCHEMA.contains(key), "schema mentions `{key}`");
     }

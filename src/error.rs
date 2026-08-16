@@ -45,13 +45,76 @@ pub enum Error {
         source: Box<serde_yaml_ng::Error>,
     },
 
-    /// A command rule references a scope that the manifest does not define.
+    /// A command rule's `{scope}` fan macro names a scope the manifest does not
+    /// define. A macro fans over files, so a probe cannot stand in for it.
     #[error("command `{command}` references unknown scope `{scope}`")]
     UnknownScope {
         /// Name of the command rule.
         command: String,
         /// The missing scope name.
         scope: String,
+    },
+
+    /// A command rule's `inputs` names something the manifest declares neither
+    /// as a scope nor as a probe. One namespace, so one error.
+    #[error(
+        "command `{command}` references unknown input `{input}`; declare it under `scopes:` or `probes:`"
+    )]
+    UnknownInput {
+        /// Name of the command rule.
+        command: String,
+        /// The unresolvable `inputs` entry.
+        input: String,
+    },
+
+    /// A probe and a scope share a name, so an `inputs:` entry naming it would
+    /// be ambiguous.
+    #[error(
+        "`{name}` is declared as both a scope and a probe; `inputs:` has one namespace, so a name must be one or the other"
+    )]
+    NameCollision {
+        /// The name claimed twice.
+        name: String,
+    },
+
+    /// A probe command exited non-zero, so its stdout is not a usable input.
+    #[error(
+        "probe `{name}` failed (exit {code}); mmz consumed no output and wrote no cache record\n  command: {run}\n  stderr: {stderr}"
+    )]
+    ProbeFailed {
+        /// Name of the offending probe.
+        name: String,
+        /// The `run` line, as the manifest spells it.
+        run: String,
+        /// The probe's exit code (1 for a signal death).
+        code: i32,
+        /// What the probe wrote to stderr, trimmed and capped.
+        stderr: String,
+    },
+
+    /// A probe command could not be spawned at all — the same hard stop as a
+    /// probe that ran and failed.
+    #[error(
+        "probe `{name}` could not be run; mmz consumed no output and wrote no cache record\n  command: {run}\n  {source}"
+    )]
+    ProbeSpawn {
+        /// Name of the offending probe.
+        name: String,
+        /// The `run` line, as the manifest spells it.
+        run: String,
+        /// Underlying spawn error.
+        source: std::io::Error,
+    },
+
+    /// A probe printed nothing and did not opt into that with `allow_empty`.
+    #[error(
+        "probe `{name}` produced no output; that is almost always a selector that matched nothing — set `allow_empty: true` on the probe if empty really is a valid input\n  command: {run}"
+    )]
+    ProbeEmpty {
+        /// Name of the offending probe.
+        name: String,
+        /// The `run` line, as the manifest spells it.
+        run: String,
     },
 
     /// A command rule has a blank `name`.
@@ -223,6 +286,78 @@ mod tests {
         assert!(
             text.contains("no cache record was written"),
             "and the consequence is spelled out: {text}"
+        );
+    }
+
+    #[test]
+    fn probe_messages_name_the_probe_and_the_consequence() {
+        let failed = Error::ProbeFailed {
+            name: "fmt-recipe".to_owned(),
+            run: "just --dump | jq .recipes".to_owned(),
+            code: 5,
+            stderr: "jq: error: no such key".to_owned(),
+        };
+        let text = failed.to_string();
+        assert!(
+            text.contains("probe `fmt-recipe`"),
+            "names the probe: {text}"
+        );
+        assert!(text.contains("exit 5"), "names the exit code: {text}");
+        assert!(text.contains("jq: error"), "carries stderr: {text}");
+        assert!(
+            text.contains("wrote no cache record"),
+            "a failed probe never reaches the hasher, and says so: {text}"
+        );
+
+        let spawn = Error::ProbeSpawn {
+            name: "toolchain".to_owned(),
+            run: "rustc -vV".to_owned(),
+            source: std::io::Error::other("no such file"),
+        };
+        let text = spawn.to_string();
+        assert!(
+            text.contains("probe `toolchain`"),
+            "names the probe: {text}"
+        );
+        assert!(
+            text.contains("wrote no cache record"),
+            "an unspawnable probe is the same hard stop: {text}"
+        );
+
+        let empty = Error::ProbeEmpty {
+            name: "selector".to_owned(),
+            run: "jq -c .missing".to_owned(),
+        };
+        let text = empty.to_string();
+        assert!(text.contains("probe `selector`"), "names the probe: {text}");
+        assert!(
+            text.contains("allow_empty"),
+            "points at the opt-in rather than leaving it a dead end: {text}"
+        );
+    }
+
+    #[test]
+    fn input_namespace_messages_are_actionable() {
+        let unknown = Error::UnknownInput {
+            command: "cargo test".to_owned(),
+            input: "ghost".to_owned(),
+        };
+        let text = unknown.to_string();
+        assert!(
+            text.contains("unknown input `ghost`"),
+            "names the entry: {text}"
+        );
+        assert!(
+            text.contains("`scopes:` or `probes:`"),
+            "names both places it could be declared: {text}"
+        );
+
+        let clash = Error::NameCollision {
+            name: "rust".to_owned(),
+        };
+        assert!(
+            clash.to_string().contains("one namespace"),
+            "the collision explains why one name cannot be both"
         );
     }
 }
