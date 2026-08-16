@@ -4,7 +4,7 @@
   title: "mmz: command-driven input hashes",
   priority: framework("ice", confidence: 0.7, ease: 4.0, impact: 6.0),
   tags: ("config", "cache", "cli"),
-  status: proposed(2026, 8, 16),
+  status: wip(2026, 8, 16),
 )
 
 == Summary
