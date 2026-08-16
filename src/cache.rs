@@ -33,6 +33,13 @@ enum Status {
 }
 
 /// A single command rule's memoization state.
+///
+/// `outputs` is the artifact list the rule declared when the run was recorded,
+/// so `mmz --status` can report a missing artifact against the run that
+/// promised it. It defaults to empty, which is exactly what a record written
+/// before the field existed (or by a rule declaring no outputs) means, so it
+/// needs no [`FORMAT`] bump: freshness is decided against the manifest's
+/// current declaration, never against the stored list.
 #[derive(Debug, Serialize, Deserialize)]
 struct Record {
     format: u32,
@@ -41,6 +48,8 @@ struct Record {
     input_digest: String,
     status: Status,
     ran_at: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    outputs: Vec<String>,
 }
 
 /// A trusted view of a stored record, for inspection by `mmz --status`.
@@ -51,6 +60,9 @@ pub struct Cached {
     pub digest: String,
     /// Unix seconds when the run was recorded.
     pub ran_at: u64,
+    /// The outputs the rule declared when this run was recorded, as written.
+    /// Empty for a rule that declares none.
+    pub outputs: Vec<String>,
     /// Every stored record field as a string, keyed by field name, for cache-hit
     /// notice macros (`{cache:<field>}`). Driven off serialization, so a new
     /// record field becomes a macro automatically.
@@ -75,6 +87,7 @@ pub fn read(dir: &Path, command: &str) -> Option<Cached> {
         ok: record.status == Status::Ok,
         digest: record.input_digest,
         ran_at: record.ran_at,
+        outputs: record.outputs,
         fields,
     })
 }
@@ -109,10 +122,10 @@ pub fn is_fresh(dir: &Path, command: &str, digest: &str) -> bool {
     read(dir, command).is_some_and(|cached| cached.ok && cached.digest == digest)
 }
 
-/// Records the outcome of a run under `dir`. Best-effort: a write failure is
-/// logged, never propagated, because the command has already run and its exit
-/// code stands.
-pub fn write(dir: &Path, command: &str, digest: &str, ok: bool) {
+/// Records the outcome of a run under `dir`, along with the artifact paths the
+/// rule declared at that moment. Best-effort: a write failure is logged, never
+/// propagated, because the command has already run and its exit code stands.
+pub fn write(dir: &Path, command: &str, digest: &str, ok: bool, outputs: &[PathBuf]) {
     let record = Record {
         format: FORMAT,
         algorithm: ALGORITHM.to_owned(),
@@ -120,6 +133,10 @@ pub fn write(dir: &Path, command: &str, digest: &str, ok: bool) {
         input_digest: digest.to_owned(),
         status: if ok { Status::Ok } else { Status::Failed },
         ran_at: now_secs(),
+        outputs: outputs
+            .iter()
+            .map(|output| output.display().to_string())
+            .collect(),
     };
     if let Err(err) = try_write(dir, command, &record) {
         log::warn!("mmz: could not write cache for `{command}`: {err}");
@@ -226,8 +243,15 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use std::path::{Path, PathBuf};
 
-    use super::{is_fresh, prune, read, slug, write};
+    use super::{is_fresh, prune, read, slug, write as write_record};
+
+    /// Records a run declaring no outputs — every case here but the one that
+    /// checks the declared list is stored.
+    fn write(dir: &Path, command: &str, digest: &str, ok: bool) {
+        write_record(dir, command, digest, ok, &[]);
+    }
 
     #[test]
     fn fresh_only_for_matching_successful_record() {
@@ -271,6 +295,31 @@ mod tests {
         assert!(
             cached.fields.contains_key("ran_at"),
             "numeric field exposed for macros"
+        );
+    }
+
+    #[test]
+    fn declared_outputs_are_stored_with_the_record() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_record(
+            dir.path(),
+            "just cover",
+            "d1",
+            true,
+            &[PathBuf::from("target/coverage/lcov.info")],
+        );
+        let cached = read(dir.path(), "just cover").expect("record");
+        assert_eq!(
+            cached.outputs,
+            vec!["target/coverage/lcov.info".to_owned()],
+            "the record remembers what the run promised to produce"
+        );
+
+        write(dir.path(), "cargo test", "d2", true);
+        let bare = read(dir.path(), "cargo test").expect("record");
+        assert!(
+            bare.outputs.is_empty(),
+            "a rule declaring no outputs records none"
         );
     }
 

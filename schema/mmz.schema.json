@@ -54,6 +54,11 @@
             "description": "Scope names whose globs union into this rule's input set. For a parametric rule these are the shared pins added to every per-file record; keep the fan scope out of them.",
             "items": { "type": "string" }
           },
+          "outputs": {
+            "type": "array",
+            "description": "Literal artifact paths a successful run of this command is expected to produce, relative to the project root. The rule is fresh only when its inputs still hash the same AND every declared output exists, so an artifact deleted out from under a record (cargo clean, a fresh clone, a pruned target/) voids that record instead of leaving the rule fresh with nothing to show for it. Existence only — an output is never hashed. Each path is stat-ed, never walked, so the gitignore filter never applies to it and an artifact under an ignored tree needs no opt-out. Patterns are rejected at load: a glob here would never match. A run that exits 0 without producing a declared output is a hard error (exit 5) and records nothing.",
+            "items": { "type": "string" }
+          },
           "match": {
             "type": "string",
             "enum": ["prefix", "exact"],

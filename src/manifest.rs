@@ -243,6 +243,19 @@ pub struct Command {
     #[serde(default)]
     pub inputs: Vec<String>,
 
+    /// Literal paths a successful run of this command is expected to produce,
+    /// relative to the project root. The rule is fresh only when its inputs
+    /// still hash the same AND every declared output exists, so an artifact
+    /// deleted out from under a record (a `cargo clean`, a fresh clone, a
+    /// pruned `target/`) voids that record instead of leaving the rule fresh
+    /// with nothing to show for it.
+    ///
+    /// Existence only — an output is never hashed — and each path is stat-ed,
+    /// never walked, so the `gitignore` filter never applies to it. Patterns
+    /// are rejected at load; see [`crate::outputs`].
+    #[serde(default)]
+    pub outputs: Vec<PathBuf>,
+
     /// How `name` matches argv: token-prefix (default) or exact. Spelled
     /// `match` in the manifest.
     #[serde(rename = "match", default)]
@@ -282,12 +295,14 @@ impl Manifest {
     }
 
     /// Checks invariants the schema cannot express: command names are present,
-    /// unique, and reference only defined scopes; tags are unique per command.
+    /// unique, and reference only defined scopes; tags are unique per command;
+    /// declared outputs are literal paths.
     ///
     /// # Errors
     ///
     /// Returns [`Error::EmptyCommandName`], [`Error::DuplicateCommand`],
-    /// [`Error::UnknownScope`], or [`Error::DuplicateTag`].
+    /// [`Error::UnknownScope`], [`Error::DuplicateTag`], or
+    /// [`Error::InvalidOutput`].
     pub fn validate(&self) -> Result<()> {
         let mut seen: Vec<&str> = Vec::new();
         for (index, command) in self.commands.iter().enumerate() {
@@ -314,6 +329,7 @@ impl Manifest {
                     });
                 }
             }
+            crate::outputs::validate(&command.name, &command.outputs)?;
             let mut seen_tags: Vec<&str> = Vec::new();
             for tag in &command.tags {
                 if seen_tags.contains(&tag.as_str()) {

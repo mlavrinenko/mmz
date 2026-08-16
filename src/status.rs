@@ -17,7 +17,7 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
-use crate::{cache, hashing, parametric, resolve};
+use crate::{cache, hashing, outputs, parametric, resolve};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
 /// `mmz --status=json-schema`.
@@ -38,6 +38,10 @@ struct RuleStatus {
     /// Digest of the current inputs; absent when the rule resolves to no files.
     #[serde(skip_serializing_if = "Option::is_none")]
     digest: Option<String>,
+    /// The declared output that voided the record, present exactly when the
+    /// state is [`State::MissingOutput`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_output: Option<String>,
     /// The stored record, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     cached: Option<CachedInfo>,
@@ -52,6 +56,10 @@ struct CachedInfo {
     ok: bool,
     /// Unix seconds when the run was recorded.
     ran_at: u64,
+    /// The outputs the rule declared when the run was recorded; omitted when
+    /// it declared none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    outputs: Vec<String>,
 }
 
 /// A rule's freshness verdict.
@@ -63,6 +71,15 @@ pub(crate) enum State {
     Never,
     Failed,
     NoInputs,
+    MissingOutput,
+}
+
+/// A verdict plus the detail behind it: the declared output that voided the
+/// record, when there is one. The state alone cannot carry it — a reader told
+/// only "stale" goes looking at the inputs, which is the wrong place.
+pub(crate) struct Assessment {
+    pub(crate) state: State,
+    pub(crate) missing_output: Option<String>,
 }
 
 impl State {
@@ -74,6 +91,7 @@ impl State {
             Self::Never => "never",
             Self::Failed => "failed",
             Self::NoInputs => "no-inputs",
+            Self::MissingOutput => "missing-output",
         }
     }
 
@@ -83,16 +101,21 @@ impl State {
     }
 
     /// True for the non-fresh states a recorded pass can clear: `Stale`,
-    /// `Never`, and `Failed`. `NoInputs` never has inputs to digest, so a
-    /// wrapped run records nothing (or is refused under the `no_inputs`
-    /// strictness) and the rule stays `NoInputs` — its remedy is fixing the
-    /// manifest, not re-running under mmz.
+    /// `Never`, `Failed`, and `MissingOutput` — re-running the command under
+    /// mmz regenerates the artifact and records the pass. `NoInputs` never has
+    /// inputs to digest, so a wrapped run records nothing (or is refused under
+    /// the `no_inputs` strictness) and the rule stays `NoInputs` — its remedy
+    /// is fixing the manifest, not re-running under mmz.
     pub(crate) const fn is_remediable(self) -> bool {
-        matches!(self, Self::Stale | Self::Never | Self::Failed)
+        matches!(
+            self,
+            Self::Stale | Self::Never | Self::Failed | Self::MissingOutput
+        )
     }
 
     /// Why a non-fresh rule would re-run, for the `--is-fresh` gate's message.
-    /// `None` when the rule is fresh.
+    /// `None` when the rule is fresh. The `MissingOutput` wording here is the
+    /// fallback; the caller names the path (see [`Assessment`]).
     pub(crate) const fn reason(self) -> Option<&'static str> {
         match self {
             Self::Fresh => None,
@@ -100,6 +123,18 @@ impl State {
             Self::Never => Some("never run"),
             Self::Failed => Some("last run failed"),
             Self::NoInputs => Some("resolved no input files"),
+            Self::MissingOutput => Some("a declared output is missing"),
+        }
+    }
+}
+
+impl Assessment {
+    /// The verdict's one-line explanation, naming the missing artifact when
+    /// that is what voided the record. `None` when the rule is fresh.
+    pub(crate) fn reason(&self) -> Option<String> {
+        match self.missing_output.as_deref() {
+            Some(path) => Some(format!("declared output `{path}` is missing")),
+            None => self.state.reason().map(str::to_owned),
         }
     }
 }
@@ -215,17 +250,20 @@ fn rule_status(
             name: identity,
             state: State::NoInputs,
             digest: None,
+            missing_output: None,
             cached,
             inputs: Vec::new(),
         });
     }
     let inputs = hashing::hash_each(base, &files)?;
     let digest = hashing::digest_hashes(&inputs);
-    let state = verdict(cached.as_ref(), &digest);
+    let missing = outputs::first_missing(base, &hit.rule.outputs);
+    let assessed = verdict(cached.as_ref(), &digest, missing);
     Ok(RuleStatus {
         name: identity,
-        state,
+        state: assessed.state,
         digest: Some(digest),
+        missing_output: assessed.missing_output,
         cached,
         inputs,
     })
@@ -248,15 +286,19 @@ pub(crate) fn expansion_state(
     shared: &[String],
     base: &Path,
     cache_dir: &Path,
-) -> Result<State> {
+) -> Result<Assessment> {
     let files = expansion_files(shared, hit);
     if files.is_empty() {
-        return Ok(State::NoInputs);
+        return Ok(Assessment {
+            state: State::NoInputs,
+            missing_output: None,
+        });
     }
     let digest = hashing::digest_files(base, &files)?;
     Ok(verdict(
         read_cached(cache_dir, &hit.exp.identity).as_ref(),
         &digest,
+        outputs::first_missing(base, &hit.rule.outputs),
     ))
 }
 
@@ -267,51 +309,98 @@ fn read_cached(cache_dir: &Path, name: &str) -> Option<CachedInfo> {
         digest: cached.digest,
         ok: cached.ok,
         ran_at: cached.ran_at,
+        outputs: cached.outputs,
     })
 }
 
-/// The freshness verdict for `digest` against a rule's stored record: fresh only
-/// when the record is present, succeeded, and its digest matches.
-fn verdict(cached: Option<&CachedInfo>, digest: &str) -> State {
-    match cached {
+/// The freshness verdict for `digest` against a rule's stored record: fresh
+/// only when the record is present, succeeded, its digest matches, and every
+/// output the rule declares is still on disk (`missing` is the first one that
+/// is not).
+///
+/// A missing artifact outranks a digest mismatch. Both would re-run the rule,
+/// but only one of them is a fact a reader would otherwise never guess — an
+/// input change is the assumption they already hold — so the verdict names the
+/// gone artifact rather than sending them to diff the inputs.
+fn verdict(cached: Option<&CachedInfo>, digest: &str, missing: Option<String>) -> Assessment {
+    let state = match cached {
         None => State::Never,
         Some(record) if !record.ok => State::Failed,
+        Some(_) if missing.is_some() => State::MissingOutput,
         Some(record) if record.digest == digest => State::Fresh,
         Some(_) => State::Stale,
+    };
+    let missing_output = match state {
+        State::MissingOutput => missing,
+        _ => None,
+    };
+    Assessment {
+        state,
+        missing_output,
     }
 }
 
 /// Renders the aligned `RULE / STATE / AGE` table. AGE is the time since the
 /// rule's record was written, blank when it has none.
+///
+/// A fourth `MISSING OUTPUT` column appears only when some rule's record was
+/// voided by a gone artifact, naming it: the path is what a reader needs, and
+/// a column that is blank in every ordinary report is noise. Without it the
+/// table is byte-identical to what it has always been.
 fn render_text(report: &Report) -> String {
     let now = now_secs();
-    let rule_width = report
+    let ages: Vec<String> = report
         .rules
         .iter()
-        .map(|rule| rule.name.chars().count())
-        .max()
-        .unwrap_or(0)
-        .max("RULE".len());
-    let state_width = report
+        .map(|rule| {
+            rule.cached.as_ref().map_or_else(String::new, |record| {
+                humanize_age(now.saturating_sub(record.ran_at))
+            })
+        })
+        .collect();
+    let voided = report
         .rules
         .iter()
-        .map(|rule| rule.state.label().len())
-        .max()
-        .unwrap_or(0)
-        .max("STATE".len());
+        .any(|rule| rule.missing_output.is_some());
+    let rule_width = column_width(
+        report.rules.iter().map(|rule| rule.name.chars().count()),
+        "RULE",
+    );
+    let state_width = column_width(
+        report.rules.iter().map(|rule| rule.state.label().len()),
+        "STATE",
+    );
+    let age_width = if voided {
+        column_width(ages.iter().map(|age| age.chars().count()), "AGE")
+    } else {
+        0
+    };
 
-    let row = |rule: &str, state: &str, age: &str| {
-        let line = format!("{rule:<rule_width$}  {state:<state_width$}  {age}");
+    let row = |rule: &str, state: &str, age: &str, missing: &str| {
+        let line =
+            format!("{rule:<rule_width$}  {state:<state_width$}  {age:<age_width$}  {missing}");
         format!("{}\n", line.trim_end())
     };
-    let mut out = row("RULE", "STATE", "AGE");
-    for rule in &report.rules {
-        let age = rule.cached.as_ref().map_or_else(String::new, |record| {
-            humanize_age(now.saturating_sub(record.ran_at))
-        });
-        out.push_str(&row(&rule.name, rule.state.label(), &age));
+    let mut out = row(
+        "RULE",
+        "STATE",
+        "AGE",
+        if voided { "MISSING OUTPUT" } else { "" },
+    );
+    for (rule, age) in report.rules.iter().zip(&ages) {
+        out.push_str(&row(
+            &rule.name,
+            rule.state.label(),
+            age,
+            rule.missing_output.as_deref().unwrap_or(""),
+        ));
     }
     out
+}
+
+/// The width of a table column: the widest cell, never narrower than `header`.
+fn column_width(cells: impl Iterator<Item = usize>, header: &str) -> usize {
+    cells.max().unwrap_or(0).max(header.len())
 }
 
 /// Renders a record's age as a coarse, human-readable span (`5s`, `3m`, `2h`,

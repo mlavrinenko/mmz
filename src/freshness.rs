@@ -16,7 +16,7 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
 use crate::parametric;
-use crate::status::{self, State, expansion_state};
+use crate::status::{self, Assessment, expansion_state};
 
 /// Every kept rule's parametric matches, plus its pre-resolved shared
 /// `inputs` file set keyed by rule name — [`expand_matching`]'s result.
@@ -29,37 +29,41 @@ pub struct Verdict {
     /// or the rule name with its `{scope}` macro substituted for a
     /// parametric expansion.
     pub rule: String,
-    state: State,
+    assessed: Assessment,
 }
 
 impl Verdict {
     /// True when the rule is fresh — its inputs are unchanged since it last
-    /// succeeded, so a gate over it passes.
+    /// succeeded and every artifact it declared is still on disk, so a gate
+    /// over it passes.
     #[must_use]
     pub const fn is_fresh(&self) -> bool {
-        self.state.is_fresh()
+        self.assessed.state.is_fresh()
     }
 
     /// The rule's freshness label (`fresh`, `stale`, `never`, `failed`,
-    /// `no-inputs`), matching `mmz --status`.
+    /// `no-inputs`, `missing-output`), matching `mmz --status`.
     #[must_use]
     pub const fn state(&self) -> &'static str {
-        self.state.label()
+        self.assessed.state.label()
     }
 
-    /// Why the rule is not fresh, for a gate's message; `None` when it is fresh.
+    /// Why the rule is not fresh, for a gate's message; `None` when it is
+    /// fresh. A record voided by a gone artifact names that artifact, since
+    /// "inputs changed" would send a reader to the wrong place entirely.
     #[must_use]
-    pub const fn reason(&self) -> Option<&'static str> {
-        self.state.reason()
+    pub fn reason(&self) -> Option<String> {
+        self.assessed.reason()
     }
 
     /// True for the non-fresh states a recorded pass can clear (`stale`,
-    /// `never`, `failed`). A gate prints its one-line remediation hint once
-    /// when any verdict is remediable; a `no-inputs` verdict is not, since a
-    /// wrapped run records nothing against an empty input set.
+    /// `never`, `failed`, `missing-output`). A gate prints its one-line
+    /// remediation hint once when any verdict is remediable; a `no-inputs`
+    /// verdict is not, since a wrapped run records nothing against an empty
+    /// input set.
     #[must_use]
     pub const fn is_remediable(&self) -> bool {
-        self.state.is_remediable()
+        self.assessed.state.is_remediable()
     }
 }
 
@@ -173,7 +177,7 @@ fn verdict_for(
 ) -> Result<Verdict> {
     Ok(Verdict {
         rule: hit.exp.identity.clone(),
-        state: expansion_state(hit, shared, base, cache_dir)?,
+        assessed: expansion_state(hit, shared, base, cache_dir)?,
     })
 }
 

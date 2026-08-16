@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A command rule may declare `outputs:` — literal artifact paths relative to the
+  project root — and is fresh only when its inputs still hash the same AND every
+  declared output exists. A record claims a command exited 0 while its inputs
+  hashed to H; for a producer command that claim carries a side effect, and the
+  effect can be undone without touching an input (`cargo clean`, a fresh clone,
+  a pruned `target/`). Such a record is not stale, it is void — and it used to
+  read fresh forever. Existence only: mmz never hashes an output. Outputs are
+  stat-ed, never walked, so the `gitignore` filter never applies to them and an
+  artifact under an ignored tree needs no per-scope opt-out; a glob in an output
+  is a manifest error rather than a pattern that silently never matches. A
+  voided record reports the state `missing-output` and
+  names the path: in the `--is-fresh` reason, in a `MISSING OUTPUT` column of the
+  `--status` table (present only when some record is voided), and as
+  `missing_output` in `--status=json`, whose `cached.outputs` also lists what
+  the recorded run promised.
+- Exit code `5`: a wrapped command exited 0 without producing a declared output.
+  mmz names the missing path and writes no cache record — silently skipping the
+  record would leave a rule that quietly never hits again, the exact failure
+  `outputs` exists to end. A failing run is unaffected, recorded as a failure.
 - A scope value may now be an object — `globs:` plus an optional `gitignore:` —
   which overrides the manifest-level `gitignore` for that scope alone. The array
   form is unchanged and inherits the manifest setting, whose default stays

@@ -35,13 +35,17 @@ fn targeted_tracks_never_then_fresh_then_stale() {
     let verdict = never.first().expect("one verdict");
     assert!(!verdict.is_fresh(), "never run is not fresh");
     assert_eq!(verdict.state(), "never");
-    assert_eq!(verdict.reason(), Some("never run"));
+    assert_eq!(verdict.reason().as_deref(), Some("never run"));
 
     record_ok(base);
     let fresh = evaluate(base, Some(&argv), &[]).expect("evaluate");
     let verdict = fresh.first().expect("one verdict");
     assert!(verdict.is_fresh(), "fresh after a recorded run");
     assert_eq!(verdict.reason(), None, "fresh carries no reason");
+    assert!(
+        verdict.is_fresh(),
+        "a rule declaring no outputs is unaffected by the outputs check"
+    );
 
     std::fs::write(base.join("a.txt"), b"two").expect("rewrite input");
     let stale = evaluate(base, Some(&argv), &[]).expect("evaluate");
@@ -88,6 +92,81 @@ fn no_inputs_rule_is_not_fresh() {
     let verdict = verdicts.first().expect("one verdict");
     assert!(!verdict.is_fresh(), "a rule with no inputs cannot be fresh");
     assert_eq!(verdict.state(), "no-inputs");
+}
+
+/// A rule that produces `out/artifact.bin` and declares it, plus the one input
+/// keying it. The command writes the artifact, so a wrapped run is a real
+/// producer run.
+fn producing_project(dir: &Path) {
+    write_manifest(
+        dir,
+        concat!(
+            "scopes:\n  src: [\"*.txt\"]\n",
+            "commands:\n  - name: sh\n    inputs: [src]\n",
+            "    outputs:\n      - out/artifact.bin\n",
+        ),
+    );
+    std::fs::write(dir.join("a.txt"), b"one").expect("write input");
+    std::fs::create_dir_all(dir.join("out")).expect("mkdir out");
+}
+
+fn record_producing_run(dir: &Path) {
+    let argv = [
+        "sh".to_owned(),
+        "-c".to_owned(),
+        "printf built > out/artifact.bin".to_owned(),
+    ];
+    crate::run(&argv, dir).expect("recorded run");
+}
+
+#[test]
+fn a_present_output_stays_fresh_and_a_deleted_one_names_the_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    producing_project(base);
+    record_producing_run(base);
+
+    let fresh = evaluate(base, None, &[]).expect("evaluate");
+    let verdict = fresh.first().expect("one verdict");
+    assert!(
+        verdict.is_fresh(),
+        "inputs unchanged and the artifact is on disk"
+    );
+
+    // The artifact is deleted; not one input byte moves.
+    std::fs::remove_file(base.join("out/artifact.bin")).expect("delete artifact");
+    let voided = evaluate(base, None, &[]).expect("evaluate");
+    let verdict = voided.first().expect("one verdict");
+    assert!(!verdict.is_fresh(), "a missing output voids the record");
+    assert_eq!(verdict.state(), "missing-output");
+    assert_eq!(
+        verdict.reason().as_deref(),
+        Some("declared output `out/artifact.bin` is missing"),
+        "the reason names the artifact, not the inputs"
+    );
+    assert!(
+        verdict.is_remediable(),
+        "re-running the command under mmz regenerates it"
+    );
+}
+
+#[test]
+fn a_missing_output_outranks_a_changed_input_in_the_reason() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    producing_project(base);
+    record_producing_run(base);
+
+    std::fs::write(base.join("a.txt"), b"two").expect("rewrite input");
+    std::fs::remove_file(base.join("out/artifact.bin")).expect("delete artifact");
+
+    let verdicts = evaluate(base, None, &[]).expect("evaluate");
+    let verdict = verdicts.first().expect("one verdict");
+    assert_eq!(
+        verdict.state(),
+        "missing-output",
+        "with both true, the verdict names the fact a reader cannot guess"
+    );
 }
 
 #[test]

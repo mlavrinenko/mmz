@@ -281,6 +281,7 @@ mod tests {
             name: name.to_owned(),
             inputs: Vec::new(),
             match_mode: mode,
+            outputs: Vec::new(),
             tags: Vec::new(),
             on_hit: None,
         }

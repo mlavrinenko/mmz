@@ -214,6 +214,43 @@ fn validate_rejects_blank_and_duplicate_names() {
 }
 
 #[test]
+fn outputs_parse_as_literal_paths_and_default_to_none() {
+    let manifest = parse(concat!(
+        "commands:\n",
+        "  - name: just cover\n",
+        "    outputs:\n      - target/coverage/lcov.info\n      - target/doc\n",
+        "  - name: cargo fmt\n",
+    ));
+    let producer = manifest.commands.first().expect("first rule");
+    let verdict = manifest.commands.get(1).expect("second rule");
+    assert_eq!(
+        producer.outputs,
+        vec![
+            std::path::PathBuf::from("target/coverage/lcov.info"),
+            std::path::PathBuf::from("target/doc"),
+        ],
+        "declaration order is preserved"
+    );
+    assert!(
+        verdict.outputs.is_empty(),
+        "no outputs: key means no outputs, and the rule behaves as before"
+    );
+    manifest.validate().expect("literal paths validate");
+}
+
+#[test]
+fn validate_rejects_a_glob_in_outputs() {
+    let manifest = parse("commands:\n  - name: just cover\n    outputs: [\"target/*.info\"]\n");
+    let err = manifest
+        .validate()
+        .expect_err("a pattern would never match a stat");
+    assert!(
+        err.to_string().contains("literal paths, not patterns"),
+        "the message says outputs are literal: {err}"
+    );
+}
+
+#[test]
 fn validate_rejects_unknown_scope() {
     let manifest = parse("commands:\n  - name: sh\n    inputs: [ghost]\n");
     assert!(manifest.validate().is_err(), "missing scope rejected");

@@ -66,8 +66,8 @@
     records the result.
   </div>
 
-  <p>Not a build system: no task graph, no artifact tracking, no remote cache.
-    One question per run — are this rule's inputs unchanged since it last passed?</p>
+  <p>Not a build system: no task graph, no artifact replay, no remote cache.
+    One question per run — is this rule's work still done?</p>
 
   <h2>Install</h2>
   <pre><code>cargo install mmz</code></pre>
@@ -97,6 +97,22 @@ mmz --schema          # print the config JSON Schema</code></pre>
   lcov:
     gitignore: false           # this scope only
     globs: ["target/coverage/lcov.info"]</code></pre>
+
+  <p>A rule may also declare the artifacts its run produces. It is fresh only
+    while its inputs hash the same <em>and</em> every declared output exists, so
+    a <code>cargo clean</code> between two runs voids the record instead of
+    leaving it fresh with nothing to show for it. Existence only — outputs are
+    literal paths, stat-ed rather than walked, so the gitignore filter never
+    applies to them:</p>
+  <pre><code>commands:
+  - name: just cover
+    inputs: [rust]
+    outputs:
+      - target/coverage/lcov.info</code></pre>
+
+  <p>A run that exits 0 without producing a declared output is a hard error
+    (exit 5): <code>mmz</code> names the missing path and writes no record,
+    rather than leaving a rule that quietly never hits again.</p>
 
   <nav>
     <a href="https://github.com/mlavrinenko/mmz">GitHub</a>

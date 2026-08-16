@@ -64,8 +64,8 @@ mod tests {
         // The manifest knows only `cargo test`, in a custom cache directory.
         manifest(base, "cache_dir: .cache\ncommands:\n  - name: cargo test\n");
         let cache_dir = base.join(".cache");
-        cache::write(&cache_dir, "cargo test", "d", true);
-        cache::write(&cache_dir, "cargo bench", "d", true); // orphan
+        cache::write(&cache_dir, "cargo test", "d", true, &[]);
+        cache::write(&cache_dir, "cargo bench", "d", true, &[]); // orphan
 
         let first = prune(base).expect("prune");
         assert!(first.contains("cargo bench"), "orphan reported: {first}");
@@ -98,8 +98,8 @@ mod tests {
             "cache_dir: .cache\nscopes:\n  targets: [\"src/**/*.rs\"]\ncommands:\n  - name: \"run {targets}\"\n",
         );
         let cache_dir = base.join(".cache");
-        cache::write(&cache_dir, "run src/a.rs", "d", true);
-        cache::write(&cache_dir, "run src/b.rs", "d", true);
+        cache::write(&cache_dir, "run src/a.rs", "d", true, &[]);
+        cache::write(&cache_dir, "run src/b.rs", "d", true, &[]);
 
         // Removing b's source orphans its per-file record; a's stays live.
         std::fs::remove_file(base.join("src/b.rs")).expect("rm b");

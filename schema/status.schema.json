@@ -25,12 +25,16 @@
           },
           "state": {
             "type": "string",
-            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files.",
-            "enum": ["fresh", "stale", "never", "failed", "no-inputs"]
+            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files. `missing-output`: a declared output is gone, so the record is void whatever the inputs hash — it outranks `stale`, since an input change is the assumption a reader already holds.",
+            "enum": ["fresh", "stale", "never", "failed", "no-inputs", "missing-output"]
           },
           "digest": {
             "type": "string",
             "description": "Digest of the current inputs. Absent when the rule resolves to no files."
+          },
+          "missing_output": {
+            "type": "string",
+            "description": "The declared output that voided the record, as the manifest spells it (the first one missing, in declaration order). Present exactly when state is `missing-output`."
           },
           "cached": {
             "type": "object",
@@ -50,6 +54,11 @@
                 "type": "integer",
                 "minimum": 0,
                 "description": "Unix seconds when the record was written."
+              },
+              "outputs": {
+                "type": "array",
+                "description": "The outputs the rule declared when this run was recorded, so a missing one is reported against the run that promised it. Absent when the rule declared none.",
+                "items": { "type": "string" }
               }
             }
           },

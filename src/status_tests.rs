@@ -72,6 +72,98 @@ fn text_shows_age_after_a_run_and_json_reports_ran_at() {
     );
 }
 
+/// A rule keyed on `*.txt` that declares (and its run writes) the artifact
+/// `out/artifact.bin`.
+fn producing_project(base: &std::path::Path) {
+    write(base, "a.txt", "one");
+    std::fs::create_dir_all(base.join("out")).expect("mkdir out");
+    manifest(
+        base,
+        concat!(
+            "scopes:\n  src: [\"*.txt\"]\n",
+            "commands:\n  - name: sh\n    inputs: [src]\n",
+            "    outputs:\n      - out/artifact.bin\n",
+        ),
+    );
+    let argv = [
+        "sh".to_owned(),
+        "-c".to_owned(),
+        "printf built > out/artifact.bin".to_owned(),
+    ];
+    crate::run(&argv, base).expect("recorded run");
+}
+
+#[test]
+fn a_voided_record_names_its_missing_output_in_the_table() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    producing_project(base);
+
+    let fresh = report(base, &[]).expect("report");
+    assert!(fresh.contains("fresh"), "artifact present: {fresh}");
+    assert!(
+        !fresh.contains("MISSING OUTPUT"),
+        "the extra column stays out of an ordinary table: {fresh}"
+    );
+
+    std::fs::remove_file(base.join("out/artifact.bin")).expect("delete artifact");
+    let voided = report(base, &[]).expect("report");
+    assert!(
+        voided.contains("missing-output"),
+        "the state says what happened: {voided}"
+    );
+    assert!(
+        voided.contains("MISSING OUTPUT") && voided.contains("out/artifact.bin"),
+        "and the column names the artifact: {voided}"
+    );
+}
+
+#[test]
+fn json_reports_the_missing_output_and_what_the_run_promised() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    producing_project(base);
+    std::fs::remove_file(base.join("out/artifact.bin")).expect("delete artifact");
+
+    let json: serde_json::Value =
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
+    let rule = json.pointer("/rules/0").expect("first rule");
+    assert_eq!(
+        rule.get("state").and_then(serde_json::Value::as_str),
+        Some("missing-output")
+    );
+    assert_eq!(
+        rule.get("missing_output")
+            .and_then(serde_json::Value::as_str),
+        Some("out/artifact.bin"),
+        "the gone artifact is machine-readable, not just in the table"
+    );
+    assert_eq!(
+        rule.pointer("/cached/outputs/0")
+            .and_then(serde_json::Value::as_str),
+        Some("out/artifact.bin"),
+        "reported against the outputs the recorded run itself promised"
+    );
+}
+
+#[test]
+fn a_rule_without_outputs_reports_no_missing_output_field() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write(base, "a.txt", "one");
+    manifest(
+        base,
+        "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&report_json(base, &[]).expect("json")).expect("valid json");
+    let rule = json.pointer("/rules/0").expect("first rule");
+    assert!(
+        rule.get("missing_output").is_none(),
+        "no outputs declared, so nothing to report"
+    );
+}
+
 #[test]
 fn reports_no_inputs_for_empty_scopes() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -251,6 +343,9 @@ fn schema_is_valid_json_describing_the_output() {
         "inputs",
         "no-inputs",
         "ran_at",
+        "missing-output",
+        "missing_output",
+        "outputs",
     ] {
         assert!(SCHEMA.contains(key), "schema mentions `{key}`");
     }

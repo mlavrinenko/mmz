@@ -11,10 +11,10 @@ byte-for-byte unchanged since the command last succeeded, `mmz` skips it and
 exits 0. Otherwise it runs the command, streams its output, and records the
 result on success.
 
-It is not a build system: no task ordering, no dependency graph, no
-output/artifact tracking, no remote cache. It answers one question per
-invocation — are this rule's inputs unchanged since it last passed? See
-[Non-goals](#non-goals).
+It is not a build system: no task ordering, no dependency graph, no artifact
+replay, no remote cache. It answers one question per invocation — is this rule's
+work still done, i.e. are its inputs unchanged since it last passed and are the
+artifacts it declared still there? See [Non-goals](#non-goals).
 
 ## Install
 
@@ -69,6 +69,7 @@ scopes:
 commands:
   - name: cargo test       # matcher and cache identity
     inputs: [rust]
+#   outputs: [target/coverage/lcov.info]   # artifacts the run must leave behind
 #   match: exact           # match only the bare command, no trailing args (default prefix)
 #   on_hit: "tests fresh"  # per-rule cache-hit note, overriding the global one below
 # cache_dir: .mmz/cache    # where throwaway records live (default; must be git-ignored)
@@ -84,7 +85,9 @@ on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a h
   [Artifact scopes](#artifact-scopes-per-scope-gitignore)).
 - `commands`: ordered rules. Each has a `name` (the matcher and cache identity),
   `inputs` (scope names whose globs, unioned, are the rule's input set), and an
-  optional `match` (`prefix`, the default, or `exact`; see [Matching](#matching)).
+  optional `match` (`prefix`, the default, or `exact`; see [Matching](#matching))
+  and `outputs` (literal artifact paths the run must produce; see
+  [Declared outputs](#declared-outputs)).
 - `gitignore` (default `true`): glob expansion skips git-ignored paths, so build
   artifacts never enter an input set. Explicitly listed literal paths are always
   kept. The `.git` directory is never traversed; symlinks are not followed. One
@@ -139,6 +142,61 @@ A rule may mix both kinds of scope — each is expanded under its own setting, s
 the sibling scopes in the same rule keep filtering. Absent means inherit; the
 manifest-level default stays `true`. An object without `globs`, or with an empty
 `globs` list, is a manifest error.
+
+## Declared outputs
+
+A rule may list the artifacts its run produces. It is fresh only when its inputs
+still hash the same **and** every declared output exists — a missing one makes
+it stale whatever the inputs say:
+
+```yaml
+commands:
+  - name: just cover
+    inputs: [rust]
+    outputs:
+      - target/coverage/lcov.info
+```
+
+A record is a claim: this command exited 0 while its inputs hashed to H. For a
+verdict command (`fmt --check`, `clippy`) that claim holds for as long as H
+holds. For a producer command the claim carries a side effect, and the effect
+can be undone without touching a single input:
+
+```bash
+mmz just cover   # runs, records H, writes target/coverage/lcov.info
+cargo clean      # artifact gone; sources untouched, H unchanged
+mmz just cover   # without `outputs`: fresh, skipped — and nothing to read
+```
+
+The record is not stale, it is void: the run it describes has been undone. Same
+story for a fresh clone, a new worktree, or a pruned `target/`. This does not
+replace the inputs — they stay the only evidence that an artifact matches the
+sources. Outputs are the second way a record can stop being valid.
+
+Existence only; `mmz` never hashes an output. The input digest already proves
+that an existing artifact is the one those inputs produced, so hashing would buy
+tamper detection alone (catching a hand-edited artifact) — a separate feature
+with a separate cost, deliberately left out.
+
+Outputs are literal paths relative to the project root, stat-ed directly and
+never walked — a glob is a manifest error rather than a pattern that silently
+never matches, and a `{scope}` macro is not substituted here. Because nothing is
+walked, the `gitignore` filter never applies: an artifact under an ignored
+`target/` needs no [artifact scope](#artifact-scopes-per-scope-gitignore)
+opt-out, unlike the same path used as an *input*. A directory counts as present.
+
+When a rule's record is voided, `mmz --status` says `missing-output` and names
+the path in a `MISSING OUTPUT` column, `mmz --status=json` reports it as
+`missing_output` (with the outputs the recorded run promised under
+`cached.outputs`), and `mmz --is-fresh` fails with
+``declared output `<path>` is missing`` rather than "inputs changed" — a wrong
+reason there sends a reader to look at the wrong thing.
+
+A run that exits 0 without producing a declared output is a hard error: `mmz`
+prints the missing path, writes no cache record, and exits 5. Skipping the
+record silently would leave a rule that quietly never hits again, which is the
+exact failure this feature exists to end. A run that *fails* is untouched by
+this — its own exit code is the story, and its failure is recorded as before.
 
 ## Tags
 
@@ -245,8 +303,11 @@ it has not confirmed unchanged.
 Records live in a git-ignored cache directory (`.mmz/cache` by default), one YAML file
 per rule, written atomically (temp file + rename) so a crash or concurrent writer
 never leaves a truncated record. Derived, throwaway state — do not commit it. A
-record is fresh only when its `status` is `ok` and its content digest, format,
-algorithm, and command all still match; anything else re-runs.
+record is fresh only when its `status` is `ok`, its content digest, format,
+algorithm, and command all still match, and every output its rule declares is
+still on disk; anything else re-runs. A record also remembers the outputs
+declared when it was written, so a missing one is reported against the run that
+promised it.
 
 `mmz --status` shows each rule's verdict and the age of its record;
 `mmz --status=json` adds every resolved input and its content hash so you can
@@ -275,6 +336,7 @@ A non-fresh gate prints one `mmz: \`<rule>\` is <state> (<reason>)` line per off
 | 2    | usage error (empty invocation, unknown option, `--init` over an existing manifest) |
 | 3    | strict refusal (no matching rule, or a matched rule with no inputs) |
 | 4    | manifest missing or invalid |
+| 5    | the command succeeded without producing a declared output; nothing recorded |
 | 70   | internal error |
 | 127  | command could not be spawned |
 
@@ -284,7 +346,9 @@ A non-fresh gate prints one `mmz: \`<rule>\` is <state> (<reason>)` line per off
 scope:
 
 - Task orchestration: no execution order or dependency graph; use a task runner.
-- Output replay: only the exit code is cached, never stdout, stderr, or artifacts.
+- Output replay: only the exit code is cached, never stdout, stderr, or
+  artifacts. A declared `outputs` path is checked for existence, never stored,
+  restored, or hashed.
 - Automatic dependency tracing: no strace; scopes are declared explicitly.
 - Remote caching: state is strictly local and throwaway.
 - Deep runner integration: no plugins or hooks; `mmz` is a dumb CLI prefix.

@@ -39,9 +39,10 @@ with a targeted command is a usage error — a command already resolves to one r
 
 Exit codes:
     0    fresh, skipped, or succeeded        4    manifest missing or invalid
-    1    --is-fresh: not fresh               70   internal error
-    2    usage error                         127  command could not be spawned
-    3    strict refusal (no rule / inputs)
+    1    --is-fresh: not fresh               5    declared output missing after a
+    2    usage error                              successful run (nothing recorded)
+    3    strict refusal (no rule / inputs)   70   internal error
+                                             127  command could not be spawned
     otherwise the wrapped command's own exit code"
 );
 
@@ -224,7 +225,7 @@ fn report_freshness(verdicts: &[mmz::freshness::Verdict]) -> ExitCode {
             continue;
         }
         fresh = false;
-        let reason = verdict.reason().unwrap_or("not fresh");
+        let reason = verdict.reason().unwrap_or_else(|| "not fresh".to_owned());
         eprintln!("mmz: `{}` is {} ({reason})", verdict.rule, verdict.state());
         any_remediable |= verdict.is_remediable();
     }
@@ -300,9 +301,11 @@ fn exit_for(err: &Error) -> u8 {
         | Error::EmptyCommandName(_)
         | Error::DuplicateCommand(_)
         | Error::DuplicateTag { .. }
+        | Error::InvalidOutput { .. }
         | Error::MacroSyntax { .. }
         | Error::CollidingIdentity { .. }
         | Error::Pattern { .. } => 4,
+        Error::MissingOutput { .. } => 5,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,
     }

@@ -62,6 +62,30 @@ pub enum Error {
     #[error("duplicate command name: {0} (command names must be unique)")]
     DuplicateCommand(String),
 
+    /// A command rule declares an output that is not a usable literal path.
+    #[error("command `{command}` declares invalid output `{path}`: {reason}")]
+    InvalidOutput {
+        /// Name of the offending command.
+        command: String,
+        /// The offending output path, as written.
+        path: String,
+        /// Why it cannot be used as an output.
+        reason: String,
+    },
+
+    /// A rule's command exited 0 without producing a declared output, so no
+    /// record was written: a record here would claim an artifact that is not
+    /// on disk, and every later invocation would skip on that claim.
+    #[error(
+        "`{rule}` succeeded without producing its declared output `{path}`; no cache record was written, so the rule stays stale"
+    )]
+    MissingOutput {
+        /// Cache identity of the rule that ran.
+        rule: String,
+        /// The declared output that never appeared.
+        path: String,
+    },
+
     /// A command rule declares the same tag twice.
     #[error("command `{command}` declares tag `{tag}` twice")]
     DuplicateTag {
@@ -175,6 +199,30 @@ mod tests {
             no_manifest
                 .to_string()
                 .contains("no .mmz/config.yaml found")
+        );
+
+        let bad_output = Error::InvalidOutput {
+            command: "just cover".to_owned(),
+            path: "target/*.info".to_owned(),
+            reason: "outputs are literal paths, not patterns".to_owned(),
+        };
+        assert!(
+            bad_output
+                .to_string()
+                .contains("declares invalid output `target/*.info`")
+        );
+        let missing = Error::MissingOutput {
+            rule: "just cover".to_owned(),
+            path: "target/coverage/lcov.info".to_owned(),
+        };
+        let text = missing.to_string();
+        assert!(
+            text.contains("target/coverage/lcov.info"),
+            "the missing artifact is named: {text}"
+        );
+        assert!(
+            text.contains("no cache record was written"),
+            "and the consequence is spelled out: {text}"
         );
     }
 }
