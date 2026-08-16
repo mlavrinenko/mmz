@@ -15,3 +15,9 @@ overrides:
   # Markdown budget meant for a doc page.
   - pattern: ./README.md
     limit: 500
+  # The changelog is append-only history: it grows by one section per release
+  # and nothing in it can be split out. Under the shared Markdown budget the
+  # only way to land a release is to delete or thin an older entry, which
+  # trades history for a number. Budget it for many releases instead.
+  - pattern: ./CHANGELOG.md
+    limit: 1000
