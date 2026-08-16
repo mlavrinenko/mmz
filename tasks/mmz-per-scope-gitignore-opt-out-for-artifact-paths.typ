@@ -7,7 +7,7 @@
   links: related(
     "mmz-outputs-a-missing-declared-artifact-voids-a-cache-record.typ",
   )[the other half of tracking build artifacts, from the producer side],
-  status: proposed(2026, 8, 16),
+  status: wip(2026, 8, 16)[wave 1, branch scope-gitignore],
 )
 
 == Summary
