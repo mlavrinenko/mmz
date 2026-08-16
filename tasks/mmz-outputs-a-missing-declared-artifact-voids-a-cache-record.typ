@@ -7,7 +7,7 @@
   links: related(
     "mmz-per-scope-gitignore-opt-out-for-artifact-paths.typ",
   )[the consumer-side half of the same problem],
-  status: proposed(2026, 8, 16),
+  status: wip(2026, 8, 16),
 )
 
 == Summary
