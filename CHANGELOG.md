@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A scope value may now be an object — `globs:` plus an optional `gitignore:` —
+  which overrides the manifest-level `gitignore` for that scope alone. The array
+  form is unchanged and inherits the manifest setting, whose default stays
+  `true`. This is what lets a rule depend on a build artifact: artifacts live in
+  git-ignored paths by definition, so under the filter such a scope expanded to
+  nothing and the rule referencing it reported fresh forever — silently, since
+  an empty resolution is only an error when every scope in the rule is empty. A
+  rule may mix both kinds; each scope resolves under its own setting. An object
+  without `globs`, or with an empty `globs` list, is a manifest error.
+
+### Changed
+
+- Library API: `Manifest::scopes` maps to the new `manifest::Scope` rather than
+  `Vec<String>`, and `Manifest::globs_for` is replaced by `Manifest::glob_groups`,
+  which returns the rule's patterns bucketed by effective `gitignore` setting for
+  the new `resolve::expand_groups`. The `mmz` CLI surface is unaffected.
+
 ## [0.5.1] - 2026-07-24
 
 ### Fixed

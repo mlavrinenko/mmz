@@ -7,11 +7,34 @@
   "additionalProperties": false,
   "properties": {
     "scopes": {
-      "description": "Named glob sets, each referenced by command rules.",
+      "description": "Named glob sets, each referenced by command rules. A scope is either an array of patterns, or an object naming those patterns under globs alongside a per-scope gitignore override.",
       "type": "object",
       "additionalProperties": {
-        "type": "array",
-        "items": { "type": "string" }
+        "oneOf": [
+          {
+            "type": "array",
+            "description": "The scope's patterns; the manifest-level gitignore setting applies.",
+            "items": { "type": "string" }
+          },
+          {
+            "type": "object",
+            "description": "The scope's patterns plus an optional per-scope gitignore override.",
+            "additionalProperties": false,
+            "required": ["globs"],
+            "properties": {
+              "globs": {
+                "type": "array",
+                "description": "The scope's patterns. At least one is required; use the array form when there is no override to declare.",
+                "minItems": 1,
+                "items": { "type": "string" }
+              },
+              "gitignore": {
+                "type": "boolean",
+                "description": "Overrides the manifest-level gitignore for this scope only; omit to inherit it. Set false for a scope naming build artifacts: they live in git-ignored paths by definition, so under the filter the scope resolves empty and the rules referencing it are fresh forever."
+              }
+            }
+          }
+        ]
       }
     },
     "commands": {

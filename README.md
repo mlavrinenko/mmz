@@ -79,13 +79,17 @@ on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a h
 
 - `scopes`: named glob sets, declared once and referenced by many commands, so a
   shared input path lives in one place. Globs follow the common convention — `*`
-  stays within a directory, `**` crosses directories.
+  stays within a directory, `**` crosses directories. A scope is either an array
+  of patterns or an object naming them under `globs` (see
+  [Artifact scopes](#artifact-scopes-per-scope-gitignore)).
 - `commands`: ordered rules. Each has a `name` (the matcher and cache identity),
   `inputs` (scope names whose globs, unioned, are the rule's input set), and an
   optional `match` (`prefix`, the default, or `exact`; see [Matching](#matching)).
 - `gitignore` (default `true`): glob expansion skips git-ignored paths, so build
   artifacts never enter an input set. Explicitly listed literal paths are always
-  kept. The `.git` directory is never traversed; symlinks are not followed.
+  kept. The `.git` directory is never traversed; symlinks are not followed. One
+  scope can override this for itself — see
+  [Artifact scopes](#artifact-scopes-per-scope-gitignore).
 - `cache_dir` (default `.mmz/cache`): directory for throwaway records, relative
   to the project root (the directory holding `.mmz`). Keep it git-ignored; set it
   to relocate state (e.g. `.cache/mmz`).
@@ -105,6 +109,36 @@ every referenced scope must be defined, and `strict` names must be known. Run
 it, not `main`, so a project keeps validating against the schema its mmz was
 built for even when different projects pin different mmz versions. `mmz --help`
 and `mmz --version` report the running version.
+
+## Artifact scopes (per-scope gitignore)
+
+A scope value is normally an array of patterns. Spelled as an object it names
+those patterns under `globs` and may pin `gitignore` for that scope alone:
+
+```yaml
+scopes:
+  src: ["src/**"]              # array form: inherits the manifest-level setting
+  lcov:
+    gitignore: false           # this scope only
+    globs: ["target/coverage/lcov.info"]
+```
+
+This is what a rule needs to depend on a build artifact. Artifacts live in
+git-ignored paths by definition, so under the default filter such a scope
+expands to nothing — and a rule whose inputs resolve to nothing is not an error
+you notice, it is a rule that reports fresh forever. Opting the one scope out
+makes the artifact a tracked input: regenerate it, and the rule goes stale.
+
+Keep the override at the scope that names the artifact. Flipping the
+manifest-level `gitignore` instead would drag every other scope through
+`target/` and any other ignored tree, which is both slow and a source of
+spurious cache busts. There is no per-glob override: one knob, at the level a
+reader can see it.
+
+A rule may mix both kinds of scope — each is expanded under its own setting, so
+the sibling scopes in the same rule keep filtering. Absent means inherit; the
+manifest-level default stays `true`. An object without `globs`, or with an empty
+`globs` list, is a manifest error.
 
 ## Tags
 

@@ -88,6 +88,16 @@ mmz --schema          # print the config JSON Schema</code></pre>
     manifest is invalid, no rule matches, or a matched rule has no inputs. Relax
     the last two per project with the <code>strict</code> list.</p>
 
+  <p>Inputs are declared as named scopes of globs. Git-ignored paths are skipped
+    by default, so a scope naming a build artifact would expand to nothing and
+    its rule would report fresh forever. Spell that one scope as an object to opt
+    it out — every sibling scope keeps filtering:</p>
+  <pre><code>scopes:
+  src: ["src/**"]              # inherits the default
+  lcov:
+    gitignore: false           # this scope only
+    globs: ["target/coverage/lcov.info"]</code></pre>
+
   <nav>
     <a href="https://github.com/mlavrinenko/mmz">GitHub</a>
     <a href="https://crates.io/crates/mmz">crates.io</a>

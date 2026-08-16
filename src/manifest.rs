@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
+use crate::resolve::GlobGroup;
 
 /// Directory holding mmz's per-project state, found by walking upward. The
 /// config lives inside it so a project gains one entry, not two.
@@ -40,6 +41,95 @@ where
         .map(|tag| tag.trim().to_owned())
         .filter(|tag| !tag.is_empty())
         .collect())
+}
+
+/// A named input scope: the patterns it contributes, plus an optional
+/// per-scope override of the manifest's `gitignore` filter.
+///
+/// The array form is the common spelling and inherits the manifest-level
+/// setting:
+///
+/// ```yaml
+/// scopes:
+///   src: ["src/**"]
+/// ```
+///
+/// The object form names the patterns under `globs` and may pin `gitignore` for
+/// this scope alone. That is the escape hatch for a scope naming build
+/// artifacts: they live in git-ignored paths by definition, so under the
+/// default filter the scope resolves empty and every rule referencing it is
+/// fresh forever.
+///
+/// ```yaml
+/// scopes:
+///   lcov:
+///     gitignore: false
+///     globs: ["target/coverage/lcov.info"]
+/// ```
+#[derive(Debug, Clone, Deserialize)]
+#[serde(try_from = "ScopeSpelling")]
+pub struct Scope {
+    /// Glob patterns and literal paths this scope contributes.
+    pub globs: Vec<String>,
+    /// Per-scope override of [`Manifest::gitignore`]; `None` inherits it.
+    pub gitignore: Option<bool>,
+}
+
+impl Scope {
+    /// Whether this scope's globs skip git-ignored paths: its own `gitignore`
+    /// when set, else the manifest-level `inherited` value.
+    #[must_use]
+    pub fn honours_gitignore(&self, inherited: bool) -> bool {
+        self.gitignore.unwrap_or(inherited)
+    }
+}
+
+/// The two manifest spellings of a scope value, normalized into [`Scope`].
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum ScopeSpelling {
+    /// The array form — patterns only, inheriting the manifest's `gitignore`.
+    Patterns(Vec<String>),
+    /// The object form — `globs` plus an optional per-scope `gitignore`.
+    Object(ScopeObject),
+}
+
+/// The object spelling's fields. `globs` is optional here only so that omitting
+/// it is reported against the object rather than as a failure to match either
+/// spelling; [`Scope`]'s conversion rejects both a missing and an empty list.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScopeObject {
+    #[serde(default)]
+    globs: Option<Vec<String>>,
+    #[serde(default)]
+    gitignore: Option<bool>,
+}
+
+impl TryFrom<ScopeSpelling> for Scope {
+    type Error = String;
+
+    fn try_from(spelling: ScopeSpelling) -> std::result::Result<Self, Self::Error> {
+        let object = match spelling {
+            ScopeSpelling::Patterns(globs) => {
+                return Ok(Self {
+                    globs,
+                    gitignore: None,
+                });
+            }
+            ScopeSpelling::Object(object) => object,
+        };
+        let globs = object
+            .globs
+            .ok_or_else(|| "a scope object must list its patterns under `globs`".to_owned())?;
+        if globs.is_empty() {
+            return Err("a scope object's `globs` must list at least one pattern".to_owned());
+        }
+        Ok(Self {
+            globs,
+            gitignore: object.gitignore,
+        })
+    }
 }
 
 /// How a rule's `name` is matched against an invoked command.
@@ -106,8 +196,10 @@ impl StrictPolicy {
 pub struct Manifest {
     /// Reusable named glob sets. A scope is defined once and referenced by any
     /// number of commands, so a shared input path is declared in one place.
+    /// Each value is either an array of patterns or an object carrying a
+    /// per-scope `gitignore` override (see [`Scope`]).
     #[serde(default)]
-    pub scopes: BTreeMap<String, Vec<String>>,
+    pub scopes: BTreeMap<String, Scope>,
 
     /// Ordered command rules. The first rule whose `name` is a token-prefix of
     /// the invoked command wins; its inputs determine the cache.
@@ -116,7 +208,7 @@ pub struct Manifest {
 
     /// When true (the default), glob expansion skips paths ignored by git, so
     /// build artifacts never enter an input set. Set false to match every file
-    /// on disk.
+    /// on disk. A scope may override this for itself (see [`Scope`]).
     #[serde(default = "default_gitignore")]
     pub gitignore: bool,
 
@@ -236,25 +328,41 @@ impl Manifest {
         Ok(())
     }
 
-    /// Returns the deduplicated union of glob patterns a command draws from.
+    /// Returns the glob patterns a command draws from, bucketed by the
+    /// gitignore setting they expand under: one group for the scopes honouring
+    /// the filter and one for the scopes that opted out, each deduplicated and
+    /// omitted when no scope feeds it.
+    ///
+    /// Bucketing rather than one group per scope keeps the filesystem walk
+    /// count at two in the worst case, however many scopes a rule references.
     ///
     /// # Errors
     ///
     /// Returns [`Error::UnknownScope`] if a referenced scope is undefined.
-    pub fn globs_for(&self, command: &Command) -> Result<Vec<String>> {
-        let mut out: Vec<String> = Vec::new();
-        for scope in &command.inputs {
-            let globs = self.scopes.get(scope).ok_or_else(|| Error::UnknownScope {
+    pub fn glob_groups(&self, command: &Command) -> Result<Vec<GlobGroup>> {
+        let mut honoured: Vec<String> = Vec::new();
+        let mut opted_out: Vec<String> = Vec::new();
+        for name in &command.inputs {
+            let scope = self.scopes.get(name).ok_or_else(|| Error::UnknownScope {
                 command: command.name.clone(),
-                scope: scope.clone(),
+                scope: name.clone(),
             })?;
-            for glob in globs {
-                if !out.contains(glob) {
-                    out.push(glob.clone());
+            let bucket = if scope.honours_gitignore(self.gitignore) {
+                &mut honoured
+            } else {
+                &mut opted_out
+            };
+            for glob in &scope.globs {
+                if !bucket.contains(glob) {
+                    bucket.push(glob.clone());
                 }
             }
         }
-        Ok(out)
+        Ok([(true, honoured), (false, opted_out)]
+            .into_iter()
+            .filter(|(_, globs)| !globs.is_empty())
+            .map(|(gitignore, globs)| GlobGroup { globs, gitignore })
+            .collect())
     }
 
     /// Walks up from `start` to the filesystem root, returning the first

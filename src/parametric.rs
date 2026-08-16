@@ -240,21 +240,26 @@ pub fn detect_collision(matches: &[Match]) -> Result<()> {
     Ok(())
 }
 
-/// Resolves a macro scope to its file set, honouring the gitignore filter.
+/// Resolves a macro scope to its file set, honouring the gitignore filter —
+/// the scope's own override when it carries one, else the manifest's.
 fn resolve_domain(
     manifest: &Manifest,
     base: &Path,
     rule: &Command,
     scope: &str,
 ) -> Result<Vec<String>> {
-    let globs = manifest
+    let declared = manifest
         .scopes
         .get(scope)
         .ok_or_else(|| Error::UnknownScope {
             command: rule.name.clone(),
             scope: scope.to_owned(),
         })?;
-    resolve::expand(globs, base, manifest.gitignore)
+    resolve::expand(
+        &declared.globs,
+        base,
+        declared.honours_gitignore(manifest.gitignore),
+    )
 }
 
 /// Normalizes an argv file token to a `base`-relative, forward-slash path so it

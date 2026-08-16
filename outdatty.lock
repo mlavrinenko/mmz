@@ -7,10 +7,10 @@ groups:
       src/init.rs: f038108b2d9ad217e2a4b4a8f0a0dd8d22e6288a8267a3f0933d6781a0c17a59
       src/lib.rs: 7381a052b9671370fbc51c585fc9e62088a21df755387275c58f48a445bf7897
       src/main.rs: 1e53e6ba4e5845f730e03280395446fcae73094a0c2f96cea83def0d45a053e9
-      src/manifest.rs: 04c15cbd63bf4c38abb1a65bbbff6bf908529a6ed3013572fd76df4bc8da91ae
+      src/manifest.rs: 2dfd5eb88e9c97a9f849854e22f0a194bf2e72dd98795a6f5c1842567412cc2b
     dependents:
-      README.md: 658a045672bd5272b8a545879cd12747e08eae0af365d778bc20ac3274b584b3
-      www/index.html: f440142131cb19dced4968811a094cfca37fc0b919b90332685b757a37c89b62
+      README.md: 8e311aed2ef7647f71bcd66312171919d31055cd8f3c8ef27db45600b614d021
+      www/index.html: 0dd3bf71e4bc51a6bde78baa3b1bc8d4908470c909f19516f5489b64b2dc303f
   dev-docs:
     source:
       Justfile: 34905bc5e53e3b711d1f6de2962073e27a282688c55ee697fc1c45ee76b8de06
@@ -21,16 +21,16 @@ groups:
       CONTRIBUTING.md: a90bfa47c26ca61ac15877bd03c4e6045fa2825b27ff9efd7fd0eceb912c9502
   manifest-schema:
     source:
-      src/manifest.rs: 04c15cbd63bf4c38abb1a65bbbff6bf908529a6ed3013572fd76df4bc8da91ae
+      src/manifest.rs: 2dfd5eb88e9c97a9f849854e22f0a194bf2e72dd98795a6f5c1842567412cc2b
     dependents:
-      schema/mmz.schema.json: be36c79b1b3955aeff6a0acc2985536dd11f0518d8853395ed56fe84ebd18f73
+      schema/mmz.schema.json: 20fe1d35070f8b5545cf2ab24fbf6878a8f67325c8d66a7441db97f09d7882f5
   release-notes:
     source:
       Cargo.toml: 000c275fc8bbad84daa71d4178e3654ca88274e6b172582b0e1c344258c72b66
     dependents:
-      CHANGELOG.md: 50809e05bf48f635995be3cb8a4f5904d000265192bc5d70f6fe3282cf55ef62
+      CHANGELOG.md: bae72729e5ec983fbc704db85a615320363a84d44c88fc55b6996b78393e24b6
   status-schema:
     source:
-      src/status.rs: 476f6ef98a30ec68f01b23ce6c8e50bbe93d6a07e1a440a2cdc42089121b5f73
+      src/status.rs: eda0b149747bf01199b365e2155cb80b75856519fa85aecde4204d339eb69e9d
     dependents:
       schema/status.schema.json: 86ee74d322210bbbd16275071ad83c6b04518be6f392d9f38b565882e32f6fee

@@ -17,6 +17,7 @@ mod tests {
         assert!(SCHEMA.contains("\"$schema\""), "declares its meta-schema");
         for key in [
             "scopes",
+            "globs",
             "commands",
             "gitignore",
             "cache_dir",

@@ -166,10 +166,11 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     })
 }
 
-/// Resolves a rule's shared `inputs` glob set: one filesystem walk, run once
-/// per rule regardless of how many expansions (parametric fan-outs) it has.
-/// [`expansion_files`] unions this cached set with each expansion's bound
-/// file, so the walk itself never repeats per expansion.
+/// Resolves a rule's shared `inputs` glob set, run once per rule regardless of
+/// how many expansions (parametric fan-outs) it has. [`expansion_files`] unions
+/// this cached set with each expansion's bound file, so the walk itself never
+/// repeats per expansion. One walk, or two when the rule mixes scopes that
+/// honour the gitignore filter with scopes that opted out.
 ///
 /// # Errors
 ///
@@ -179,7 +180,7 @@ pub(crate) fn shared_inputs(
     rule: &Command,
     base: &Path,
 ) -> Result<Vec<String>> {
-    resolve::expand(&manifest.globs_for(rule)?, base, manifest.gitignore)
+    resolve::expand_groups(&manifest.glob_groups(rule)?, base)
 }
 
 /// Combines a rule's pre-resolved shared inputs with one expansion's bound

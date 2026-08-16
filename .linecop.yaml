@@ -10,5 +10,8 @@ exclude_dirs:
   - archive
 
 overrides:
+  # The README is the whole user manual — every manifest key, the matching
+  # rules, and the correctness contract — so it carries more than the 200-line
+  # Markdown budget meant for a doc page.
   - pattern: ./README.md
-    limit: 295
+    limit: 400

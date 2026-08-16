@@ -79,11 +79,122 @@ fn parses_scopes_and_commands() {
     assert_eq!(manifest.commands.len(), 1);
     let command = manifest.commands.first().expect("command");
     assert_eq!(command.name, "cargo test");
-    assert_eq!(
-        manifest.globs_for(command).expect("globs"),
-        vec!["**/*.rs".to_owned()]
-    );
+    let groups = manifest.glob_groups(command).expect("groups");
+    let group = groups.first().expect("one group");
+    assert_eq!(groups.len(), 1, "one scope, one group");
+    assert_eq!(group.globs, vec!["**/*.rs".to_owned()]);
+    assert!(group.gitignore, "the array form inherits the default");
     assert!(manifest.gitignore, "gitignore defaults on");
+}
+
+#[test]
+fn scope_object_form_pins_gitignore_for_that_scope_only() {
+    let manifest = parse(concat!(
+        "scopes:\n",
+        "  src: [\"src/**\"]\n",
+        "  lcov:\n",
+        "    gitignore: false\n",
+        "    globs: [\"target/coverage/lcov.info\"]\n",
+        "commands:\n  - name: cargo crap\n    inputs: [src, lcov]\n",
+    ));
+    let src = manifest.scopes.get("src").expect("array-form scope");
+    let lcov = manifest.scopes.get("lcov").expect("object-form scope");
+    assert_eq!(src.gitignore, None, "the array form records no override");
+    assert!(
+        src.honours_gitignore(manifest.gitignore),
+        "so it inherits the manifest default"
+    );
+    assert_eq!(
+        lcov.globs,
+        vec!["target/coverage/lcov.info".to_owned()],
+        "the object form's patterns live under `globs`"
+    );
+    assert_eq!(lcov.gitignore, Some(false), "the override is recorded");
+    assert!(
+        !lcov.honours_gitignore(manifest.gitignore),
+        "and wins over the manifest default"
+    );
+    assert!(
+        manifest.gitignore,
+        "the manifest-level default is untouched"
+    );
+}
+
+#[test]
+fn glob_groups_bucket_scopes_by_effective_gitignore() {
+    let manifest = parse(concat!(
+        "scopes:\n",
+        "  src: [\"src/**\"]\n",
+        "  pins: [\"src/**\", \"Cargo.toml\"]\n",
+        "  lcov:\n",
+        "    gitignore: false\n",
+        "    globs: [\"target/coverage/lcov.info\"]\n",
+        "commands:\n  - name: cargo crap\n    inputs: [src, pins, lcov]\n",
+    ));
+    let command = manifest.commands.first().expect("command");
+    let groups = manifest.glob_groups(command).expect("groups");
+    assert_eq!(
+        groups.len(),
+        2,
+        "one bucket per effective setting, not per scope"
+    );
+    let honoured = groups.first().expect("honouring group");
+    let opted_out = groups.get(1).expect("opted-out group");
+    assert!(honoured.gitignore, "the filtered bucket comes first");
+    assert_eq!(
+        honoured.globs,
+        vec!["src/**".to_owned(), "Cargo.toml".to_owned()],
+        "two inheriting scopes merge, and a shared pattern is deduplicated"
+    );
+    assert!(!opted_out.gitignore);
+    assert_eq!(
+        opted_out.globs,
+        vec!["target/coverage/lcov.info".to_owned()]
+    );
+}
+
+#[test]
+fn glob_groups_omit_an_empty_bucket() {
+    let manifest = parse(concat!(
+        "scopes:\n",
+        "  lcov:\n",
+        "    gitignore: false\n",
+        "    globs: [\"target/coverage/lcov.info\"]\n",
+        "commands:\n  - name: cargo crap\n    inputs: [lcov]\n",
+    ));
+    let command = manifest.commands.first().expect("command");
+    let groups = manifest.glob_groups(command).expect("groups");
+    assert_eq!(
+        groups.len(),
+        1,
+        "no scope honours the filter, so no such group"
+    );
+    let group = groups.first().expect("group");
+    assert!(!group.gitignore);
+}
+
+#[test]
+fn rejects_a_scope_object_without_globs() {
+    let parsed: Result<Manifest, _> =
+        serde_yaml_ng::from_str("scopes:\n  lcov:\n    gitignore: false\n");
+    assert!(parsed.is_err(), "an object scope must name its patterns");
+}
+
+#[test]
+fn rejects_a_scope_object_with_empty_globs() {
+    let parsed: Result<Manifest, _> =
+        serde_yaml_ng::from_str("scopes:\n  lcov:\n    gitignore: false\n    globs: []\n");
+    assert!(
+        parsed.is_err(),
+        "an empty globs list is rejected like any malformed scope"
+    );
+}
+
+#[test]
+fn rejects_an_unknown_field_in_a_scope_object() {
+    let parsed: Result<Manifest, _> =
+        serde_yaml_ng::from_str("scopes:\n  lcov:\n    globs: [\"a\"]\n    ignore: false\n");
+    assert!(parsed.is_err(), "a stray key in a scope object is rejected");
 }
 
 #[test]

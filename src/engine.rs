@@ -106,8 +106,8 @@ fn digest_inputs(
     extra: Option<&str>,
     base: &Path,
 ) -> Result<Option<String>> {
-    let globs = manifest.globs_for(rule)?;
-    let mut files = resolve::expand(&globs, base, manifest.gitignore)?;
+    let groups = manifest.glob_groups(rule)?;
+    let mut files = resolve::expand_groups(&groups, base)?;
     if let Some(file) = extra {
         files.push(file.to_owned());
         files.sort();
