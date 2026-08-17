@@ -45,9 +45,9 @@ groups:
       src/schema.rs: 1ca00e1717116ecb0a62c984b610604ccee994c5b3d389bc53b86a3beb7686c5
   release-notes:
     source:
-      Cargo.toml: 696c2fd18c5387b9bb8bb916b63f66a206e3e40e9ac8950c5d54ae7c4846a8a8
+      Cargo.toml: 018d4e86c4095f3071a97011b8f51a054466a6eff55481c3f18c97a3d1077e08
     dependents:
-      CHANGELOG.md: 4f204a9b696710a46fa677a38c674a30527e8dad51e4b47bc9059a2876355153
+      CHANGELOG.md: 32aab4a4568d7ad058995105b080ef156418858c06c41610a804d602f1f0fa1f
   status-schema:
     source:
       src/status.rs: 6d635b6c65cca5a652fe3b850a498f43df4b5f05e4fbab8ca37eee6c5abe5513
