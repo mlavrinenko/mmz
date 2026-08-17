@@ -9,7 +9,7 @@
       + related("mmz-review-the-built-docs-site-in-a-browser.typ")[the review of
         the theme this replaced]
   ),
-  status: proposed(2026, 8, 17),
+  status: done(2026, 8, 17)[All looks good to me.],
 )
 
 == Summary
