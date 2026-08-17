@@ -3,38 +3,61 @@
 # Declares which dependents must be re-confirmed when a source changes. After
 # editing a source, review the dependents and run `just outdatty-update` to
 # record the new state; `just outdatty-check` (part of `just check`) fails until
-# you do. Tune these groups to match where your project's coupled files live.
+# you do. A recorded hash is a review watermark: it means a human looked, not
+# that a tool verified.
+#
+# The shape of this file changed when the docs became generated. A dependent
+# must be something a HUMAN edits — README.md, AGENTS.md, CONTRIBUTING.md and
+# docs/contributing/*.md are rendered from docs/src/*.typ and are checked for
+# drift by `just docs::md-check`, so listing them here would only ask a reviewer
+# to re-confirm a file they cannot edit.
+#
+# What remains are the couplings a generator genuinely cannot close: hand-written
+# JSON Schemas that mirror Rust types, and hand-written prose whose CORRECTNESS
+# no set-difference gate can judge. check-doc-coverage and check-doc-facts prove
+# that a note EXISTS for every action, key, code and gate; only a human can say
+# whether the note is still true after the thing it describes changed. That is
+# exactly the review this file schedules.
 groups:
-  # The CLI surface (commands, flags, behaviour) is documented by hand. Touching
-  # the code flags the user-facing docs as needing a look.
-  - name: cli-docs
-    source:
-      - src/main.rs
-      - src/lib.rs
-      - src/manifest.rs
-      - src/init.rs
-      - src/freshness.rs
-      - src/probe.rs
-    dependents:
-      - README.md
-      - www/index.html
-
   # The manifest type and the JSON Schema that validates .mmz/config.yaml are
-  # kept in sync by hand; a change to one must be mirrored in the other.
+  # kept in sync by hand; a change to one must be mirrored in the other. The
+  # schema is also what the docs site's manifest reference is generated from, so
+  # this group is upstream of that page too.
   - name: manifest-schema
     source:
       - src/manifest.rs
       - src/probe.rs
     dependents:
       - schema/mmz.schema.json
+      - src/schema.rs
+
+  # A manifest key's schema description is derived onto the reference page; its
+  # hand-written note beside it is not. check-doc-facts proves the note exists —
+  # this asks whether it is still true.
+  - name: manifest-prose
+    source:
+      - schema/mmz.schema.json
+    dependents:
+      - www/utils/config-notes.typ
 
   # The --status=json output shape lives in src/status.rs; its JSON Schema is
-  # maintained by hand alongside it.
+  # maintained by hand alongside it, and the docs read the state vocabulary back
+  # out of that schema.
   - name: status-schema
     source:
       - src/status.rs
     dependents:
       - schema/status.schema.json
+
+  # The CLI surface is the USAGE const in src/main.rs. The docs parse it for the
+  # action list and the exit codes, so a new flag reaches the page automatically
+  # — but its prose does not.
+  - name: cli-prose
+    source:
+      - src/main.rs
+    dependents:
+      - www/utils/cli-notes.typ
+      - www/utils/exit-code-notes.typ
 
   # A package change (version, dependencies, metadata) should land in the
   # changelog.
@@ -44,14 +67,38 @@ groups:
     dependents:
       - CHANGELOG.md
 
-  # The dev tooling and conventions documented for contributors track the
-  # files that define them. .mmz/config.yaml's rules mirror the commands
-  # `just check` memoizes, so a change to the recipe should be reflected there.
-  - name: dev-docs
+  # The Justfile is the gate surface. Its recipes are mirrored three ways that
+  # no generator closes: each gate's prose, the .mmz/config.yaml rule that
+  # memoizes it (rule name = `just <recipe>`, plus the probe pinning its body),
+  # and the deep dive arguing the wiring.
+  - name: gates
+    source:
+      - Justfile
+      - .just/docs.just
+    dependents:
+      - www/utils/gate-notes.typ
+      - .mmz/config.yaml
+      - docs/src/contributing/gates.typ
+
+  # The gate scripts and the doc generators define the pipeline that
+  # generated-docs.md documents. It is the one doc whose subject IS the
+  # machinery, so it cannot be generated from it.
+  - name: docs-pipeline
+    source:
+      - www/generate.sh
+      - www/generate-facts.sh
+      - www/generate-site-pages.sh
+      - docs/generate-md.sh
+      - .just/scripts/check-doc-coverage.sh
+      - .just/scripts/check-doc-facts.sh
+      - .just/scripts/docs-md-check.sh
+    dependents:
+      - docs/src/contributing/generated-docs.typ
+
+  # The dev shell defines what a contributor is told to install, and the
+  # setup/tooling prose in CONTRIBUTING.md's source tracks it.
+  - name: dev-shell
     source:
       - flake.nix
-      - Justfile
     dependents:
-      - CONTRIBUTING.md
-      - AGENTS.md
-      - .mmz/config.yaml
+      - docs/src/contributing.typ

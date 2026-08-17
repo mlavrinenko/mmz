@@ -1,470 +1,76 @@
-# mmz
+<!-- Generated from docs/src/readme.typ by `just docs md`. Do not edit; edit the source. -->
 
-[![CI](https://github.com/mlavrinenko/mmz/actions/workflows/ci.yml/badge.svg)](https://github.com/mlavrinenko/mmz/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/mmz.svg)](https://crates.io/crates/mmz)
-[![License: MIT](https://img.shields.io/crates/l/mmz.svg)](LICENSE-MIT)
+<h1 align="center"><img src="https://raw.githubusercontent.com/mlavrinenko/mmz/main/www/assets/images/logo.svg" alt="mmz" width="96" /><br />
+mmz</h1><h4 align="center">A <a href="LICENSE-MIT">MIT</a>-licensed memoized command runner.</h4><h4 align="center"><a href="https://mlavrinenko.github.io/mmz/">Documentation</a> · <a href="https://mlavrinenko.github.io/mmz/quickstart/">Quickstart</a> · <a href="https://mlavrinenko.github.io/mmz/comparison/">Comparison</a></h4>
 
-memoized command runner
+---
 
-Prefix any command with `mmz`. When the matched rule's declared inputs are
-byte-for-byte unchanged since the command last succeeded, `mmz` skips it and
-exits 0. Otherwise it runs the command, streams its output, and records the
-result on success.
+[<img src="https://github.com/mlavrinenko/mmz/actions/workflows/ci.yml/badge.svg" alt="CI" />](https://github.com/mlavrinenko/mmz/actions/workflows/ci.yml) [<img src="https://img.shields.io/crates/v/mmz.svg" alt="crates.io" />](https://crates.io/crates/mmz) [<img src="https://img.shields.io/crates/l/mmz.svg" alt="License: MIT" />](LICENSE-MIT)
 
-It is not a build system: no task ordering, no dependency graph, no artifact
-replay, no remote cache. It answers one question per invocation — is this rule's
-work still done, i.e. are its inputs unchanged since it last passed and are the
-artifacts it declared still there? See [Non-goals](#non-goals).
+Prefix any command with `mmz`. When the matched rule’s declared inputs are byte-for-byte unchanged since that command last succeeded, `mmz` skips it and exits 0. Otherwise it runs the command, streams its output, and records the result on success.
 
-## Install
+It is not a build system: no task ordering, no dependency graph, no artifact replay, no remote cache. It answers one question per invocation — is this rule’s work still done?
+
+```yaml
+# .mmz/config.yaml
+scopes:
+  rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
+
+commands:
+  - name: cargo test
+    inputs: [rust]
+```
+
+```console
+validate: 4 orders, 2 customers OK
+mmz: skipped ./bin/validate.sh (inputs unchanged)
+```
+
+## Installation
 
 ```bash
 cargo install mmz
 ```
 
-Or download a pre-built binary from the
-[latest release](https://github.com/mlavrinenko/mmz/releases/latest).
+[Quickstart](https://mlavrinenko.github.io/mmz/quickstart/) covers the prebuilt binaries, `nix run`, and scaffolding a manifest.
 
 ## Usage
 
-```
-mmz <command> [args...]      run a command, skipping it when its inputs are unchanged
-mmz --init                   write a starter .mmz/config.yaml in the current directory
-mmz --status [--tag t]...    show each rule's freshness as a table
-mmz --status=json            the same as JSON, with each rule's inputs and hashes
-mmz --status=json-schema     print the JSON Schema for --status=json
-mmz --is-fresh [--tag t]... [-- cmd]   exit 0 if cmd's rule (or every/tagged rule) is fresh
-mmz --prune                  delete cache records whose rule no longer exists
-mmz --schema                 print the config JSON Schema
-mmz --version                print version
-mmz --help                   print help
-mmz -- <command> [args]      run a command whose name begins with a dash
-```
-
-Scaffold a manifest, then wrap commands wherever memoization is wanted — a
-Justfile recipe line, a shell, a git hook:
-
 ```bash
-mmz --init                # writes .mmz/config.yaml and .mmz/.gitignore
-mmz cargo test            # skipped when the rust inputs are unchanged
-mmz --status              # show each rule's freshness
+mmz --init                # write a starter .mmz/config.yaml
+mmz cargo test            # skipped when the declared inputs are unchanged
+mmz --status              # each rule's freshness and record age
+mmz --is-fresh --tag gate # exit 0 if every gate-tagged rule is fresh; runs nothing
+mmz --prune               # drop records whose rule no longer exists
 ```
 
-`mmz` receives a clean argv vector (not a shell-expanded string), so matching is
-robust and there is no nesting blind spot. Wrappers go outside it
-(`chronic mmz cargo test`). There is no `just`/runner integration and no
-`--no-memo`: a bare command without `mmz` is simply unmemoized.
+## The trade
 
-## Manifest
+`mmz` cannot see a dependency you did not declare, so the asymmetry is the whole contract:
 
-`.mmz/config.yaml` — the nearest one, searching upward from the working
-directory. Everything mmz needs lives under one `.mmz/` directory: the tracked
-config plus a `.mmz/.gitignore` (written by `--init`) that ignores the cache,
-so a project gains one entry and its root `.gitignore` stays untouched.
+- Under-declaring a rule’s inputs skips a command that should have run — a false green, and dangerous.
+- Over-declaring buys an unnecessary re-run — and nothing else.
 
-```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/mmz/v0.1.0/schema/mmz.schema.json
-scopes:
-  rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
-# probes:                  # named commands whose stdout is an input
-#   toolchain: { run: rustc -vV }
-commands:
-  - name: cargo test       # matcher and cache identity
-    inputs: [rust]         # scope names, probe names, or both
-#   outputs: [target/coverage/lcov.info]   # artifacts the run must leave behind
-#   match: exact           # match only the bare command, no trailing args (default prefix)
-#   on_hit: "tests fresh"  # per-rule cache-hit note, overriding the global one below
-# cache_dir: .mmz/cache    # where throwaway records live (default; must be git-ignored)
-# gitignore: true          # skip git-ignored paths when expanding globs (default)
-# strict: [no_match, no_inputs]   # the default; list a subset to relax, [] to relax all
-on_hit: "mmz: skipped {cache:command} (inputs unchanged)"   # stderr note on a hit
-```
+Broaden the scope when in doubt. `mmz` fails closed everywhere else: a missing or invalid manifest always errors, and so do an unmatched command and a matched rule with no inputs, unless `strict` relaxes them.
 
-- `scopes`: named glob sets, declared once and referenced by many commands, so a
-  shared input path lives in one place. Globs follow the common convention — `*`
-  stays within a directory, `**` crosses directories. A scope is either an array
-  of patterns or an object naming them under `globs` (see
-  [Artifact scopes](#artifact-scopes-per-scope-gitignore)).
-- `probes`: named commands whose stdout is hashed into the input digest of every
-  rule referencing them — how a rule depends on part of a file, or on something
-  that is not a file at all. One namespace with `scopes`. Weigh the trade first:
-  see [Command inputs](#command-inputs-probes).
-- `commands`: ordered rules. Each has a `name` (the matcher and cache identity),
-  `inputs` (scope and probe names; the scopes' globs, unioned, are the rule's
-  file set), and an optional `match` (`prefix`, the default, or `exact`; see
-  [Matching](#matching)) and `outputs` (literal artifact paths the run must
-  produce; see [Declared outputs](#declared-outputs)).
-- `gitignore` (default `true`): glob expansion skips git-ignored paths, so build
-  artifacts never enter an input set. Explicitly listed literal paths are always
-  kept. The `.git` directory is never traversed; symlinks are not followed. One
-  scope can override this for itself — see
-  [Artifact scopes](#artifact-scopes-per-scope-gitignore).
-- `cache_dir` (default `.mmz/cache`): directory for throwaway records, relative
-  to the project root (the directory holding `.mmz`). Keep it git-ignored; set it
-  to relocate state (e.g. `.cache/mmz`).
-- `strict` (default: all): the runtime cases `mmz` errors on rather than falling
-  back — `no_match` (no rule matches) and `no_inputs` (a matched rule resolves to
-  zero files). Omit for both; list a subset to relax the rest; `[]` to relax all.
-- `on_hit` (default: none): a line printed to stderr when a command is skipped.
-  Embed `{cache:<field>}` to pull a field straight from the cache record
-  (`command`, `ran_at`, `input_digest`, …). Set it per command to override the
-  global note, or to `""` to silence one. `mmz --init` scaffolds a default.
+## Documentation
 
-The manifest is validated at load: command names must be non-empty and unique,
-every `inputs` entry must name a defined scope or probe (and no name may be
-both), and `strict` names must be known. Run `mmz --schema` for the full JSON
-Schema.
+- [Quickstart](https://mlavrinenko.github.io/mmz/quickstart/) — Install mmz, scaffold a manifest, and watch a command skip itself.
+- [Concepts](https://mlavrinenko.github.io/mmz/concepts/) — The model behind mmz: rules, records, freshness, and the asymmetry that decides every design question.
+- [Inputs: scopes and probes](https://mlavrinenko.github.io/mmz/inputs/) — Named glob sets, the gitignore filter and how to opt one scope out of it, and probes for the inputs that are not files.
+- [Matching and parametric rules](https://mlavrinenko.github.io/mmz/matching/) — How an invocation is matched to a rule, how the cache identity follows from that, and how one rule can fan over a scope's files.
+- [Declared outputs](https://mlavrinenko.github.io/mmz/outputs/) — A producer command's record can be undone without touching an input. Declaring what a run leaves behind is how mmz notices.
+- [Gating with tags](https://mlavrinenko.github.io/mmz/gating/) — Use --is-fresh to require that an expensive check already passed, and tags to decide which rules a gate is allowed to ask about.
+- [Manifest reference](https://mlavrinenko.github.io/mmz/manifest/) — Every key .mmz/config.yaml can declare, generated from the JSON Schema the binary ships.
+- [CLI reference](https://mlavrinenko.github.io/mmz/cli/) — Every action mmz accepts, every exit code it returns, and the JSON it can be asked for — generated from the binary's own help text.
+- [Rust library](https://mlavrinenko.github.io/mmz/library/) — mmz ships as a library crate as well as a binary; the binary is a thin wrapper over it.
+- [For AI agents](https://mlavrinenko.github.io/mmz/agents/) — Driving mmz from an agent: machine-readable state, honest exit codes, and the one mistake an agent is most likely to make with it.
+- [Comparison](https://mlavrinenko.github.io/mmz/comparison/) — Where mmz sits among build systems, task runners and compiler caches — and which of them you should reach for instead.
 
-`mmz --init` pins the `$schema` URL to the `v{version}` tag of the mmz that wrote
-it, not `main`, so a project keeps validating against the schema its mmz was
-built for even when different projects pin different mmz versions. `mmz --help`
-and `mmz --version` report the running version.
+## Contributing
 
-## Artifact scopes (per-scope gitignore)
-
-A scope value is normally an array of patterns. Spelled as an object it names
-those patterns under `globs` and may pin `gitignore` for that scope alone:
-
-```yaml
-scopes:
-  src: ["src/**"]              # array form: inherits the manifest-level setting
-  lcov:
-    gitignore: false           # this scope only
-    globs: ["target/coverage/lcov.info"]
-```
-
-This is what a rule needs to depend on a build artifact. Artifacts live in
-git-ignored paths by definition, so under the default filter such a scope
-expands to nothing — and a rule whose inputs resolve to nothing is not an error
-you notice, it is a rule that reports fresh forever. Opting the one scope out
-makes the artifact a tracked input: regenerate it, and the rule goes stale.
-
-Keep the override at the scope that names the artifact. Flipping the
-manifest-level `gitignore` instead would drag every other scope through
-`target/` and any other ignored tree, which is both slow and a source of
-spurious cache busts. There is no per-glob override: one knob, at the level a
-reader can see it.
-
-A rule may mix both kinds of scope — each is expanded under its own setting, so
-the sibling scopes in the same rule keep filtering. Absent means inherit; the
-manifest-level default stays `true`. An object without `globs`, or with an empty
-`globs` list, is a manifest error.
-
-## Command inputs (probes)
-
-A scope can only name whole files, so a rule that depends on *part* of a file
-has to hash all of it — one recipe body in a `Justfile` busts every rule that
-pins the `Justfile`. A `probes:` entry closes that gap: `run` is a command line,
-its stdout is hashed, and `inputs:` references the probe by name exactly as it
-references a scope.
-
-```yaml
-probes:
-  fmt-recipe:
-    run: just --dump --dump-format json | jq -c '.recipes["fmt-check"]'
-
-commands:
-  - name: just fmt-check
-    inputs: [rust, fmt-recipe]
-```
-
-Nothing else about the rule changes: the probe's digest joins the rest of its
-input digest, so `just fmt-check` re-runs when its own recipe body moves and
-ignores every other recipe in the same file. The same shape covers a toolchain
-fingerprint (`rustc -vV`), a resolved dependency set, or anything else a project
-can print deterministically.
-
-**Read this before reaching for one: a wrong scope costs time, a wrong probe can
-lie.** Over-declaring a scope buys an unnecessary re-run — harmless. A probe that
-prints the wrong bytes buys a wrongly *fresh* rule, which is the failure `mmz`
-exists to prevent. So every way a probe can fail visibly is a hard stop:
-
-- A probe that exits non-zero is an error naming the probe, its exit code, and
-  its stderr. `mmz` exits 6 without consuming the output and without writing a
-  record — a failed command never reaches the hasher.
-- A probe that cannot be spawned is the same error.
-- Empty stdout is an error by default; `allow_empty: true` opts in. It is the
-  cheapest catch for a selector that matched nothing.
-
-Content correctness and determinism are **yours, not `mmz`'s**. A probe that
-prints valid but wrong output, or that varies run to run, is a manifest bug and
-`mmz` cannot see it: pin the ordering, strip the timestamps, and assert the
-shape inside the probe so a bad shape becomes a non-zero exit and hits the rule
-above.
-
-```yaml
-probes:
-  fmt-recipe:                                       # note the -e
-    run: just --dump --dump-format json | jq -e -c '.recipes["fmt-check"]'
-```
-
-`jq -e` exits non-zero when its selector yields `null` or `false`, turning a
-renamed recipe into a loud probe failure instead of a digest that quietly stops
-tracking anything. `mmz` does not validate meaning, and will not learn to.
-
-Mechanics: `run` is executed by `sh -c` from the project root (the directory
-holding `.mmz`), with stdin closed so a probe waiting on input fails instead of
-hanging a gate, and stderr captured for the failure message. A probe is resolved
-once per `mmz` invocation however many rules name it, so eighteen rules sharing
-one probe cost one process — the shape that matters, since a bare
-`mmz --is-fresh` gates every rule and runs in git hooks. A declared probe that no
-rule names is never run.
-
-`inputs:` has one namespace: a probe sharing a name with a scope is a manifest
-error, so a reader never has to guess which kind a name is, and an entry that is
-neither is refused at load. A rule whose only input is a probe has inputs — it is
-memoized, not `no-inputs`. When a probe is what changed, `mmz --is-fresh` says
-``probe `<name>` changed since it last passed`` rather than "inputs changed",
-and `mmz --status=json` reports every resolved probe's current digest under
-`probes` (with what each record saw under `cached.probes`).
-
-## Declared outputs
-
-A rule may list the artifacts its run produces. It is fresh only when its inputs
-still hash the same **and** every declared output exists — a missing one makes
-it stale whatever the inputs say:
-
-```yaml
-commands:
-  - name: just cover
-    inputs: [rust]
-    outputs:
-      - target/coverage/lcov.info
-```
-
-A record is a claim: this command exited 0 while its inputs hashed to H. For a
-verdict command (`fmt --check`, `clippy`) that claim holds for as long as H
-holds. For a producer command the claim carries a side effect, and the effect
-can be undone without touching a single input:
-
-```bash
-mmz just cover   # runs, records H, writes target/coverage/lcov.info
-cargo clean      # artifact gone; sources untouched, H unchanged
-mmz just cover   # without `outputs`: fresh, skipped — and nothing to read
-```
-
-The record is not stale, it is void: the run it describes has been undone. Same
-story for a fresh clone, a new worktree, or a pruned `target/`. This does not
-replace the inputs — they stay the only evidence that an artifact matches the
-sources. Outputs are the second way a record can stop being valid.
-
-Existence only; `mmz` never hashes an output. The input digest already proves
-that an existing artifact is the one those inputs produced, so hashing would buy
-tamper detection alone (catching a hand-edited artifact) — a separate feature
-with a separate cost, deliberately left out.
-
-Outputs are literal paths relative to the project root, stat-ed directly and
-never walked — a glob is a manifest error rather than a pattern that silently
-never matches, and a `{scope}` macro is not substituted here. Because nothing is
-walked, the `gitignore` filter never applies: an artifact under an ignored
-`target/` needs no [artifact scope](#artifact-scopes-per-scope-gitignore)
-opt-out, unlike the same path used as an *input*. A directory counts as present.
-
-When a rule's record is voided, `mmz --status` says `missing-output` and names
-the path in a `MISSING OUTPUT` column, `mmz --status=json` reports it as
-`missing_output` (with the outputs the recorded run promised under
-`cached.outputs`), and `mmz --is-fresh` fails with
-``declared output `<path>` is missing`` rather than "inputs changed" — a wrong
-reason there sends a reader to look at the wrong thing.
-
-A run that exits 0 without producing a declared output is a hard error: `mmz`
-prints the missing path, writes no cache record, and exits 5. Skipping the
-record silently would leave a rule that quietly never hits again, which is the
-exact failure this feature exists to end. A run that *fails* is untouched by
-this — its own exit code is the story, and its failure is recorded as before.
-
-## Tags
-
-A command rule can carry `tags: [..]`; `mmz --is-fresh --tag <tag>` and `mmz
---status --tag <tag>` then narrow to rules carrying every listed tag, instead
-of every rule in the manifest. Repeat `--tag`/`-t` to require more than one —
-repeats AND together (there is no OR: call `mmz --is-fresh` once per tag for
-that). A rule with no `tags:` never matches a `--tag` filter; a bare `mmz
---is-fresh` (no `--tag`, no command) still gates every rule regardless of tags.
-
-```yaml
-commands:
-  - name: cargo test
-    inputs: [rust]
-    tags: [gate]
-  - name: cargo bench
-    inputs: [rust]
-    tags: [bench]
-```
-
-`mmz --is-fresh --tag gate` here checks only `cargo test`; a bare `mmz
---is-fresh` still checks both. One manifest can then hold a gating subset
-(wired into `just check` or a pre-push hook) alongside other memoized commands
-a gate should ignore, instead of splitting `.mmz/config.yaml` per concern.
-
-Tags are case-faithful, trimmed, and blank entries are dropped; declaring the
-same tag twice on one rule is a manifest error.
-
-## Matching
-
-A rule's `name` is split on whitespace into tokens, and it matches when those
-tokens are a prefix of the invoked argv: `cargo test` matches `cargo test` and
-`cargo test --workspace`, but not `cargo build` and not the bare `cargo`.
-Matching is on whole tokens, so `car` does not match `cargo`.
-
-Rules are tried in manifest order; the first match wins. Order specific rules
-before general ones. The cache identity is the matched rule (its `name`), not
-the full argv, so you control granularity by how specifically rules are written:
-split a rule or narrow its matcher when one rule conflates commands with
-different real inputs.
-
-Set `match: exact` on a rule to match only the bare command, no trailing args —
-so `cargo test` and `cargo test --release` become separate cache identities. It
-only narrows a rule, never causing a wrongful skip: an unmatched invocation
-falls to the `no_match` case (error, or passthrough when relaxed).
-
-## Parametric rules (per-file fan)
-
-A single `{scope}` macro in a rule's `name` fans it over that scope's files: one
-per-file cache record per matched file, without hand-listing each as its own
-rule.
-
-```yaml
-scopes:
-  lint-targets: ["src/**/*.rs"]
-  rust-pins:    ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
-commands:
-  - name: "ruff check {lint-targets}"   # {scope} macro ⇒ parametric rule
-    inputs: [rust-pins]                 # shared pins added to every record
-```
-
-`ruff check {lint-targets}` stands for `ruff check src/a.rs`, `ruff check
-src/b.rs`, … — each a distinct cache identity. A record's inputs are the
-`inputs` pins plus its own file, so editing `src/a.rs` busts only that file's
-record. The macro is one whitespace token but may sit inside one
-(`--file={lint-targets}`). `mmz` stays a prefix — you drive the loop
-(`for f in src/**/*.rs; do mmz ruff check "$f"; done`).
-
-The bound file must be a member of the scope (gitignore-filtered), so an
-off-list path falls through to the no-match case rather than inventing a record.
-`mmz --status` enumerates one row per expanded file, `mmz --is-fresh` gates one
-verdict per expanded file (a bare `--is-fresh` over a parametric rule passes
-only when every one of its expansions is fresh; a targeted `--is-fresh --
-<command> <file>` gates the one expansion `<file>` binds to), `mmz --prune`
-drops a record once its file leaves the tree, and two rules resolving to the
-same expanded identity is an error, not a silently picked winner.
-
-Per-file scoping is only honest when the command depends on that one file plus
-the pins (a per-file lint/format/typecheck). A whole-crate command like `cargo
-mutants -f {scope}` compiles siblings, so a sibling edit can leave a file's
-record wrongly fresh — use the fan there knowing you trade correctness for speed.
-
-## Correctness contract
-
-The governing asymmetry, because the failure is silent:
-
-- Under-declaring a rule's inputs → `mmz` skips a command that should have run →
-  false green. Dangerous.
-- Over-declaring inputs → an unnecessary re-run. Harmless.
-
-So a rule's scopes must be a superset of every file any matching invocation
-could depend on. When in doubt, broaden the scope. Toolchain sensitivity is
-modeled as ordinary inputs: add `rust-toolchain.toml` or `flake.lock` to a scope
-and a toolchain bump busts the cache. `mmz` trusts file content, not the ambient
-environment — and a [probe](#command-inputs-probes) only shifts who is trusted,
-from a file's bytes to a command's stdout, which is why its content is the
-manifest author's to get right.
-
-`mmz` fails closed: a missing or invalid manifest always errors, and unmatched
-commands or matched rules with no inputs error too unless `strict` relaxes them
-(then they run unmemoized). What `mmz` never does is skip a command whose inputs
-it has not confirmed unchanged.
-
-## State and exit codes
-
-Records live in a git-ignored cache directory (`.mmz/cache` by default), one YAML file
-per rule, written atomically (temp file + rename) so a crash or concurrent writer
-never leaves a truncated record. Derived, throwaway state — do not commit it. A
-record is fresh only when its `status` is `ok`, its content digest, format,
-algorithm, and command all still match, and every output its rule declares is
-still on disk; anything else re-runs. A record also remembers the outputs
-declared when it was written, so a missing one is reported against the run that
-promised it.
-
-`mmz --status` shows each rule's verdict and the age of its record;
-`mmz --status=json` adds every resolved input and its content hash so you can
-`jq` out what changed, and `mmz --status=json-schema` prints its schema. Renaming
-or removing a rule orphans its record; `mmz --prune` sweeps the unclaimed ones.
-
-`mmz --is-fresh -- <command>` gates a command on its cache without running it:
-exit 0 when its rule is already fresh, exit 1 otherwise. With no command,
-`mmz --is-fresh` gates every rule at once. It is the inverse of wrapping —
-`mmz <command>` runs a stale command, `--is-fresh` refuses it — so a git hook
-can require that an expensive check was already run (and memoized) without
-re-running it on the spot:
-
-```bash
-# pre-push: refuse the push if the VM checks were not run, but never run them here
-mmz --is-fresh -- just check-vm || { echo "stale: run 'just check-vm' first" >&2; exit 1; }
-```
-
-A non-fresh gate prints one `mmz: \`<rule>\` is <state> (<reason>)` line per offender, then a single hint to re-run the listed commands under mmz (e.g. `mmz just check`) to record a pass — a standalone run is not tracked, so the rule stays stale or `never`. (A `no-inputs` offender names no run record.)
-
-| Code | Meaning |
-| ---- | ------- |
-| 0    | fresh, skipped, or the command succeeded |
-| 1    | `--is-fresh`: the targeted rule (or some rule) is not fresh |
-| *n*  | the wrapped command's own exit code |
-| 2    | usage error (empty invocation, unknown option, `--init` over an existing manifest) |
-| 3    | strict refusal (no matching rule, or a matched rule with no inputs) |
-| 4    | manifest missing or invalid |
-| 5    | the command succeeded without producing a declared output; nothing recorded |
-| 6    | a probe failed, could not be run, or printed nothing; nothing recorded |
-| 70   | internal error |
-| 127  | command could not be spawned |
-
-## Non-goals
-
-`mmz` follows the Unix philosophy — one thing, done right — so these stay out of
-scope:
-
-- Task orchestration: no execution order or dependency graph; use a task runner.
-- Output replay: only the exit code is cached, never stdout, stderr, or
-  artifacts. A declared `outputs` path is checked for existence, never stored,
-  restored, or hashed.
-- Automatic dependency tracing: no strace; scopes are declared explicitly.
-- Remote caching: state is strictly local and throwaway.
-- Deep runner integration: no plugins or hooks; `mmz` is a dumb CLI prefix.
-
-## Library
-
-`mmz` is published as a library crate too; the binary is a thin wrapper.
-`mmz::run(&argv, cwd)` memoizes one invocation and returns its exit code;
-`mmz::status`, `mmz::prune`, and `mmz::Manifest` cover the rest.
-
-```rust
-let argv = vec!["cargo".to_owned(), "test".to_owned()];
-std::process::exit(mmz::run(&argv, std::path::Path::new("."))?.into());
-```
-
-## Dogfooding
-
-`mmz` memoizes its own checks: [`.mmz/config.yaml`](.mmz/config.yaml) declares the rules and the
-[`Justfile`](Justfile) `check` recipe wraps `cargo test`, `cargo clippy`,
-`cargo fmt`, and `cargo machete` with the locally built binary, so a no-op
-`just check` skips them.
-
-## Development
-
-Prerequisites: [Nix](https://nixos.org/) with flakes enabled.
-
-```bash
-direnv allow         # or: nix develop
-
-just check           # fmt + clippy + tests + file-size + drift check (memoized)
-just build
-just test
-just cover           # code coverage (70% minimum)
-just fmt             # format code
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for coding conventions.
+See [CONTRIBUTING.md](CONTRIBUTING.md). mmz memoizes its own checks, so `just check` is itself the worked example — and closing a task asserts those checks already passed with `mmz --is-fresh --tag gate`.
 
 ## License
 
-MIT
+MIT. Requires Rust `1.85` or newer.

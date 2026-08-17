@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A documentation site under `www/`, built from Typst sources with
+  [tola](https://github.com/tola-rs/tola-ssg) and searchable via Pagefind,
+  replacing the single hand-written `index.html` that restated the README from
+  memory. Twelve pages, and the reference ones are generated rather than
+  written: the manifest reference from `mmz --schema`, the CLI reference and the
+  exit-code table from `mmz --help`, the rule-state vocabulary from
+  `mmz --status=json-schema`. Every transcript is captured from the real binary
+  run against a new `examples/demo` fixture, so no example on the site can drift
+  from what the binary does.
+- `README.md`, `AGENTS.md`, `CONTRIBUTING.md` and `docs/contributing/*.md` are
+  now rendered from `docs/src/*.typ` by typlite (`just docs md`), and
+  `just docs::md-check` fails when a committed file has drifted from its source.
+  The README drops from 500 lines to 76: it is a front door now, and the manual
+  it used to carry lives on the site where it can be generated.
+- Four documentation gates in `just check`: `docs::check` builds the site and
+  validates every internal link, `docs::md-check` catches Markdown drift,
+  `check-doc-coverage` fails when `mmz --help` advertises an action with no
+  hand-written note, and `check-doc-facts` does the same for every manifest key,
+  exit code, gate and page. Each compares in both directions, so a note for
+  something that no longer exists fails too.
+
+### Changed
+
+- `just check` runs its arms as `just memo <gate>` — that is, `mmz just <gate>` —
+  so `.mmz/config.yaml` names RECIPES rather than mirroring their command lines.
+  The mirror it replaces was hand-maintained and desynchronised silently: a
+  recipe growing a flag left the rule matching, and memoizing, the old command's
+  identity.
+- Each gate rule now pins its own recipe body through a probe
+  (`just --dump --dump-format json | jq -e -c '.recipes["<name>"]'`) instead of
+  sharing one scope over the whole `Justfile`. Editing an unrelated recipe used
+  to bust every rule and re-run clippy and the full test suite; it now busts
+  nothing. Verified both directions: a non-gate recipe edit leaves all ten rules
+  fresh, and a `clippy` body edit makes exactly one stale.
+- Gate membership is derived from `[group("gate")]` and cross-checked against
+  `check`'s own dependency list, which is also the gate table's row order in
+  CONTRIBUTING.md. A gate tagged but not wired — or wired but not tagged — fails
+  the docs build naming both sides.
+- `.linecop.yaml` caps Typst, Shell, jq and CSS, and exempts the generated
+  Markdown: typlite emits one line per paragraph, so those line counts were never
+  a meaningful size proxy. The cap that matters is on the Typst source. The
+  README's 500-line override is gone with the 500-line README.
+- `outdatty.yaml`'s groups now couple sources to the hand-written prose a
+  generator cannot check — the notes files — rather than to whole documents that
+  are no longer hand-edited.
+- The Pages workflow builds the site through the dev shell instead of uploading
+  `www/` verbatim.
+
 ## [0.6.0] - 2026-08-16
 
 ### Added

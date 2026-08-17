@@ -1,0 +1,4 @@
+[
+  { "id": "ada",   "name": "Ada Lovelace",  "tier": "gold" },
+  { "id": "grace", "name": "Grace Hopper",  "tier": "silver" }
+]

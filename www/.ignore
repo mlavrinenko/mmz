@@ -1,0 +1,5 @@
+# Keep ripgrep (and anything else honouring .ignore) out of the built site and
+# the regenerated captures — searching www/ should hit sources, never output.
+/public
+/.tola/
+/generated

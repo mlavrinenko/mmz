@@ -1,23 +1,59 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/mlavrinenko/linecop/main/linecop-schema.json
+#
+# A cap is a design constraint, not a nag: a file nobody can hold in their head
+# is where the untested branch hides. CONTRIBUTING.md renders this file's
+# `limits` and `overrides` verbatim (www/generate-facts.sh -> linecop-caps.json),
+# so the numbers below are the ones the docs quote.
 limits:
   Rust: 500
   Markdown: 200
+  # The docs sources, both render paths: www/content pages, www/utils helpers,
+  # and the docs/src Markdown sources. Set below the Rust cap because a doc page
+  # that long is a page that wanted splitting into two routes.
+  Typst: 250
+  # The generators. Every one of them is load-bearing and heavily commented —
+  # the comments ARE the design record — so the cap is generous, but a generator
+  # past it is a generator that wanted a jq program beside it (see www/gates.jq).
+  Shell: 200
+  # The jq programs the generators run through `jq -f`.
+  jq: 150
+  CSS: 250
 
 count_mode: total
 
 exclude_dirs:
   - target
   - archive
+  # The built docs site and the regenerated captures. Both are gitignored build
+  # output; scanning either would cap files this repo does not author.
+  - public
+  - generated
 
 overrides:
-  # The README is the whole user manual — every manifest key, the matching
-  # rules, and the correctness contract — so it carries more than the 200-line
-  # Markdown budget meant for a doc page.
+  # Every Markdown file below is GENERATED from a docs/src/*.typ source, and a
+  # generated file's line count is not a meaningful size proxy: typlite emits
+  # one line per paragraph rather than hard-wrapping, so a 40-line document can
+  # be a 6-line file and a well-scoped one can be 200. The cap that matters is
+  # on the SOURCE, which the Typst limit above already applies. Editing these
+  # files is itself a mistake `just docs::md-check` catches.
   - pattern: ./README.md
-    limit: 500
+    exclude: true
+  - pattern: ./AGENTS.md
+    exclude: true
+  - pattern: ./CONTRIBUTING.md
+    exclude: true
+  - pattern: ./docs/contributing/*.md
+    exclude: true
+  # Vendored verbatim from tola 0.7.1 and marked AUTO-GENERATED upstream.
+  # Capping them would only ever produce a violation whose fix is to diverge
+  # from upstream, which is the opposite of what a vendored file wants.
+  - pattern: ./www/templates/tola.typ
+    exclude: true
+  - pattern: ./www/utils/tola.typ
+    exclude: true
   # The changelog is append-only history: it grows by one section per release
   # and nothing in it can be split out. Under the shared Markdown budget the
-  # only way to land a release is to delete or thin an older entry, which
-  # trades history for a number. Budget it for many releases instead.
+  # only way to land a release is to delete or thin an older entry, which trades
+  # history for a number. Budget it for many releases instead.
   - pattern: ./CHANGELOG.md
     limit: 1000

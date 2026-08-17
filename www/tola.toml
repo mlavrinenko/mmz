@@ -1,0 +1,52 @@
+# Tola configuration (v0.7.1) — mmz documentation site.
+#
+# The site URL below is the single source for both the public URL and the
+# GitHub Pages path prefix: www/utils/site.typ reads this file rather than
+# restating either, so moving the site is a one-line edit here.
+
+[site.info]
+title = "mmz"
+author = "Maxim Lavrinenko"
+description = "A memoized command runner. Prefix any command with mmz and it skips when the declared inputs are byte-for-byte unchanged since the command last succeeded."
+# GitHub Pages project page: the URL path ("/mmz") is the build prefix.
+url = "https://mlavrinenko.github.io/mmz"
+language = "en"
+copyright = "MIT"
+
+[site.seo]
+auto_og = false
+
+[site.seo.feed]
+enable = false
+
+[site.seo.sitemap]
+enable = true
+path = "sitemap.xml"
+
+[site.header]
+no_fouc = true
+styles = []
+scripts = []
+elements = []
+
+[build.assets]
+nested = ["assets"]
+flatten = []
+
+[build.hooks.css]
+enable = false
+
+[serve]
+interface = "127.0.0.1"
+port = 5288
+watch = true
+# Serve under the same /mmz prefix the build uses, so local links resolve.
+respect_prefix = true
+
+[validate.pages]
+enable = true
+level = "error"
+
+[validate.assets]
+enable = true
+level = "error"

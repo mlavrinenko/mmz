@@ -1,101 +1,133 @@
+<!-- Generated from docs/src/contributing.typ by `just docs md`. Do not edit; edit the source. -->
+
 # Contributing to mmz
 
-## Code Style
+## Setup
 
-All clippy lints are set to `deny` level — the project will not compile with violations.
+Prerequisites: [Nix](https://nixos.org/) with flakes enabled. The dev shell pins every tool the gates use, so a green run locally is a green run in CI.
 
-Key restrictions:
-- No `unwrap()` — use `?` operator or `anyhow`/`thiserror` error handling
-- No `todo!()`, `unimplemented!()`, `unreachable!()` — handle all cases
-- No `unsafe` code
-- No wildcard imports (`use foo::*`)
-- No single-character variable names (minimum 2 characters)
-- Functions: max 70 lines, max 5 arguments, max cognitive complexity 20
+```bash
+direnv allow    # or: nix develop
+just            # list every recipe
+just check      # the full gate, memoized
+```
 
-## Error Handling
+## The gate
 
-- Use `anyhow::Result` for application-level code (binaries, CLI)
-- Use `thiserror::Error` for library error types that callers will match on
-- Propagate errors with `?` — never `unwrap()` or `expect()`
+`just check` runs ten gates in parallel. Each arm goes through `just memo <gate>`, which is `mmz just <gate>` — so a gate whose declared inputs have not moved since it last passed is skipped rather than re-run. [docs/contributing/gates.md](docs/contributing/gates.md) covers the memoization itself: what it buys, what it costs, and how to record a pass.
 
-## Project Structure
+| Gate | Command | What it prevents |
+| --- | --- | --- |
+| `fmt-check` | Check formatting without writing changes (CI-friendly) | Formatting is settled by a tool, not in review. Covers Rust, the Typst docs sources, and the Justfiles — one gate, so a formatted-by-one-tool tree cannot pass while another tool’s files drift. |
+| `clippy` | `cargo clippy --workspace --all-targets -q -- -D warnings` | Every lint in `Cargo.toml`’s `[workspace.lints]` is `deny`, so this is not a style pass: it is the compile-time half of the correctness contract, and it fails the build rather than warning into a log nobody reads. |
+| `test` | `cargo test --workspace "$@"` | The whole suite — inline unit tests plus the CLI integration tests that drive the real binary through `assert_cmd`. |
+| `machete` | `cargo machete` | A dependency nobody imports is still a dependency somebody audits, builds and ships. Catches the ones a refactor orphaned. |
+| `check-file-size` | `linecop` | Caps every file at the limit `.linecop.yaml` sets for its language. The point is not tidiness: a file nobody can hold in their head is where the untested branch hides. |
+| `outdatty-check` | `outdatty check` | Fails when a source changed and the dependents `outdatty.yaml` couples to it were not re-confirmed. It cannot check that a doc is _correct_ — only that a human looked since the code moved. |
+| `check-doc-coverage` | Fail if a CLI action has no hand-written note | Fails when `mmz --help` advertises an action with no hand-written note, or a note names an action the binary no longer has. The list is parsed out of the binary, so it cannot be satisfied by editing a list. |
+| `check-doc-facts` | Fail if a derived doc fact has no hand-written prose | The same set-difference over the derived facts: a manifest key with no prose, a gate with no prose, a page unreachable from the sidebar, a sidebar entry pointing at no page. |
+| `docs-check` | `tola build && pagefind --site public/mmz --silent && tola validate` | Builds the docs site and validates every internal link and asset reference. A cross-page link is a string until something resolves it; this is the something. |
+| `docs-md-check` | Fail if generated Markdown has drifted from docs/src | Fails when a committed `README.md`, `AGENTS.md`, `CONTRIBUTING.md` or `docs/contributing/*.md` has drifted from the `docs/src/*.typ` source it is rendered from — which is what a hand-edit of a generated file looks like. The regenerate goes to a temp directory precisely so a hand-corrupted committed file cannot be healed by the check that is supposed to catch it. |
 
-Keep `main.rs` as a thin entry point — argument parsing, logger init, and a call into
-library code. All logic belongs in `lib.rs` (and its modules). `main.rs` is excluded from
-coverage, so anything there is untested by default.
+Gate membership is not a list anyone maintains: a gate carries `[group("gate")]` in the Justfile AND appears in `check`’s own dependency list, and the docs build fails naming both sides when those two disagree. That dependency list is also this table’s row order, so reordering the table is an edit to the `check` line rather than to any document.
+
+Individual gates run on their own, unmemoized, when you want the output:
+
+```bash
+just clippy
+just test
+just docs::check
+```
+
+## Code style
+
+Every clippy lint in `Cargo.toml`’s `[workspace.lints]` is `deny`, so the project does not compile with a violation. The ones that shape the code most:
+
+- No `unwrap()` or `expect()` — propagate with `?`.
+- No `todo!()`, `unimplemented!()`, `unreachable!()` — handle the case.
+- No `unsafe`, no wildcard imports, no single-character names.
+- Bounded functions: `too_many_lines`, `cognitive_complexity` and `too_many_arguments` are all denied rather than warned.
+
+Errors are a `thiserror` enum in `src/error.rs`. A new error case needs an exit code in `src/main.rs`’s `exit_for` and an entry in `www/utils/exit-code-notes.typ`, or `just check-doc-facts` fails naming the code.
+
+## Project structure
+
+Keep `src/main.rs` a thin entry point: argv parsing, logger init, and a call into the library. `main.rs` is excluded from coverage, so anything that lands there is untested by default — which is the argument for keeping it empty of logic, not for lowering the bar.
+
+File size is capped per language, and a cap is a design constraint rather than a nag: a file nobody can hold in their head is where the untested branch hides.
+
+| Language | Cap |
+| --- | --- |
+| Rust | `500 lines` |
+| Markdown | `200 lines` |
+| Typst | `250 lines` |
+| Shell | `200 lines` |
+| jq | `150 lines` |
+| CSS | `250 lines` |
+
+Raised, each argued in place in `.linecop.yaml`:
+
+| Path | Cap |
+| --- | --- |
+| `./CHANGELOG.md` | `1000 lines` |
+
+Exempt, because a line count says nothing useful about them — the generated Markdown (capped at its Typst source instead) and the files vendored verbatim from upstream:
+
+- `./README.md`
+- `./AGENTS.md`
+- `./CONTRIBUTING.md`
+- `./docs/contributing/*.md`
+- `./www/templates/tola.typ`
+- `./www/utils/tola.typ`
+
+As a Rust file approaches its cap, `just eject` moves its inline `#[cfg(test)]` module into a sibling `_tests.rs` file via [ejectest](https://github.com/mlavrinenko/ejectest), driven by `linecop --baseline`. That keeps sources under the cap without giving up the inline-test workflow. It runs as part of `just fix-check`.
 
 ## Testing
 
 - Unit tests live inline in a `#[cfg(test)] mod tests` block next to the code they exercise.
-- CLI and integration tests live in `tests/` and drive the built binary with
-  [`assert_cmd`](https://docs.rs/assert_cmd) + [`predicates`](https://docs.rs/predicates)
-  (see `tests/cli.rs`).
-- Run the full suite with `just test`.
-- As a file approaches the linecop limit, `just fix-check` ejects its inline
-  `#[cfg(test)]` module into a sibling `_tests.rs` file via
-  [ejectest](https://github.com/mlavrinenko/ejectest), driven by `linecop --baseline`.
-  This keeps source files under the limit without losing the inline-test workflow.
+- CLI and integration tests live in `tests/` and drive the built binary with [assert\_cmd](https://docs.rs/assert_cmd) and [predicates](https://docs.rs/predicates).
+- Every bug fix gets a regression test. The bug is evidence that the case was reachable; the test is what stops it being reachable twice.
 
-## Code Coverage
+Coverage is enforced separately from `just check`, in CI and on demand:
 
-Minimum 70% coverage enforced via `cargo-tarpaulin`. Run `just cover` to check.
-`main.rs` is excluded — keep it thin and move testable logic to `lib.rs`.
+```bash
+just cover   # tarpaulin, fails under 70%
+just crap    # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+```
 
-## CRAP Gate
+`just crap` exists because a global coverage threshold can stay green while one branchy, untested function rots. When it flags a function, add tests or reduce its branching — never raise the threshold to dodge it.
 
-`just crap` scores each function by the Change Risk Anti-Patterns metric
-(cyclomatic complexity weighted by test coverage) and fails above 30. A global
-coverage threshold can stay green while one branchy, untested function rots;
-CRAP catches that. It reads `target/coverage/lcov.info`, so run `just cover`
-first (CI chains the two). Fix a flagged function by adding
-tests or reducing its branching. Tune the threshold per repo via `--threshold`
-or a `.cargo-crap.toml`.
+## Documentation
 
-## File Size Limits
+`README.md`, `AGENTS.md`, this file, and everything under `docs/contributing/` are **generated**. Editing one directly is wasted work: `just docs md-check` fails on the drift, and the next `just docs md` overwrites it.
 
-- Rust files: 500 lines max
-- Markdown files: 200 lines max
+```bash
+just docs md      # render docs/src/*.typ -> the Markdown each source declares
+just docs serve   # the docs site, locally, with hot reload
+just docs check   # build, index, and validate the site
+```
 
-When a file exceeds the limit, split it into modules or separate documents.
+[docs/contributing/generated-docs.md](docs/contributing/generated-docs.md) covers the pipeline: which facts are derived from where, how to add a source, and the typlite constraints a source has to write within.
 
-## Dependency Drift
+The rule that matters: **a doc states a fact by reading it**. The manifest reference is generated from `mmz --schema`, the CLI reference from `mmz --help`, every transcript from a real run against `examples/demo`, and the gate table above from `just --dump`. If you find yourself typing a fact that already exists in a file the build can read, derive it instead.
 
-[outdatty.yaml](outdatty.yaml) declares groups that couple `source` files to the
-`dependents` that must stay in sync with them — for example, CLI code to the docs
-that describe it. `just check` runs `outdatty check`, which fails when a source
-changed but its dependents were not re-confirmed.
+## Dependency drift
 
-After editing a source, review the listed dependents, update them as needed, then
-run `just outdatty-update` to record the new state into `outdatty.lock` and commit
-it. Add or adjust groups whenever you introduce files that must move together.
+`outdatty.yaml` declares groups coupling `source` files to the `dependents` that must stay in sync with them. `just outdatty-check` (part of the gate) fails when a source changed but its dependents were not re-confirmed.
 
-## Dogfooding
-
-`mmz` memoizes its own checks. [.mmz/config.yaml](.mmz/config.yaml) declares the
-rules, and the `just check` recipe wraps `cargo test`, `cargo clippy`,
-`cargo fmt`, and `cargo machete` with the locally built binary (the `_mmz` recipe
-builds it first). A no-op `just check` then skips those commands. State lives in
-the git-ignored `.mmz/cache` directory. If you add or rename a wrapped command in
-the recipe, mirror it in `.mmz/config.yaml` so the rule still matches.
-
-Each of those four rules is tagged `gate`, and mmz gates its own MindTape
-backlog with them: closing a task (`mt flip done|cancelled|failed`) runs
-`mmz --is-fresh --tag gate` via [.mindtape/config.toml](.mindtape/config.toml)'s
-`[[on.flip]]` hook, which passes only when every gate rule last succeeded with
-its inputs unchanged. Run `just check` first to record a pass, then flip; pass
-`--force` to waive the gate (it records the waiver in the note). This is mmz
-dogfooding `--is-fresh` on its own repo.
+After editing a source, review the listed dependents, update them as needed, then run `just outdatty-update` to record the new state into `outdatty.lock`, and commit it. A recorded hash is a review watermark — it means a human looked, not that a tool verified.
 
 ## Commits
 
-- Use [Conventional Commits](https://www.conventionalcommits.org/) for the
-  subject line, in English (matching this repo's history).
-- Add a `Refs: tasks/<stem>.typ` footer naming the MindTape task file the
-  commit closes or advances (see [tasks/](tasks/)). File a task first if none
-  exists yet for the work; never guess a stem. Add no other trailers.
+- [Conventional Commits](https://www.conventionalcommits.org/) for the subject line, in English, matching this repo’s history.
+- Add a `Refs: tasks/<stem>.typ` footer naming the MindTape task the commit closes or advances. File a task first if none exists; never guess a stem. Add no other trailers.
 
-## Submitting Changes
+Task tracking is [MindTape](https://github.com/mlavrinenko/mindtape): one Typst file per task under `tasks/`, ruled by `.mindtape/config.toml`. Drive it with the `mt` CLI (`mt ls`, `mt add`, `mt flip`, `mt check`) rather than by hand-editing task files. Not to be confused with `.mmz/`, which is mmz’s own command cache.
 
-1. Run `just check` before submitting — it runs clippy, tests, file size, and drift checks
-2. Run `just fmt` to format code
-3. Ensure `just cover` meets the 70% threshold
+Closing a task runs `mmz --is-fresh --tag gate`, which passes only when every gate-tagged rule last succeeded with its inputs unchanged. Run `just check` to record a pass, then flip; `--force` waives the gate and records the waiver in the note. This is mmz dogfooding its headline feature on its own backlog — see [Gating with tags](https://mlavrinenko.github.io/mmz/gating/).
+
+## Submitting
+
+1. `just fix-check` — formats, applies clippy fixes, then runs the full gate.
+2. If you touched a doc source, `just docs md` and commit the regenerated Markdown alongside it.
+3. If you touched a coupled source, `just outdatty-update` and commit the lock.

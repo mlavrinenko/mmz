@@ -1,0 +1,6 @@
+[
+  { "id": "A-1001", "customer": "ada",   "total": 42.50, "status": "shipped" },
+  { "id": "A-1002", "customer": "grace", "total": 17.00, "status": "pending" },
+  { "id": "A-1003", "customer": "ada",   "total": 8.25,  "status": "shipped" },
+  { "id": "A-1004", "customer": "grace", "total": 31.00, "status": "shipped" }
+]

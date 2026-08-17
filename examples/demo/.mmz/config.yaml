@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=../../../schema/mmz.schema.json
+# The docs fixture's manifest. www/generate.sh runs the real `mmz` against a
+# throwaway copy of this project and captures the output verbatim, so every
+# transcript on the docs site is this file's actual behaviour rather than a
+# hand-typed illustration.
+#
+# The two commands are deliberately fast and dependency-free (`sh` and `jq`,
+# both already on the docs build's PATH): a fixture whose checks took a minute
+# would make every docs build take a minute, and a fixture needing a toolchain
+# would make the site unbuildable wherever that toolchain is missing. Between
+# them they exercise all four things a rule can declare — scopes, a probe,
+# declared outputs, and tags.
+
+scopes:
+  # The pipeline's real inputs: the data it reads and the scripts that read it.
+  data: ["data/*.json"]
+  bin: ["bin/*.sh"]
+
+probes:
+  # Both scripts shell out to jq, so a jq upgrade must bust both rules. jq is
+  # not a file in this project, which is exactly the gap a probe closes.
+  jq-version:
+    run: jq --version
+
+on_hit: "mmz: skipped {cache:command} (inputs unchanged)"
+
+commands:
+  # A verdict command: it passes or it fails, and leaves nothing behind.
+  - name: ./bin/validate.sh
+    inputs: [data, bin, jq-version]
+    tags: [gate]
+
+  # A producer command: its record is void once the artifact it promised is
+  # gone, however unchanged the inputs are.
+  - name: ./bin/report.sh
+    inputs: [data, bin, jq-version]
+    outputs:
+      - out/report.txt
+    tags: [gate, report]

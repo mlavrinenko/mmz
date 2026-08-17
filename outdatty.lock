@@ -1,31 +1,48 @@
 version: 1
 algorithm: blake3
 groups:
-  cli-docs:
+  cli-prose:
     source:
-      src/freshness.rs: cef3045a7a7fadaa42bb884546a9f9a18b1957ef2cbc6ed69f1fdb542d9a4a0b
-      src/init.rs: 1d898d3d9d9eb5edbd462dba36734316938c43cc75852389930c9905707f36a6
-      src/lib.rs: 01344735ed85de057c3ccbbd022103790fa5538009c4ca97feb6cc3bce12481e
       src/main.rs: 60dab4e628d5f7f9473eb28d195dac0eee595305627d9e541deab65fdb6b8374
-      src/manifest.rs: 9b3e4e88a81fcbf42c3bfc0001ad0653dd970b6e0456b0961f055603da0ff113
-      src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
     dependents:
-      README.md: 43ad6542afb070a6255cb0789547bcfa9c127e1cc673a6bc06cce85ba711d51d
-      www/index.html: 6f09b4140faa966c8367b01d27e7dceaf2b1d0b119dd09ce536ee46627b3b4bf
-  dev-docs:
+      www/utils/cli-notes.typ: 73fb3c4595638701571f25fdd71edb8c06d17923fb3985f2721a44b6d3029dcf
+      www/utils/exit-code-notes.typ: 9283f7dc8ed95ebe1ccc9a2db1d0117f918d52f886954d5a985bfda91263e695
+  dev-shell:
     source:
-      Justfile: 34905bc5e53e3b711d1f6de2962073e27a282688c55ee697fc1c45ee76b8de06
-      flake.nix: 95656a804b11b2fbc4f27f0bdb2af548eff76f1baabf866527e1ce2db63bd1e5
+      flake.nix: 12eb0e164a691a845b04ebcce3a2f7dcd07733673d2276aeb29a012f376600fd
     dependents:
-      .mmz/config.yaml: b387c4376554ff76d7439b042e94cc759bfd3b1162e2e398af575b295b165c72
-      AGENTS.md: 6fdbd4a2d0e3a0052212a1fc6b93758a2a624f6fad691ff2664a4b512b652423
-      CONTRIBUTING.md: a90bfa47c26ca61ac15877bd03c4e6045fa2825b27ff9efd7fd0eceb912c9502
+      docs/src/contributing.typ: 6128ca64e88de482ab7afbfb4e251c4a81effacd17fbbf7bb620abf287f15cba
+  docs-pipeline:
+    source:
+      .just/scripts/check-doc-coverage.sh: 0a8722c438087bccb932b18b446c4e48c6ae38d0a28c28f3bd7307772b2495ea
+      .just/scripts/check-doc-facts.sh: ce7b870531a41f876062f95f94cdc52a094b66f49bb39d94b62f7cb090e4eac3
+      .just/scripts/docs-md-check.sh: 946444f2048c19a8075205ceae282048176d97d7ec51fb4cbc5a4746af0b6d08
+      docs/generate-md.sh: fcebb5efa2271a4137c1bc30087fd2d2cc853a2e74569297511898557245ec87
+      www/generate-facts.sh: 9b3e9b05c9162b026de18e81505ad8383a1a7fa581d86349b8e426b000c676a5
+      www/generate-site-pages.sh: 7200a107f5b83e68573e1e4b3ac623d51e34ec7a5e171dc3877794aba55f80db
+      www/generate.sh: 6302e5576f41a0be196c5ec0f0b1b6665a893e1aacf89744bd1ed9473f782aac
+    dependents:
+      docs/src/contributing/generated-docs.typ: 1ef713b2afa3cafdfd428e604c06011ca13983570eea2faed760f17b8394b73c
+  gates:
+    source:
+      .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a
+      Justfile: 8d5ab5434bbee2082a8dc5eb6b7380530385f87274117cf3ce0dc20b30a8fd0d
+    dependents:
+      .mmz/config.yaml: 63848546bed1994bc78b6f77e4c0754fa05fa76a9ce0240d9f3f305f3071e8bd
+      docs/src/contributing/gates.typ: 502c19f500dcec25c2f125086dc423394a7f23337e2042409c3ce077c644151c
+      www/utils/gate-notes.typ: b947b1a5c297b1df2003f800adbfc5356d2336c0a0d08d5c11e0507f45b4bf2b
+  manifest-prose:
+    source:
+      schema/mmz.schema.json: 64bd2f3da6f76b4b2893de0be356bc7265a7068533fbfdb0a6d6f4c1d092b15a
+    dependents:
+      www/utils/config-notes.typ: 7aa3f3d839b509007030c8589a80daf1c701899a210a157000c34d80acd101d2
   manifest-schema:
     source:
       src/manifest.rs: 9b3e4e88a81fcbf42c3bfc0001ad0653dd970b6e0456b0961f055603da0ff113
       src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
     dependents:
       schema/mmz.schema.json: 64bd2f3da6f76b4b2893de0be356bc7265a7068533fbfdb0a6d6f4c1d092b15a
+      src/schema.rs: 1ca00e1717116ecb0a62c984b610604ccee994c5b3d389bc53b86a3beb7686c5
   release-notes:
     source:
       Cargo.toml: 696c2fd18c5387b9bb8bb916b63f66a206e3e40e9ac8950c5d54ae7c4846a8a8
