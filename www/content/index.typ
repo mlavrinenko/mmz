@@ -24,20 +24,12 @@ depends on. `mmz` hashes those inputs, compares the digest against the record
 the last successful run left behind, and either skips or runs. There is no task
 graph to satisfy, no artifact to replay, no daemon to keep alive.
 
-= What it is not
+= Built for gates
 
-`mmz` is not a build system, and the boundary is deliberate — see
-#link(u("/comparison/"))[Comparison] for the whole rubric.
-
-- #strong[No orchestration.] No execution order, no dependency graph. Your task
-  runner already does that; `mmz` is a prefix on one line of it.
-- #strong[No output replay.] Only the exit code is cached — never stdout,
-  stderr, or artifacts. A declared output is checked for existence, never stored
-  or restored.
-- #strong[No dependency tracing.] Nothing is inferred by watching syscalls.
-  Scopes are declared, and being wrong about them is your risk to manage.
-- #strong[No remote cache.] State is local and throwaway. Delete it and the
-  worst case is one honest re-run.
+`mmz --is-fresh` inverts the wrapper: instead of running a stale command, it
+_refuses_ one. A pre-push hook can require that an expensive check was already
+run and memoized, without paying to run it at the least convenient moment — see
+#link(u("/gating/"))[Gating with tags]. `mmz` gates its own repository that way.
 
 = Fail closed
 
@@ -54,9 +46,17 @@ inputs resolve to zero files is an error. Relax those last two per project with
 `strict` when you mean to — never by default.
 #link(u("/concepts/"))[Concepts] has the full contract.
 
-= Built for gates
+= What it is not
 
-`mmz --is-fresh` inverts the wrapper: instead of running a stale command, it
-_refuses_ one. A pre-push hook can require that an expensive check was already
-run and memoized, without paying to run it at the least convenient moment — see
-#link(u("/gating/"))[Gating with tags]. `mmz` gates its own repository that way.
+`mmz` is not a build system, and the boundary is deliberate — see
+#link(u("/comparison/"))[Comparison] for the whole rubric.
+
+- #strong[No orchestration.] No execution order, no dependency graph. Your task
+  runner already does that; `mmz` is a prefix on one line of it.
+- #strong[No output replay.] Only the exit code is cached — never stdout,
+  stderr, or artifacts. A declared output is checked for existence, never stored
+  or restored.
+- #strong[No dependency tracing.] Nothing is inferred by watching syscalls.
+  Scopes are declared, and being wrong about them is your risk to manage.
+- #strong[No remote cache.] State is local and throwaway. Delete it and the
+  worst case is one honest re-run.
