@@ -37,11 +37,19 @@
 //! content hashing ([`hashing`]), command-driven inputs ([`probe`]), declared
 //! artifact outputs ([`outputs`]), rule matching ([`matcher`]), glob-fanned
 //! parametric rules ([`parametric`]), the cache ([`cache`]), cache-hit notices
-//! ([`notice`]), and the orchestration engine ([`engine`]). The `mmz --…`
-//! actions live in [`init`], [`schema`], [`status`], [`freshness`], and
-//! [`prune`].
+//! ([`notice`]), the process clock ([`clock`]), and the orchestration engine
+//! ([`engine`]). The `mmz --…` actions live in [`init`], [`schema`],
+//! [`status`], [`freshness`], and [`prune`].
+//!
+//! # Reproducible output
+//!
+//! Anything mmz prints or stamps with a time reads one clock, resolved once per
+//! invocation and threaded down. Set `MMZ_NOW` to a Unix epoch in seconds and a
+//! record's `ran_at` and `mmz --status`'s ages become facts a build can capture;
+//! leave it unset and mmz reads the system clock. See [`clock`].
 
 pub mod cache;
+pub mod clock;
 pub mod engine;
 pub mod error;
 pub mod freshness;

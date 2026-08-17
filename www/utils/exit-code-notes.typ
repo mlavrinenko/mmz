@@ -28,8 +28,13 @@
     ],
   ),
   "2": (
-    meaning: [Usage error: an empty invocation, an unknown option, or `--init`
-      over an existing manifest.],
+    meaning: [Usage error: an empty invocation, an unknown option, `--init` over
+      an existing manifest, or a `MMZ_NOW` that is not a Unix epoch.],
+    detail: [
+      The clock case is the one that is not about argv: a malformed pin is
+      refused rather than ignored, so the misconfiguration surfaces here instead
+      of as a stamp nobody can reproduce.
+    ],
   ),
   "3": (
     meaning: [Strict refusal: no rule matched, or a matched rule resolved to zero

@@ -13,14 +13,13 @@
 # committed fixture stays pristine and the site is reproducible from a clean
 # checkout.
 #
-# Determinism: two capture families would otherwise differ build-to-build and
-# are normalized — absolute paths (the fixture's temp location) to a
-# project-relative form, and the `ran_at` epoch in a cache record to a pinned
-# value. Both normalizations are display-only and are marked at their call site;
-# nothing else is post-processed, so every other byte is the binary's own
-# stdout. mmz has no `$MMZ_NOW`-style clock pin today, which is why `ran_at`
-# needs the sed rather than an env var — see
-# tasks/mmz-pin-the-clock-for-reproducible-output.typ.
+# Determinism: everything a capture carries that is not a function of the repo
+# is pinned rather than corrected afterwards. The clock comes from `$MMZ_NOW`
+# below, so a record's `ran_at` and `--status`'s ages are the binary's own
+# output and still identical build-to-build. That leaves ONE post-processing
+# sed, on absolute paths (the fixture's temp location) to a project-relative
+# form; it is marked at its call site, and every other byte in every capture is
+# stdout as written.
 #
 # `just docs::gen` invokes this; docs::build / docs::serve / docs::check run it
 # first.
@@ -36,6 +35,15 @@
 #     must be inlined via `image(read(path, encoding: none), …)` rather than by
 #     path. (No such image today; the rule is here before the first one.)
 set -eo pipefail
+
+# The clock every capture below is taken against: 2026-08-17T17:00:00Z. mmz
+# resolves it once per invocation and both stamps and renders from it, so a
+# record's `ran_at` and the ages in a `--status` table are fixed by this line
+# instead of by when the build ran. A run and the `--status` that follows it
+# share the pin, which is why every AGE reads `0s ago`; a capture that wanted to
+# show a genuinely aged record would run `MMZ_NOW=$((PINNED + 7200))` for that
+# one command.
+export MMZ_NOW=1786986000
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -149,11 +157,12 @@ gen_run status-missing-output --status
 gen_run is-fresh-missing-output --is-fresh || true
 "$MMZ" ./bin/report.sh >/dev/null 2>&1
 
-# One cache record, verbatim — what a record actually claims. `ran_at` is a wall
-# clock epoch and is the one field that would differ every build, so it is
-# pinned for display; every other byte is the file as written.
+# One cache record, verbatim — what a record actually claims, byte for byte.
+# `ran_at` used to be the one field that differed every build and was rewritten
+# here; it now comes from the `$MMZ_NOW` pin above, so the file is copied
+# untouched.
 RECORD="$(find .mmz/cache -name 'bin-report-sh-*.yaml' | head -1)"
-sed 's/^ran_at: .*/ran_at: 1786986000/' "$RECORD" >"$OUT/record.yaml"
+cp "$RECORD" "$OUT/record.yaml"
 
 # --prune, demonstrated the only honest way: rename a rule so its record is
 # genuinely orphaned, then sweep it.

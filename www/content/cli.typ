@@ -65,6 +65,34 @@ on field names.
   input moved_. The resolved set and the recorded set are both in there.
 ]
 
+= Environment
+
+`mmz` reads one variable out of the environment, and only for the times it
+writes down:
+
+/ #raw("MMZ_NOW"): pin "now" to a Unix epoch in seconds.
+
+A cache record's `ran_at` is stamped from it, and `--status`'s `AGE` column is
+measured against it. Both resolve it once per invocation, so a build that
+captures either gets the same bytes every time — and a fixture can show a
+genuinely aged record instead of the `0s ago` a just-recorded run always prints.
+Unset, `mmz` reads the system clock.
+
+It is deliberately not `SOURCE_DATE_EPOCH`. Dev shells and CI routinely export
+that one at the 1980-01-01 zip-epoch floor, and honouring it here would silently
+rewrite every stamp in every project that has it set.
+
+#callout("note")[
+  A value that is not an epoch is refused with exit 2 by every action that reads
+  the clock: a wrapped run stops before the command runs, and both `--status`
+  renderings stop before printing. Falling back to the system clock would hide
+  the misconfiguration and hand back exactly the non-determinism the pin exists
+  to remove.
+]
+
+Freshness is untouched by any of this. `mmz` compares digests, never times, so a
+pinned clock changes what the output _says_ and never which rules are fresh.
+
 = The full help text
 
 Everything above is generated from this:

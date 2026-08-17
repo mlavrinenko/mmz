@@ -43,6 +43,7 @@ result on success.
   [`mmz::prune`], [Sweep records whose rule no longer exists.],
   [`mmz::freshness`], [The `--is-fresh` verdicts, one per rule or expansion.],
   [`mmz::Manifest`], [Load and validate a manifest without running anything.],
+  [`mmz::clock`], [The one "now" a run stamps and renders; `MMZ_NOW` pins it.],
   [`mmz::error::Error`], [The error enum every entry point returns.],
 )
 

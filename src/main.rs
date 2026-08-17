@@ -37,6 +37,11 @@ has no inputs; relax the last two per project with the `strict` list.
 every listed tag (AND, not OR); untagged rules never match. Combining --tag
 with a targeted command is a usage error — a command already resolves to one rule.
 
+Environment:
+    MMZ_NOW    pin \"now\" to a Unix epoch in seconds, so a record's ran_at and
+               the AGE column read the same on every run. A malformed value is
+               refused, never ignored. Unset, mmz reads the system clock.
+
 Exit codes:
     0    fresh, skipped, or succeeded        5    declared output missing after a
     1    --is-fresh: not fresh                    successful run (nothing recorded)
@@ -294,7 +299,10 @@ fn report_error(err: &Error) -> ExitCode {
 /// Maps a library error to its documented exit code.
 fn exit_for(err: &Error) -> u8 {
     match err {
-        Error::EmptyCommand | Error::ManifestExists { .. } | Error::TagWithCommand => 2,
+        Error::EmptyCommand
+        | Error::ManifestExists { .. }
+        | Error::TagWithCommand
+        | Error::InvalidNow { .. } => 2,
         Error::NoMatch { .. } | Error::NoInputs { .. } => 3,
         Error::NoManifest { .. }
         | Error::ManifestParse { .. }

@@ -195,6 +195,19 @@ pub enum Error {
         source: globset::Error,
     },
 
+    /// `MMZ_NOW` is set to something that is not a Unix epoch in seconds.
+    ///
+    /// Refused rather than ignored: falling back to the system clock would hide
+    /// the misconfiguration and quietly restore the non-determinism the pin
+    /// exists to remove.
+    #[error(
+        "`MMZ_NOW` is set to `{value}`, which is not a Unix epoch in seconds; set it to a whole number of seconds (e.g. `date +%s`) or unset it to use the system clock"
+    )]
+    InvalidNow {
+        /// The offending value, as the environment spells it.
+        value: String,
+    },
+
     /// A cache record could not be serialized.
     #[error("failed to serialize cache record: {0}")]
     Serialize(Box<serde_yaml_ng::Error>),

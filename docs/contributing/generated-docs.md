@@ -38,6 +38,8 @@ Three scripts, run in a fixed order, all writing to the gitignored `www/generate
 
 The order is not negotiable, and each script’s header says why. In short: `generate.sh` wipes the directory on entry, so the facts must be restored inside the same critical section; and the page manifest is a full page compile, so it needs both the facts and the captures already in place.
 
+A capture must also be the same bytes on every build, and the way to get that is to pin the input rather than to correct the output. `generate.sh` exports `MMZ_NOW`, so a record’s `ran_at` and the ages in a `--status` table are the binary’s own stdout and still identical run to run. One post-processing `sed` survives, on the fixture’s absolute temp path. Reach for a new one only when nothing can be pinned instead: a normalized capture is a place where the docs and the binary are allowed to disagree.
+
 All three serialize on `target/www-generated.lock`, because `just check` runs its arms in parallel and more than one of them is inside that directory at once. A caller that already holds the lock exports `MMZ_GENERATED_LOCK=1` so the nested calls skip their own acquisition rather than deadlocking against their own process tree.
 
 ## Adding a docs/src source

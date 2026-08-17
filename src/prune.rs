@@ -63,6 +63,7 @@ mod tests {
         cache::write(
             cache_dir,
             command,
+            crate::clock::Clock::pinned(1_700_000_000),
             &cache::Outcome {
                 digest: "d",
                 ok: true,

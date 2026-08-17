@@ -29,6 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hand-written note, and `check-doc-facts` does the same for every manifest key,
   exit code, gate and page. Each compares in both directions, so a note for
   something that no longer exists fails too.
+- `MMZ_NOW` pins "now" to a Unix epoch in seconds, so output carrying a time is
+  reproducible. It is resolved once per invocation and threaded through both
+  surfaces that carry one — the `ran_at` a cache record stamps, and the `AGE`
+  column `mmz --status` renders — so two stamps in one run can never disagree.
+  A value that is not an epoch is refused with exit 2 by every action that reads
+  the clock, never ignored: a silent fall-back to the system clock would hide
+  the misconfiguration and restore the non-determinism the pin exists to remove.
+  Deliberately its own variable rather than `SOURCE_DATE_EPOCH`, which dev
+  shells and CI export at the 1980 zip-epoch floor. Freshness is untouched — mmz
+  compares digests, not times.
 
 ### Changed
 
@@ -56,6 +66,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are no longer hand-edited.
 - The Pages workflow builds the site through the dev shell instead of uploading
   `www/` verbatim.
+- `www/generate.sh` pins its captures with `MMZ_NOW` rather than rewriting a
+  record's `ran_at` afterwards with `sed`, so the cache record shown on the site
+  is the file the binary wrote, byte for byte. One normalization is left, on the
+  fixture's absolute temp path.
+- `mmz::cache::write` takes the resolved `Clock` the record is stamped from.
+  Library callers that build an `Outcome` by hand pass `Clock::resolve()?` (or
+  `Clock::pinned(secs)`) alongside it.
 
 ## [0.6.0] - 2026-08-16
 

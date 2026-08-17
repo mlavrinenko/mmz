@@ -10,10 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::hashing::ALGORITHM;
 
@@ -153,7 +153,11 @@ pub fn is_fresh(dir: &Path, command: &str, digest: &str) -> bool {
 /// probe digests the rule carried at that moment. Best-effort: a write failure
 /// is logged, never propagated, because the command has already run and its exit
 /// code stands.
-pub fn write(dir: &Path, command: &str, outcome: &Outcome) {
+///
+/// `clock` stamps `ran_at`. It is passed in rather than read here so the whole
+/// process agrees on one instant (see [`crate::clock`]) — which is also what
+/// makes a captured record reproducible under `MMZ_NOW`.
+pub fn write(dir: &Path, command: &str, clock: Clock, outcome: &Outcome) {
     let record = Record {
         format: FORMAT,
         algorithm: ALGORITHM.to_owned(),
@@ -164,7 +168,7 @@ pub fn write(dir: &Path, command: &str, outcome: &Outcome) {
         } else {
             Status::Failed
         },
-        ran_at: now_secs(),
+        ran_at: clock.now_secs(),
         outputs: outcome
             .outputs
             .iter()
@@ -268,18 +272,17 @@ fn slug(command: &str) -> String {
     format!("{stem}-{short}")
 }
 
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs())
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
 
     use super::{Outcome, is_fresh, prune, read, slug, write as write_record};
+    use crate::clock::Clock;
+
+    /// Every record below is stamped from a pinned clock, so `ran_at` is a fact
+    /// the test states rather than whatever second the suite happened to run in.
+    const RAN_AT: u64 = 1_700_000_000;
 
     /// Records a run declaring no outputs and naming no probes — every case
     /// here but the two that check those lists.
@@ -287,6 +290,7 @@ mod tests {
         write_record(
             dir,
             command,
+            Clock::pinned(RAN_AT),
             &Outcome {
                 digest,
                 ok,
@@ -346,6 +350,7 @@ mod tests {
         write_record(
             dir.path(),
             "just cover",
+            Clock::pinned(RAN_AT),
             &Outcome {
                 digest: "d1",
                 ok: true,
@@ -377,6 +382,7 @@ mod tests {
         write_record(
             dir.path(),
             "just fmt-check",
+            Clock::pinned(RAN_AT),
             &Outcome {
                 digest: "d1",
                 ok: true,
@@ -409,11 +415,14 @@ mod tests {
     }
 
     #[test]
-    fn read_surfaces_recorded_time() {
+    fn read_surfaces_the_clock_it_was_stamped_from() {
         let dir = tempfile::tempdir().expect("tempdir");
         write(dir.path(), "sh", "d", true);
         let cached = read(dir.path(), "sh").expect("record");
-        assert!(cached.ran_at > 0, "ran_at is recorded and surfaced");
+        assert_eq!(
+            cached.ran_at, RAN_AT,
+            "ran_at is the clock the writer was handed, not one read here"
+        );
     }
 
     #[test]

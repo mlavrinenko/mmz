@@ -11,10 +11,10 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 
+use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
 use crate::{cache, hashing, outputs, parametric, probe, resolve};
@@ -28,6 +28,16 @@ pub const SCHEMA: &str = include_str!("../schema/status.schema.json");
 #[derive(Serialize)]
 struct Report {
     manifest: String,
+    /// The clock the `AGE` column ages every record against, resolved once for
+    /// the whole report so two rows can never be measured from two instants.
+    ///
+    /// Not serialized: the JSON reports each record's stored `ran_at` and lets
+    /// the consumer pick its own reference point, so putting one in the payload
+    /// would add a field the schema does not declare. Resolving it for both
+    /// renderings is deliberate all the same — a malformed `MMZ_NOW` is refused
+    /// by `--status=json` exactly as it is by the table.
+    #[serde(skip)]
+    now: Clock,
     /// Each resolved probe's current digest, by name, so a consumer can see
     /// exactly what mmz saw. Omitted when no rule in the report named one.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -162,7 +172,8 @@ impl Assessment {
 /// # Errors
 ///
 /// Returns [`Error::NoManifest`] when none is found, a manifest error when one
-/// cannot be loaded, or a resolution error when a rule's globs are invalid.
+/// cannot be loaded, a resolution error when a rule's globs are invalid, or
+/// [`Error::InvalidNow`] when `MMZ_NOW` is not a Unix epoch.
 pub fn report(cwd: &Path, tags: &[String]) -> Result<String> {
     let report = collect(cwd, tags)?;
     if report.rules.is_empty() {
@@ -189,6 +200,7 @@ pub fn report_json(cwd: &Path, tags: &[String]) -> Result<String> {
 /// rendering to consume. When `tags` is non-empty, a rule is skipped unless
 /// it carries every listed tag.
 fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
+    let now = Clock::resolve()?;
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
@@ -217,6 +229,7 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     }
     Ok(Report {
         manifest: located.path.display().to_string(),
+        now,
         probes: probes.resolved().clone(),
         rules,
     })
@@ -396,14 +409,15 @@ fn verdict(
 }
 
 /// Renders the aligned `RULE / STATE / AGE` table. AGE is the time since the
-/// rule's record was written, blank when it has none.
+/// rule's record was written, measured against the report's own resolved clock
+/// (so `MMZ_NOW` pins it), and blank when the rule has no record.
 ///
 /// A fourth `MISSING OUTPUT` column appears only when some rule's record was
 /// voided by a gone artifact, naming it: the path is what a reader needs, and
 /// a column that is blank in every ordinary report is noise. Without it the
 /// table is byte-identical to what it has always been.
 fn render_text(report: &Report) -> String {
-    let now = now_secs();
+    let now = report.now.now_secs();
     let ages: Vec<String> = report
         .rules
         .iter()
@@ -473,12 +487,6 @@ fn humanize_age(secs: u64) -> String {
     } else {
         format!("{}d ago", secs / DAY)
     }
-}
-
-fn now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs())
 }
 
 #[cfg(test)]

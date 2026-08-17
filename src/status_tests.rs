@@ -70,6 +70,10 @@ fn text_shows_age_after_a_run_and_json_reports_ran_at() {
         ran_at.as_u64().is_some_and(|secs| secs > 0),
         "ran_at is a unix timestamp"
     );
+    assert!(
+        json.get("now").is_none(),
+        "the report's own clock stays out of the payload; the schema forbids an undeclared key"
+    );
 }
 
 /// A rule keyed on `*.txt` that declares (and its run writes) the artifact
@@ -399,6 +403,39 @@ fn a_probe_only_rule_is_not_no_inputs() {
     assert!(
         text.contains("never") && !text.contains("no-inputs"),
         "a rule whose only input is a probe has inputs: {text}"
+    );
+}
+
+/// The `AGE` column reads the clock the report resolved, not one the renderer
+/// looks up for itself — which is what lets `MMZ_NOW` produce a genuinely aged
+/// row instead of the `0s ago` a just-recorded run always shows.
+#[test]
+fn age_is_measured_against_the_reports_own_clock() {
+    use super::{CachedInfo, Clock, Report, RuleStatus, State, render_text};
+
+    const RAN_AT: u64 = 1_700_000_000;
+    let report = Report {
+        manifest: ".mmz/config.yaml".to_owned(),
+        now: Clock::pinned(RAN_AT + 2 * 3600),
+        probes: std::collections::BTreeMap::new(),
+        rules: vec![RuleStatus {
+            name: "just check".to_owned(),
+            state: State::Fresh,
+            digest: Some("d1".to_owned()),
+            missing_output: None,
+            cached: Some(CachedInfo {
+                digest: "d1".to_owned(),
+                ok: true,
+                ran_at: RAN_AT,
+                outputs: Vec::new(),
+                probes: std::collections::BTreeMap::new(),
+            }),
+            inputs: Vec::new(),
+        }],
+    };
+    assert!(
+        render_text(&report).contains("2h ago"),
+        "a record two hours older than the report's clock reads as two hours old"
     );
 }
 

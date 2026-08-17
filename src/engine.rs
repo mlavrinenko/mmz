@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, ExitStatus};
 
+use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
 use crate::{cache, hashing, notice, outputs, parametric, probe, resolve};
@@ -25,6 +26,19 @@ struct Digested {
     probes: BTreeMap<String, String>,
 }
 
+/// One invocation's ambient facts: the command line, the directory it runs in,
+/// and the clock any record it writes is stamped from.
+///
+/// Bundled rather than passed as three parameters because they are constant for
+/// the whole run and travel together down every path through the engine — and
+/// because the clock in particular must be the one value [`run`] resolved, not
+/// something a callee could be tempted to read for itself.
+struct Invocation<'a> {
+    argv: &'a [String],
+    cwd: &'a Path,
+    clock: Clock,
+}
+
 /// Runs `argv` (a program and its arguments) with memoization, from `cwd`.
 ///
 /// Returns the exit code to propagate. Input globs resolve relative to the
@@ -35,28 +49,38 @@ struct Digested {
 /// Returns [`Error::NoManifest`] when no manifest is found, a manifest error
 /// when one cannot be loaded, [`Error::NoMatch`] / [`Error::NoInputs`] when the
 /// relevant strict case is enforced, [`Error::EmptyCommand`] if `argv` is
-/// empty, or [`Error::Spawn`] if the command cannot be launched.
+/// empty, [`Error::InvalidNow`] if `MMZ_NOW` is set to something that is not a
+/// Unix epoch, or [`Error::Spawn`] if the command cannot be launched.
 pub fn run(argv: &[String], cwd: &Path) -> Result<u8> {
+    // Resolved before anything else, and once: a record this invocation writes
+    // is stamped from it, and a malformed pin is a misconfigured invocation —
+    // caught before the wrapped command runs rather than after, when the stamp
+    // would be all that is left to refuse.
+    let call = Invocation {
+        argv,
+        cwd,
+        clock: Clock::resolve()?,
+    };
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
     let matches = parametric::resolve_matches(manifest, base, argv)?;
     parametric::detect_collision(&matches)?;
     match matches.first() {
-        Some(hit) => memoized(manifest, hit, base, argv, cwd),
-        None => no_match(manifest, argv, cwd),
+        Some(hit) => memoized(manifest, hit, base, &call),
+        None => no_match(manifest, &call),
     }
 }
 
 /// Handles an unmatched command: error under `no_match` strictness, else run.
-fn no_match(manifest: &Manifest, argv: &[String], cwd: &Path) -> Result<u8> {
+fn no_match(manifest: &Manifest, call: &Invocation) -> Result<u8> {
     if manifest.strict.enforces(StrictCase::NoMatch) {
         return Err(Error::NoMatch {
-            command: argv.join(" "),
+            command: call.argv.join(" "),
         });
     }
     log::debug!("mmz: no rule matches; running unmemoized");
-    exec(argv, cwd)
+    exec(call)
 }
 
 /// Memoizes a matched expansion: skip when fresh, otherwise run and record. The
@@ -66,8 +90,7 @@ fn memoized(
     manifest: &Manifest,
     hit: &parametric::Match,
     base: &Path,
-    argv: &[String],
-    cwd: &Path,
+    call: &Invocation,
 ) -> Result<u8> {
     let identity = hit.exp.identity.as_str();
     let rule = hit.rule;
@@ -78,7 +101,7 @@ fn memoized(
             });
         }
         log::warn!("mmz: `{identity}` matched no input files; running unmemoized");
-        return exec(argv, cwd);
+        return exec(call);
     };
     let digest = resolved.digest;
     let cache_dir = base.join(&manifest.cache_dir);
@@ -93,11 +116,12 @@ fn memoized(
             log::info!("mmz: `{identity}` declared output `{path}` is missing; the record is void");
         }
     }
-    let code = exec(argv, cwd)?;
+    let code = exec(call)?;
     confirm_outputs(rule, identity, base, code)?;
     cache::write(
         &cache_dir,
         identity,
+        call.clock,
         &cache::Outcome {
             digest: &digest,
             ok: code == 0,
@@ -178,13 +202,13 @@ fn digest_inputs(
 }
 
 /// Spawns the command with inherited stdio and returns its exit code.
-fn exec(argv: &[String], cwd: &Path) -> Result<u8> {
-    let Some((program, rest)) = argv.split_first() else {
+fn exec(call: &Invocation) -> Result<u8> {
+    let Some((program, rest)) = call.argv.split_first() else {
         return Err(Error::EmptyCommand);
     };
     let status = Command::new(program)
         .args(rest)
-        .current_dir(cwd)
+        .current_dir(call.cwd)
         .status()
         .map_err(|source| Error::Spawn {
             program: program.clone(),
