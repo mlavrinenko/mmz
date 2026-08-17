@@ -4,7 +4,7 @@
   title: "mmz: pin the clock for reproducible output",
   priority: framework("ice", confidence: 0.8, ease: 7.0, impact: 4.0),
   tags: ("cli", "docs", "tooling"),
-  status: wip(2026, 8, 17),
+  status: done(2026, 8, 17),
 )
 
 == Summary
