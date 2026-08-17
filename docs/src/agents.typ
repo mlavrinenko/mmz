@@ -22,6 +22,12 @@
   output: "AGENTS.md",
 )) <mmz-md>
 
+// The root package's own manifest facts, read from the generated crate map
+// rather than retyped: the repository URL below and the versions under
+// Architecture are all Cargo.toml's to state, and a fork or a move should not
+// need a human to find the copy that lied about it.
+#let pkg = fact("crate-map").package
+
 #doc-title[mmz — AI Agent Context]
 
 How work is done lives in \@CONTRIBUTING.md, pulled into your context whole by
@@ -33,10 +39,9 @@ working on it.
 
 A memoized command runner. `mmz <command>` runs the command, or skips it when the
 inputs the matched rule declares are byte-for-byte unchanged since that command
-last succeeded. Not a build system: no ordering, no artifact replay, no remote
-cache, no dependency tracing.
+last succeeded. One question per invocation: is this rule's work still done?
 
-Repository: https://github.com/mlavrinenko/mmz
+Repository: #link(pkg.repository)
 
 = Repo map
 
@@ -64,11 +69,11 @@ the page at `/<stem>/` is `www/content/<stem>.typ`.
   [Every manifest key], www-link("/manifest/"),
   [Every action and exit code], www-link("/cli/"),
   [Driving `mmz` as an agent], www-link("/agents/"),
+  [Which tool to reach for instead], www-link("/comparison/"),
 )
 
 = Architecture
 
-#let pkg = fact("crate-map").package
 #let deps = fact("crate-map").deps
 #let major(v) = {
   let parts = v.split(".")
@@ -92,10 +97,10 @@ Versions above are read from `www/generated/crate-map.json`, never hand-written.
 = Rules specific to this repo
 
 - #strong[mmz dogfoods itself.] `.mmz/config.yaml` declares the rules, and every
-  `just check` arm runs through `just memo <gate>`, which is `mmz just <gate>`.
-  So a no-op #just.check() skips the work. Because the arms name RECIPES, adding
-  or renaming a gate means adding or renaming its rule in `.mmz/config.yaml` —
-  the rule name is `just <recipe>`.
+  #just.check() arm runs through #just.memo("<gate>"), which is
+  `mmz just <gate>`. So a no-op #just.check() skips the work. Because the arms
+  name RECIPES, adding or renaming a gate means adding or renaming its rule in
+  `.mmz/config.yaml` — the rule name is `just <recipe>`.
 - #strong[Gate membership is derived and cross-checked.] A gate carries
   `[group("gate")]` AND appears in `check`'s dependency list. Tagging one without
   the other fails the docs build naming both sides, so wire both or neither.

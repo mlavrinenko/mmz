@@ -4,10 +4,15 @@
   title: "mmz: review the built docs site in a browser",
   priority: framework("ice", confidence: 0.9, ease: 8.0, impact: 5.0),
   tags: ("docs",),
-  links: related(
-    "mmz-generated-docs-and-tola-site.typ",
-  )[the build this reviews],
-  status: proposed(2026, 8, 17),
+  links: (
+    related("mmz-generated-docs-and-tola-site.typ")[the build this reviews]
+      + related("mmz-monochrome-square-docs-theme.typ")[filed from this review]
+      + related("mmz-brand-mark-renders-as-a-solid-square.typ")[filed from this
+        review]
+      + related("mmz-review-the-monochrome-docs-theme-in-a-browser.typ")[the
+        same review, run again against what replaced the theme]
+  ),
+  status: done(2026, 8, 17),
 )
 
 == Summary
@@ -50,3 +55,33 @@ The session was actually run and its outcome is recorded here — pass or fail. 
 problem found gets its own new task linked back to this one and to
 `mmz-generated-docs-and-tola-site.typ`, rather than reopening either: reopening
 would lose the fact that a real review happened.
+
+== Outcome
+
+Run 2026-08-17. #strong[Failed] — six findings, all fixed. None of them were
+things a gate could have caught, which is what this task existed to establish.
+
+The two substantial ones carry their own tasks:
+
+- The whole visual design was MindTape's, borrowed rather than chosen —
+  `mmz-monochrome-square-docs-theme.typ`.
+- The header brand mark rendered as a featureless coloured square on every page
+  — `mmz-brand-mark-renders-as-a-solid-square.typ`.
+
+Four were single-line copy defects in `docs/src/`, fixed in the same commit
+rather than filed:
+
++ The README's License section carried an MSRV sentence that had nothing to do
+  with licensing. Dropped.
++ "It is not a build system: no task ordering, no dependency graph, no artifact
+  replay, no remote cache" — a list of things mmz is not, in place of a claim
+  about what it is, and repeated in `agents.typ`. Both now state the one
+  question and point at the comparison page for the boundary.
++ `agents.typ` hand-typed the repository URL. It reads `package.repository` out
+  of the generated crate map instead.
++ `agents.typ` spelled recipe invocations two ways in one section. Every one now
+  goes through the generated `just` module, so a rename fails the render.
+
+The theme this reviewed no longer exists, so the verdict does not transfer:
+`mmz-review-the-monochrome-docs-theme-in-a-browser.typ` makes the same claim
+again about what replaced it.

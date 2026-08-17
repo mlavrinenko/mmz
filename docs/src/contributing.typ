@@ -159,7 +159,7 @@ just cover   # tarpaulin, fails under 70%
 just crap    # CRAP metric, fails above 30 — needs the lcov `just cover` writes
 ```
 
-`just crap` exists because a global coverage threshold can stay green while one
+#just.crap() exists because a global coverage threshold can stay green while one
 branchy, untested function rots. When it flags a function, add tests or reduce
 its branching — never raise the threshold to dodge it.
 

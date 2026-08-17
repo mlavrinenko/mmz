@@ -1,0 +1,29 @@
+<!-- The brand mark's GLYPH alone, as a CSS mask source (.brand-mark in
+     main.css) rather than as a picture. A CSS mask samples an image's alpha, so
+     what matters here is only which pixels are opaque: the three glyph shapes
+     are, and the ground is not.
+
+     logo.svg, the same mark drawn as an opaque tile with the glyph painted
+     white, stays the picture: the favicon and the README draw the image rather
+     than mask it. Masking THAT one is the bug this file fixes. Every pixel of
+     it has alpha 1, so the mask revealed the whole square and the glyph never
+     appeared at all.
+
+     The tile the glyph sits in is drawn by the stylesheet, not by this file, so
+     it can take the ink token while the glyph takes the paper token and both
+     follow the theme. Cutting the glyph out of a tile HERE instead was tried
+     and does not work. With an evenodd fill rule the two triangles overlap by 2
+     units, and the overlap crosses three subpaths, turns odd and fills back in
+     as a sliver; with an SVG mask element the file renders fully transparent
+     the moment a browser rasterizes it as a mask source, and the mark vanishes.
+
+     Careful with this comment: a double hyphen is illegal inside an XML
+     comment, so naming a CSS custom property here by its real spelling makes
+     the whole file unparseable and the mask silently empty. Ask for it in
+     words. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="mmz logo">
+  <title>mmz</title>
+  <path d="M12 18 L30 32 L12 46 Z" fill="#000"/>
+  <path d="M28 18 L46 32 L28 46 Z" fill="#000"/>
+  <rect x="46" y="18" width="6" height="28" fill="#000"/>
+</svg>

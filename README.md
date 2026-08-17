@@ -9,7 +9,7 @@ mmz</h1><h4 align="center">A <a href="LICENSE-MIT">MIT</a>-licensed memoized com
 
 Prefix any command with `mmz`. When the matched rule’s declared inputs are byte-for-byte unchanged since that command last succeeded, `mmz` skips it and exits 0. Otherwise it runs the command, streams its output, and records the result on success.
 
-It is not a build system: no task ordering, no dependency graph, no artifact replay, no remote cache. It answers one question per invocation — is this rule’s work still done?
+It answers one question per invocation: is this rule’s work still done? [The comparison page](https://mlavrinenko.github.io/mmz/comparison/) places it beside the build systems, task runners and compiler caches you might reach for instead.
 
 ```yaml
 # .mmz/config.yaml
@@ -73,4 +73,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). mmz memoizes its own checks, so `just ch
 
 ## License
 
-MIT. Requires Rust `1.85` or newer.
+MIT.

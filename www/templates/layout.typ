@@ -84,19 +84,9 @@ heads[0].parentNode.insertBefore(nav,heads[0]);
     href: "/assets/images/logo.svg",
     type: "image/svg+xml",
   ))
-  html.elem("link", attrs: (
-    rel: "preconnect",
-    href: "https://fonts.googleapis.com",
-  ))
-  html.elem("link", attrs: (
-    rel: "preconnect",
-    href: "https://fonts.gstatic.com",
-    crossorigin: "",
-  ))
-  html.elem("link", attrs: (
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap",
-  ))
+  // No webfont link: the theme is monospace-only and uses the system stack
+  // (--mono in main.css), so there is nothing to preconnect to and no flash of
+  // fallback text to manage.
   // Assets stay source-relative; tola applies the site prefix on build.
   html.elem("link", attrs: (rel: "stylesheet", href: "/assets/styles/main.css"))
   html.elem("link", attrs: (
@@ -108,11 +98,21 @@ heads[0].parentNode.insertBefore(nav,heads[0]);
   html.script(_search-init)
 }
 
+// The mark is an ink-painted inline <span> masked with mark.svg (see
+// .brand-mark in main.css), never an <img>: Typst treats an image as block
+// content and paragraph-wraps the sibling that follows it, so the emitted
+// `<a><img><p><span>mmz</span></p></a>` hits the HTML parser's rule that an
+// open <p> closes on the next <p> — the anchor splits into TWO anchors and the
+// brand renders as a mark and a wordmark that link separately. Verified in a
+// browser, not assumed.
+//
+// mark.svg rather than logo.svg is the other half of that fix: a CSS mask
+// samples ALPHA, and logo.svg is opaque everywhere, so it masked to a solid
+// square with no glyph in it. mark.svg carries the same mark with the glyph cut
+// out of the tile instead of painted onto it.
 #let _brand = html.elem(
   "a",
   attrs: (href: u("/"), class: "brand"),
-  // Logo as an accent-tinted inline mark (see .brand-mark in main.css); a real
-  // block-level <img> would force a <p> inside the <a> and split the anchor.
   html.elem("span", attrs: (
     class: "brand-mark",
     role: "img",

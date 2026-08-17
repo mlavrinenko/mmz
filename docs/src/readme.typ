@@ -21,13 +21,11 @@
 // `<h1 align="center">`/`<h4 align="center">` survive both typlite and GitHub's
 // HTML sanitizer, so the header below uses those. This document therefore has
 // no separate `doc-title` ATX `#`: the centered `<h1>` IS the title.
-#import "lib.typ": capture, fact, www-link, www-summary
+#import "lib.typ": capture, fact, just, www-link, www-summary
 
 #metadata((
   output: "README.md",
 )) <mmz-md>
-
-#let pkg = fact("crate-map").package
 
 // Every docs-site page except the site root. `www-link` renders a page's own
 // title, and the root's title is "mmz" over a summary that restates this
@@ -76,9 +74,9 @@ byte-for-byte unchanged since that command last succeeded, `mmz` skips it and
 exits 0. Otherwise it runs the command, streams its output, and records the
 result on success.
 
-It is not a build system: no task ordering, no dependency graph, no artifact
-replay, no remote cache. It answers one question per invocation — is this rule's
-work still done?
+It answers one question per invocation: is this rule's work still done?
+#www-link("/comparison/")[The comparison page] places it beside the build
+systems, task runners and compiler caches you might reach for instead.
 
 ```yaml
 # .mmz/config.yaml
@@ -139,9 +137,9 @@ with no inputs, unless `strict` relaxes them.
 = Contributing
 
 See #link("CONTRIBUTING.md")[CONTRIBUTING.md]. mmz memoizes its own checks, so
-`just check` is itself the worked example — and closing a task asserts those
+#just.check() is itself the worked example — and closing a task asserts those
 checks already passed with `mmz --is-fresh --tag gate`.
 
 = License
 
-MIT. Requires Rust #raw(pkg.rust_version) or newer.
+MIT.

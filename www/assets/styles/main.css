@@ -1,44 +1,45 @@
-/* mmz docs — base: tokens, typography, layout, code listings. */
+/* mmz docs — base: tokens, typography, layout, code listings.
+ *
+ * "Quadratisch. Praktisch. Gut." The site is monochrome, monospace and square:
+ * two colours (ink and paper), one type family, 2px rules, no radii, no
+ * shadows, no accent hue. Dark mode is the exact inversion of those same two
+ * tokens, so every rule written against --ink / --paper flips for free and no
+ * component carries a dark-mode branch of its own.
+ *
+ * The corollary worth stating: nothing here may encode meaning as COLOUR,
+ * because there is only one. Where the old theme used an accent (a selected
+ * nav item, a callout kind, a heatmap cell) this one uses fill, rule weight or
+ * a written label — see components.css.
+ */
 
 :root {
-  --fg: #1f2328;
-  --muted: #5b6570;
-  --bg: #ffffff;
-  --bg-soft: #f8f7f6;
-  --border: #e8e6e4;
-  --accent: #a8500d;
-  --accent-strong: #833d07;
-  --accent-wash: rgba(168, 80, 13, 0.09);
+  --ink: #000;
+  --paper: #fff;
+  /* The one grey, for text that is deliberately secondary: nav group titles,
+     the footer, a lede, the "on this page" summary. Anything load-bearing is
+     ink. */
+  --mid: #6a6a6a;
 
-  /* Code listings use a fixed light "paper" surface in both themes: Typst bakes
-     one light highlight theme into inline span colors, so the surface stays
-     light for contrast. Terminal panels (below) are dark and CSS-coloured. */
-  --code-bg: #f7f6f5;
-  --code-fg: #24292f;
-  --code-border: #e9e7e5;
+  --rule: 2px;
+  --hair: 1px;
 
-  --term-bg: #14110f;
-  --term-fg: #e2dcd6;
-  --term-dim: #a1968c;
-  --term-accent: #f0a95c;
+  /* System monospace, and nothing else. The previous theme pulled Source Serif
+     4 and JetBrains Mono off Google Fonts; a mono-only site can use the face
+     the machine already has, so the page renders with no webfont, no
+     preconnect and no flash. */
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 
   --max: 46rem;
-  --sidebar: 15rem;
-  --shell-max: 74rem;
-
-  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --sidebar: 14rem;
+  --shell-max: 72rem;
 }
 
+/* Inverted, not restyled. Not quite #fff on #000: at full contrast a monospace
+   face haloes badly on a dark ground, so both ends are pulled in a few points. */
 [data-theme="dark"] {
-  --fg: #e9e6e3;
-  --muted: #a49b93;
-  --bg: #171513;
-  --bg-soft: #1e1b19;
-  --border: #302c29;
-  --accent: #f0a35c;
-  --accent-strong: #f6bd85;
-  --accent-wash: rgba(240, 163, 92, 0.13);
+  --ink: #f2f0ed;
+  --paper: #0d0d0d;
+  --mid: #8f8b86;
 }
 
 * { box-sizing: border-box; }
@@ -46,28 +47,31 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  color: var(--fg);
-  background: var(--bg);
-  font-family: var(--font-serif);
-  font-size: 18px;
-  line-height: 1.65;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 16px;
+  line-height: 1.6;
 }
 
-a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
-a:hover { color: var(--accent-strong); }
+/* A link is ink on paper with a rule under it, and inverts on hover — the same
+   figure/ground swap every interactive thing on this site uses. Scoped to prose
+   so the chrome (brand, nav, buttons, search) can opt out by simply not being
+   in it. */
+a { color: inherit; text-decoration: none; }
+main a,
+.site-footer a { border-bottom: var(--rule) solid currentColor; }
+main a:hover,
+.site-footer a:hover { background: var(--ink); color: var(--paper); }
 
 /* Header ------------------------------------------------------------------ */
 .site-header {
   position: sticky;
   top: 0;
   z-index: 20;
-  /* Full-bleed bar; inner content aligns to the shell column below. */
-  padding: 0.7rem 0;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(150%) blur(10px);
-  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0;
+  background: var(--paper);
+  border-bottom: var(--rule) solid var(--ink);
 }
 .header-inner {
   display: flex;
@@ -78,27 +82,35 @@ a:hover { color: var(--accent-strong); }
   margin: 0 auto;
   padding: 0 clamp(1rem, 4vw, 2rem);
 }
+/* Typst wraps loose content in <p>; these unwrap it so flex layout survives. */
 .site-header p { display: contents; }
 
-.brand { display: inline-flex; align-items: center; gap: 0.55rem; font-weight: 700; color: var(--fg); text-decoration: none; }
-.brand-mark {
-  width: 26px; height: 26px; display: inline-block;
-  background: var(--accent);
-  -webkit-mask: url("../images/logo.svg") center / contain no-repeat;
-  mask: url("../images/logo.svg") center / contain no-repeat;
+.brand { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; }
+/* The mark is painted in two layers, not drawn as one image: an ink tile, and
+   over it a paper-filled box masked down to the glyph by mark.svg. So both
+   halves take theme tokens and invert with everything else, from one asset.
+   Masking logo.svg — the opaque picture — is what used to produce a solid
+   square with no glyph in it; see mark.svg's own header for why the glyph is
+   the mask rather than the hole. */
+.brand-mark { width: 26px; height: 26px; display: inline-block; position: relative; background: var(--ink); }
+.brand-mark::before {
+  content: ""; position: absolute; inset: 0;
+  background: var(--paper);
+  -webkit-mask: url("../images/mark.svg") center / contain no-repeat;
+  mask: url("../images/mark.svg") center / contain no-repeat;
 }
-.brand-name { font-family: var(--font-mono); font-weight: 600; font-size: 1.05rem; letter-spacing: -0.01em; }
+.brand-name { font-size: 1.05rem; letter-spacing: -0.02em; }
 
 .header-right { display: inline-flex; align-items: center; gap: 1rem; }
-.header-link { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); text-decoration: none; }
-.header-link:hover { color: var(--accent); }
+.header-link { font-size: 0.82rem; color: var(--mid); }
+.header-link:hover { color: var(--ink); }
 
 .theme-toggle {
-  border: 1px solid var(--border); background: var(--bg-soft); color: var(--fg);
-  width: 32px; height: 32px; border-radius: 8px; cursor: pointer; padding: 0;
-  display: inline-grid; place-items: center; font-size: 0.9rem;
+  border: var(--rule) solid var(--ink); background: var(--paper); color: var(--ink);
+  width: 30px; height: 30px; cursor: pointer; padding: 0;
+  display: inline-grid; place-items: center; font-size: 0.85rem; font-family: inherit;
 }
-.theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle:hover { background: var(--ink); color: var(--paper); }
 .theme-icon-moon { display: none; }
 [data-theme="dark"] .theme-icon-sun { display: none; }
 [data-theme="dark"] .theme-icon-moon { display: inline; }
@@ -113,105 +125,102 @@ a:hover { color: var(--accent-strong); }
   padding: 0 clamp(1rem, 4vw, 2rem);
 }
 
-.sidebar { padding-top: 2.2rem; }
-.sidebar nav { position: sticky; top: 4.2rem; }
+.sidebar { padding-top: 2rem; }
+.sidebar nav { position: sticky; top: 4rem; }
 .sidebar p { display: contents; }
-.nav-group { margin-bottom: 1.4rem; }
+.nav-group { margin-bottom: 1.3rem; }
 .nav-title {
-  font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase;
-  letter-spacing: 0.14em; color: var(--muted); margin: 0 0 0.5rem;
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.18em;
+  color: var(--mid); margin: 0 0 0.5rem;
+  border-bottom: var(--hair) solid var(--ink); padding-bottom: 0.25rem;
 }
 .sidebar ul { list-style: none; margin: 0; padding: 0; }
 .sidebar li { margin: 0; }
 .sidebar a {
-  display: block; padding: 0.24rem 0.6rem; margin-left: -0.6rem;
-  color: var(--fg); text-decoration: none; border-radius: 6px;
-  font-size: 0.95rem; line-height: 1.5;
+  display: block; padding: 0.18rem 0.5rem; margin-left: -0.5rem;
+  font-size: 0.9rem; line-height: 1.5;
 }
-.sidebar a:hover { background: var(--bg-soft); color: var(--accent); }
-.sidebar a[aria-current="page"] {
-  color: var(--accent); font-weight: 600; background: var(--accent-wash);
-}
+.sidebar a:hover { background: var(--ink); color: var(--paper); }
+/* The current page is filled, not tinted — the only "selected" signal a
+   two-colour palette has. */
+.sidebar a[aria-current="page"] { background: var(--ink); color: var(--paper); font-weight: 700; }
 
 /* Main -------------------------------------------------------------------- */
-main { padding: 2.2rem 0 5rem; max-width: var(--max); min-width: 0; }
-main.home { max-width: 60rem; }
+main { padding: 2rem 0 5rem; max-width: var(--max); min-width: 0; }
+main.home { max-width: 58rem; }
 
 main h1 {
-  font-size: clamp(1.8rem, 4vw, 2.4rem); line-height: 1.15; letter-spacing: -0.02em;
-  margin: 0 0 1.6rem;
+  font-size: clamp(1.6rem, 4vw, 2.1rem); line-height: 1.15; letter-spacing: -0.03em;
+  margin: 0 0 1.4rem;
 }
+/* The section rule that carries the whole look: a small letterspaced label
+   sitting on a full-width line, rather than a large bold word. */
 main h2 {
-  font-size: 1.5rem; letter-spacing: -0.01em; margin: 2.6rem 0 0.8rem;
-  padding-top: 0.4rem;
+  font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.18em;
+  margin: 2.6rem 0 0.9rem; padding-bottom: 0.3rem;
+  border-bottom: var(--rule) solid var(--ink);
 }
-main h3 { font-size: 1.18rem; margin: 1.8rem 0 0.5rem; }
-main h4 { font-size: 1rem; font-family: var(--font-mono); margin: 1.4rem 0 0.4rem; }
+main h3 { font-size: 1rem; margin: 1.9rem 0 0.5rem; }
+main h4 {
+  font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;
+  margin: 1.4rem 0 0.4rem;
+}
 main p { margin: 0 0 1rem; }
-main ul, main ol { margin: 0 0 1rem; padding-left: 1.3rem; }
-main li { margin: 0.25rem 0; }
-main hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+main ul, main ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+main li { margin: 0.3rem 0; }
+main hr { border: none; border-top: var(--rule) solid var(--ink); margin: 2.5rem 0; }
 
 blockquote {
-  margin: 1.2rem 0; padding: 0.4rem 1.1rem; border-left: 3px solid var(--accent);
-  color: var(--muted); background: var(--bg-soft); border-radius: 0 8px 8px 0;
+  margin: 1.2rem 0; padding: 0.5rem 1rem;
+  border-left: var(--rule) solid var(--ink); color: var(--mid);
 }
 
-/* Inline + block code (Typst-highlighted listings on light paper) --------- */
+/* Code -------------------------------------------------------------------
+   Typst bakes ONE light syntax-highlight theme into per-token inline styles on
+   every `raw(..., lang: ...)` block. A page with two colours has nowhere to put
+   those — and half of them are unreadable on one of the two papers — so they
+   are dropped at the only place that outranks an inline style. A listing reads
+   as text, which is what the rest of the page is anyway. This is also why a new
+   content page needs no rule of its own: the neutralisation is on the element,
+   not on a list of known languages. */
+pre code span { color: inherit !important; }
+
 code {
-  font-family: var(--font-mono); font-size: 0.86em;
-  /* Code surfaces stay on light "paper" in both themes (see --code-bg), so pin
-     the text to the dark code foreground — otherwise inline chips inherit the
-     light --fg in dark mode and vanish against the light chip. */
-  color: var(--code-fg);
-  background: var(--code-bg); border: 1px solid var(--code-border);
-  padding: 0.08em 0.36em; border-radius: 5px;
+  font-family: var(--mono); font-size: 0.88em;
+  background: color-mix(in srgb, var(--ink) 8%, var(--paper));
+  padding: 0.05em 0.3em;
 }
 pre {
-  background: var(--code-bg); color: var(--code-fg);
-  border: 1px solid var(--code-border); border-radius: 10px;
-  padding: 0.95rem 1.1rem; overflow-x: auto; margin: 0 0 1.2rem;
+  background: var(--paper); color: var(--ink);
+  border: var(--rule) solid var(--ink);
+  padding: 0.9rem 1rem; overflow-x: auto; margin: 0 0 1.2rem;
   font-size: 0.82rem; line-height: 1.55;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-pre code { background: none; border: none; padding: 0; font-size: inherit; }
-[data-theme="dark"] pre { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03); }
+pre code { background: none; padding: 0; font-size: inherit; }
 
 /* On-this-page index (see the _toc-script in layout.typ) ------------------ */
-.page-toc {
-  margin: 0 0 1.8rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-soft);
-  padding: 0 1rem;
-}
+.page-toc { margin: 0 0 1.8rem; border: var(--rule) solid var(--ink); padding: 0 1rem; }
 .page-toc summary {
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  padding: 0.7rem 0;
+  cursor: pointer; font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.16em; color: var(--mid); padding: 0.6rem 0;
 }
-.page-toc summary:hover { color: var(--accent); }
-.page-toc ul { list-style: none; margin: 0; padding: 0 0 0.9rem; }
+.page-toc summary:hover { color: var(--ink); }
+.page-toc ul { list-style: none; margin: 0; padding: 0 0 0.8rem; }
 .page-toc li { margin: 0.2rem 0; }
-.page-toc a { font-size: 0.92rem; }
+.page-toc a { font-size: 0.88rem; }
 
 /* Footer ------------------------------------------------------------------ */
 .site-footer {
-  border-top: 1px solid var(--border); margin-top: 3rem;
-  padding: 2rem clamp(1rem, 4vw, 2rem); text-align: center;
-  color: var(--muted); font-size: 0.85rem; font-family: var(--font-mono);
+  border-top: var(--rule) solid var(--ink); margin-top: 3rem;
+  padding: 1.6rem clamp(1rem, 4vw, 2rem); text-align: center;
+  color: var(--mid); font-size: 0.8rem;
 }
 .site-footer p { margin: 0; }
 
 /* Responsive -------------------------------------------------------------- */
 @media (max-width: 52rem) {
-  body { font-size: 17px; }
   .shell { grid-template-columns: 1fr; gap: 0; }
-  .sidebar { padding-top: 1.2rem; border-bottom: 1px solid var(--border); }
+  .sidebar { padding-top: 1.2rem; border-bottom: var(--rule) solid var(--ink); padding-bottom: 0.6rem; }
   .sidebar nav { position: static; display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem; }
   .nav-group { margin-bottom: 0.6rem; }
   main { padding-top: 1.6rem; }

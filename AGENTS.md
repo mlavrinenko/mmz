@@ -6,7 +6,7 @@ How work is done lives in @CONTRIBUTING.md, pulled into your context whole by th
 
 ## What is this?
 
-A memoized command runner. `mmz <command>` runs the command, or skips it when the inputs the matched rule declares are byte-for-byte unchanged since that command last succeeded. Not a build system: no ordering, no artifact replay, no remote cache, no dependency tracing.
+A memoized command runner. `mmz <command>` runs the command, or skips it when the inputs the matched rule declares are byte-for-byte unchanged since that command last succeeded. One question per invocation: is this rule’s work still done?
 
 Repository: [https://github.com/mlavrinenko/mmz](https://github.com/mlavrinenko/mmz)
 
@@ -31,6 +31,7 @@ Reference material lives on the docs site, not here. Before writing about a feat
 | Every manifest key | [Manifest reference](https://mlavrinenko.github.io/mmz/manifest/) |
 | Every action and exit code | [CLI reference](https://mlavrinenko.github.io/mmz/cli/) |
 | Driving `mmz` as an agent | [For AI agents](https://mlavrinenko.github.io/mmz/agents/) |
+| Which tool to reach for instead | [Comparison](https://mlavrinenko.github.io/mmz/comparison/) |
 
 ## Architecture
 
