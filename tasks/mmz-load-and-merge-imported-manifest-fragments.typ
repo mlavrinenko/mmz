@@ -8,7 +8,7 @@
     parent("mmz-config-composition-via-imported-fragments.typ")[the settled
       design this implements]
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20)[wave 1: the loader],
 )
 
 == Summary
