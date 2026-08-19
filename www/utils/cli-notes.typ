@@ -94,6 +94,16 @@
       the same schema the `$schema` line `--init` writes points at.
     ],
   ),
+  "--schema=fragment": (
+    summary: [Print the JSON Schema for a file named in a manifest's
+      `imports:` list.],
+    detail: [
+      Narrower than `--schema`: a fragment may not set `cache_dir`,
+      `gitignore`, `strict` or `on_hit`, so validating it against the config
+      schema instead would accept documents mmz rejects. Point a fragment's
+      own `# yaml-language-server: $schema=…` line here.
+    ],
+  ),
   "--version": (summary: [Print the version.]),
   "--help": (summary: [Print the usage text, including the exit-code table.]),
 )
