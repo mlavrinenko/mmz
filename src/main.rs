@@ -146,7 +146,7 @@ fn run_schema(arg: &str, rest: &[String]) -> ExitCode {
         "" => emit(mmz::schema::SCHEMA),
         "=fragment" => emit(mmz::schema::FRAGMENT_SCHEMA),
         other => usage(&format!(
-            "unknown `--schema` format `{}`; use fragment",
+            "unknown `--schema` format `{}`; use fragment, or omit the suffix for the config schema",
             other.trim_start_matches('=')
         )),
     }

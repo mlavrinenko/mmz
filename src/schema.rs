@@ -27,13 +27,9 @@ pub const FRAGMENT_SCHEMA: &str = include_str!("../schema/mmz-fragment.schema.js
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::{FRAGMENT_SCHEMA, SCHEMA};
+    use crate::compose::POLICY_KEYS;
 
-    /// The four root-manifest-only keys `crate::compose::check_no_policy_keys`
-    /// rejects in a fragment. The single source of truth for "which keys are
-    /// policy" is that function; this list must track it by hand, same as the
-    /// fragment schema itself does.
-    const POLICY_KEYS: [&str; 4] = ["cache_dir", "gitignore", "strict", "on_hit"];
+    use super::{FRAGMENT_SCHEMA, SCHEMA};
 
     #[test]
     fn schema_documents_every_manifest_field() {
@@ -120,6 +116,28 @@ mod tests {
             assert_eq!(
                 config_value, fragment_value,
                 "`{key}` must describe the same shape and prose in both schemas"
+            );
+        }
+
+        // The sentence this whole test exists to prove, written literally:
+        // the fragment schema forbids exactly what compose::check_no_policy_keys
+        // rejects at load time — no more (a key it doesn't reject stays legal
+        // in the fragment) and no less (a key it does reject is undeclared, so
+        // additionalProperties: false makes setting it a validation failure).
+        // POLICY_KEYS is imported from crate::compose, not redeclared here, so
+        // this binds both schemas to the loader's own list rather than to a
+        // second copy of it.
+        for key in POLICY_KEYS {
+            assert!(
+                config_props.contains_key(key),
+                "config schema must declare policy key `{key}`, which the loader treats \
+                 as root-only"
+            );
+            assert!(
+                !fragment_props.contains_key(key),
+                "fragment schema must not declare policy key `{key}`: \
+                 compose::check_no_policy_keys rejects it in a fragment, so the schema \
+                 must not advertise it as legal"
             );
         }
 

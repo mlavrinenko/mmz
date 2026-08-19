@@ -342,6 +342,17 @@ fn parse_text(text: &str, path: &Path) -> Result<Document> {
     })
 }
 
+/// The root-manifest-only keys: `cache_dir`, `gitignore`, `strict` and
+/// `on_hit` may be set on the root manifest but never on an imported
+/// fragment. This is the single source of truth for that surface — the only
+/// place the four names are spelled as literals — and it has two readers:
+/// [`check_no_policy_keys`] below, which is the rule actually enforced at
+/// load time, and the derivation test in `crate::schema` that asserts the
+/// fragment JSON Schema forbids exactly what this array names, so the
+/// schema (the discoverable form of the rule) cannot drift from the loader
+/// (the rule itself).
+pub(crate) const POLICY_KEYS: [&str; 4] = ["cache_dir", "gitignore", "strict", "on_hit"];
+
 /// Rejects a fragment that sets a root-only policy key, naming the first one
 /// found and the fragment that set it. `Option::is_some` on the outer
 /// double-`Option` is exactly "the key is present" regardless of its inner
@@ -351,14 +362,15 @@ fn parse_text(text: &str, path: &Path) -> Result<Document> {
 ///
 /// # Errors
 ///
-/// Returns [`Error::FragmentPolicyKey`] if any of `gitignore`, `cache_dir`,
-/// `strict` or `on_hit` is present, `null` included.
+/// Returns [`Error::FragmentPolicyKey`] if any of [`POLICY_KEYS`] is present,
+/// `null` included.
 fn check_no_policy_keys(document: &Document, path: &Path) -> Result<()> {
+    let [cache_dir, gitignore, strict, on_hit] = POLICY_KEYS;
     let present = [
-        ("gitignore", document.gitignore.is_some()),
-        ("cache_dir", document.cache_dir.is_some()),
-        ("strict", document.strict.is_some()),
-        ("on_hit", document.on_hit.is_some()),
+        (cache_dir, document.cache_dir.is_some()),
+        (gitignore, document.gitignore.is_some()),
+        (strict, document.strict.is_some()),
+        (on_hit, document.on_hit.is_some()),
     ];
     if let Some((key, _)) = present.into_iter().find(|(_, set)| *set) {
         return Err(Error::FragmentPolicyKey {

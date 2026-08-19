@@ -3,7 +3,7 @@ algorithm: blake3
 groups:
   cli-prose:
     source:
-      src/main.rs: 7f8559f00452ac96fe031c6e39045891e9bb3f6745b070c996663d6cb9f650cd
+      src/main.rs: 2657fcf0dcc0ca48062fd205ed5adcdae9577b33bfb28b6698d76273401fab55
     dependents:
       www/utils/cli-notes.typ: 9edd405316c75ed397f489eb53c20f8a6eb04d4be9bfd8be82cb9ea35d9edfa8
       www/utils/exit-code-notes.typ: 52c6468b51aecd2d5cd77c7ba0901d4f3cbb05b61482c53a9c3980b2af0ec3ba
