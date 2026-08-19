@@ -4,24 +4,30 @@
 //! Once a manifest can be assembled from several files (see
 //! [`crate::compose`]), the merged model itself hides the import graph that
 //! produced it — a scope, probe or command reads the same whether it came
-//! from the root manifest or the third fragment three imports deep. This
-//! module answers two questions composition raises and `--status` does not:
-//! a person asking "which file made this rule skip?" needs more than the
-//! rule `--status` already names (see
-//! `mmz-report-each-rule-s-source-file-in-status`) when the surprise is in a
-//! scope's globs or a probe's command line, not a rule's freshness; and a
-//! generator emitting a fragment wants a gate hook to assert the fragment it
-//! wrote is the one actually in effect, not merely present on disk.
+//! from the root manifest or the third fragment three imports deep, and the
+//! four keys that govern the whole run (`gitignore`, `cache_dir`, `strict`,
+//! `on_hit`) are invisible once they have fallen back to their defaults.
+//! This module answers two questions composition raises and `--status` does
+//! not: a person asking "which file made this rule skip?", "why did this
+//! pass straight through instead of erroring?" (`strict`), "why is nothing
+//! printed when it skips?" (`on_hit`), or "why does this scope resolve
+//! empty?" (`gitignore`) needs more than the rule `--status` already names
+//! (see `mmz-report-each-rule-s-source-file-in-status`) — none of those are
+//! about a rule's freshness; and a generator emitting a fragment wants a
+//! gate hook to assert the fragment it wrote is the one actually in effect,
+//! not merely present on disk.
 //!
 //! Two renderings share one model, exactly as [`crate::status`] does: a human
 //! form (`mmz --dump-config`, rendered by [`render_text`]) that leads with
 //! the source list in load order — so the import graph is visible before the
-//! entries it fed are — then each section's entries annotated with the file
-//! they came from; and a machine form (`mmz --dump-config=json`) carrying the
-//! same facts under stable keys, because a gate hook asserting against this
-//! output is half the point. There is deliberately no `=json-schema` arm and
-//! no `schema/config-dump.schema.json`: the only consumer today is a gate
-//! that can assert on keys directly, and a schema for a document with one
+//! entries it fed are — then the effective policy (manifest-wide context, so
+//! it comes before any entry section), then each entry section, every entry
+//! annotated with the file it came from; and a machine form
+//! (`mmz --dump-config=json`) carrying the same facts under stable keys,
+//! because a gate hook asserting against this output is half the point.
+//! There is deliberately no `=json-schema` arm and no
+//! `schema/config-dump.schema.json`: the only consumer today is a gate that
+//! can assert on keys directly, and a schema for a document with one
 //! consumer is premature (see the task's `Deferred` section).
 //!
 //! Both renderings print the merged manifest *after* validation. A manifest
@@ -31,12 +37,13 @@
 //! either returns a complete model or an error, never a partly-built one, so
 //! there is nothing to accidentally emit on the failure path.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-use crate::manifest::{Manifest, MatchMode};
+use crate::manifest::{Manifest, MatchMode, StrictCase};
 use crate::provenance::Provenance;
 
 /// The merged manifest, every scope, probe and command carrying the file it
@@ -54,9 +61,45 @@ struct Dump {
     /// Every file that contributed to the merge, in load order (see
     /// [`Provenance::sources`]), numbered from 1 in the human form.
     sources: Vec<String>,
+    /// The four manifest-wide keys, resolved to their effective values.
+    /// Manifest-wide context rather than an entry, so it sits ahead of the
+    /// three entry sections rather than among them.
+    policy: Policy,
     scopes: Vec<ScopeEntry>,
     probes: Vec<ProbeEntry>,
     commands: Vec<CommandEntry>,
+}
+
+/// The four manifest-wide policy keys, resolved to their effective
+/// values — defaulted ones included, because "what is mmz actually using"
+/// is the question this section answers, and an absent key does not answer
+/// it. [`crate::compose::check_no_policy_keys`] rejects every one of these
+/// outside the root manifest, so unlike a scope, probe or command there is
+/// one `source` for the whole section rather than one per key.
+#[derive(Serialize)]
+struct Policy {
+    source: String,
+    gitignore: bool,
+    cache_dir: String,
+    /// The enforced [`StrictCase`]s, spelled the way the manifest spells
+    /// them (`"no_match"`, `"no_inputs"`); empty when `strict: []` relaxes
+    /// every case.
+    strict: Vec<&'static str>,
+    /// `null` when no default `on_hit` is set, present unconditionally
+    /// (unlike [`CommandEntry::on_hit`], which omits the key entirely) —
+    /// this field answers "what does mmz use", and "the key is missing"
+    /// does not distinguish "unset" from "a consumer that forgot to check".
+    on_hit: Option<String>,
+    /// Which of the four keys above the root manifest wrote explicitly
+    /// rather than leaving to its default. Read only by the human form's
+    /// trailing `(default)` marker — omitted from JSON on purpose: a
+    /// defaulted value and a written one are indistinguishable once
+    /// resolved, a consumer parsing JSON almost always wants the effective
+    /// value rather than its provenance, and a second boolean per key would
+    /// be exactly the kind of heavy encoding a boring, stable schema does
+    /// not need.
+    #[serde(skip)]
+    declared: BTreeSet<&'static str>,
 }
 
 /// One merged scope: its declared globs and gitignore override, plus the file
@@ -148,6 +191,8 @@ fn collect(cwd: &Path) -> Result<Dump> {
         .map(|path| Provenance::display(path, base))
         .collect();
 
+    let policy = collect_policy(manifest, &located.path, base)?;
+
     let scopes = manifest
         .scopes
         .iter()
@@ -194,9 +239,35 @@ fn collect(cwd: &Path) -> Result<Dump> {
     Ok(Dump {
         manifest: Provenance::display(&located.path, base),
         sources,
+        policy,
         scopes,
         probes,
         commands,
+    })
+}
+
+/// Builds the [`Policy`] section: the manifest's four policy fields, already
+/// resolved to their effective values by [`Manifest::locate`], paired with
+/// which of them the root actually wrote (see
+/// [`crate::compose::declared_policy_keys`]). Split out of [`collect`] to
+/// keep that function under clippy's line-count lint — this is a cohesive
+/// unit on its own, not a slice taken for size alone.
+fn collect_policy(manifest: &Manifest, root_path: &Path, base: &Path) -> Result<Policy> {
+    let declared = crate::compose::declared_policy_keys(root_path)?;
+    Ok(Policy {
+        source: Provenance::display(root_path, base),
+        gitignore: manifest.gitignore,
+        cache_dir: manifest.cache_dir.clone(),
+        strict: [
+            (StrictCase::NoMatch, "no_match"),
+            (StrictCase::NoInputs, "no_inputs"),
+        ]
+        .into_iter()
+        .filter(|(case, _)| manifest.strict.enforces(*case))
+        .map(|(_, label)| label)
+        .collect(),
+        on_hit: manifest.on_hit.clone(),
+        declared,
     })
 }
 
@@ -218,19 +289,50 @@ fn source_of(
 }
 
 /// Renders the human `mmz --dump-config` output: the source list numbered in
-/// load order, then each non-empty section's entries, each annotated with a
-/// trailing `# <source>` comment on its header line — the same shape a merged
-/// `config.yaml` would have if one file held everything, so the format needs
-/// no legend of its own.
+/// load order; then `policy:`, always printed (it is four keys, never
+/// empty), naming the root manifest once on its header line rather than per
+/// key — every key in it can only come from the root, so a `# <source>` on
+/// each one would imply a choice that does not exist — and marking a
+/// defaulted key with a trailing `(default)`; then each non-empty entry
+/// section, each entry annotated with a trailing `# <source>` comment on its
+/// header line — the same shape a merged `config.yaml` would have if one
+/// file held everything, so the format needs no legend of its own.
 ///
-/// A section with no entries (e.g. a manifest with no probes) is omitted
-/// entirely rather than printed with an empty body, matching how `--status`'s
-/// own conditional columns only appear when there is something to show.
+/// An entry section with no entries (e.g. a manifest with no probes) is
+/// omitted entirely rather than printed with an empty body, matching how
+/// `--status`'s own conditional columns only appear when there is something
+/// to show.
 fn render_text(dump: &Dump) -> String {
     let mut out = String::from("sources:\n");
     for (index, source) in dump.sources.iter().enumerate() {
         out.push_str(&format!("  {}  {source}\n", index + 1));
     }
+
+    out.push_str(&format!("\npolicy:  # {}\n", dump.policy.source));
+    out.push_str(&format!(
+        "  gitignore: {}{}\n",
+        dump.policy.gitignore,
+        default_marker("gitignore", &dump.policy.declared)
+    ));
+    out.push_str(&format!(
+        "  cache_dir: {}{}\n",
+        dump.policy.cache_dir,
+        default_marker("cache_dir", &dump.policy.declared)
+    ));
+    out.push_str(&format!(
+        "  strict: [{}]{}\n",
+        dump.policy.strict.join(", "),
+        default_marker("strict", &dump.policy.declared)
+    ));
+    let on_hit_display = dump
+        .policy
+        .on_hit
+        .as_deref()
+        .map_or_else(|| "(none)".to_owned(), |value| format!("{value:?}"));
+    out.push_str(&format!(
+        "  on_hit: {on_hit_display}{}\n",
+        default_marker("on_hit", &dump.policy.declared)
+    ));
 
     if !dump.scopes.is_empty() {
         out.push_str("\nscopes:\n");
@@ -273,6 +375,17 @@ fn render_text(dump: &Dump) -> String {
     }
 
     out
+}
+
+/// `"  (default)"` when `key` is not in `declared` (the root manifest never
+/// wrote it), else the empty string — the human form's only nod to whether a
+/// policy value was written or assumed; see [`Policy::declared`].
+fn default_marker(key: &str, declared: &BTreeSet<&'static str>) -> &'static str {
+    if declared.contains(key) {
+        ""
+    } else {
+        "  (default)"
+    }
 }
 
 #[cfg(test)]

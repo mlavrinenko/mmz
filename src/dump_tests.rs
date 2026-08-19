@@ -80,12 +80,19 @@ fn a_single_file_project_dumps_with_itself_as_the_only_source() {
 /// `10-rust.yaml`'s own `imports: [../nested.yaml]` — relative to *its own*
 /// directory, `.mmz/conf.d/`, which is what makes `../nested.yaml` resolve to
 /// `.mmz/nested.yaml` rather than `.mmz/conf.d/nested.yaml`.
+///
+/// The root also declares `on_hit`, the one policy key this fixture sets
+/// explicitly — `gitignore`, `cache_dir` and `strict` are left to their
+/// defaults, which is what makes this fixture double as the policy-section
+/// fixture too: one declared key beside three defaulted ones covers both
+/// halves of "shows its effective value, and says whether that was written
+/// or assumed" without a second project to maintain.
 fn composed_project(base: &Path) {
     write(base, "a.txt", "one");
     write(base, "a.rs", "one");
     manifest(
         base,
-        "imports: [conf.d/]\nscopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
+        "imports: [conf.d/]\non_hit: \"notify {cache:command}\"\nscopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
     );
     write(
         base,
@@ -188,6 +195,82 @@ fn the_json_form_round_trips_and_carries_sources_in_load_order() {
         serde_json::from_str(&serde_json::to_string(&json).expect("re-serialize"))
             .expect("re-parse");
     assert_eq!(json, reparsed);
+}
+
+/// The four policy keys — `gitignore`, `cache_dir`, `strict`, `on_hit` — are
+/// part of the manifest mmz actually assembled just as much as a scope or a
+/// command is, and are the ones most likely to explain a surprise: a `strict`
+/// left at its default explains an unexpected pass-through, a defaulted
+/// `on_hit` explains silence on a cache hit, a `gitignore` override explains
+/// an empty scope. Every key shows its *effective* value — resolved, not
+/// merely present-or-absent — because "what is mmz actually using" is the
+/// question, and a defaulted key that showed as `null`/missing would not
+/// answer it. `composed_project` declares `on_hit` and leaves the other three
+/// to their defaults, so this one fixture exercises both "shows the default"
+/// and "a declared value overrides it" at once.
+#[test]
+fn the_policy_section_reports_every_keys_effective_value_declared_and_defaulted() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    composed_project(base);
+
+    let json: serde_json::Value =
+        serde_json::from_str(&dump_json(base).expect("json")).expect("valid json");
+    let policy = json.get("policy").expect("policy object");
+    assert_eq!(
+        policy.get("source").and_then(serde_json::Value::as_str),
+        Some(".mmz/config.yaml"),
+        "policy can only ever come from the root manifest"
+    );
+    assert_eq!(
+        policy.get("gitignore").and_then(serde_json::Value::as_bool),
+        Some(true),
+        "defaulted gitignore shows its effective value"
+    );
+    assert_eq!(
+        policy.get("cache_dir").and_then(serde_json::Value::as_str),
+        Some(".mmz/cache"),
+        "defaulted cache_dir shows its effective value"
+    );
+    assert_eq!(
+        policy.get("strict").and_then(serde_json::Value::as_array),
+        Some(&vec![
+            serde_json::Value::String("no_match".to_owned()),
+            serde_json::Value::String("no_inputs".to_owned()),
+        ]),
+        "defaulted strict enforces every case"
+    );
+    assert_eq!(
+        policy.get("on_hit").and_then(serde_json::Value::as_str),
+        Some("notify {cache:command}"),
+        "the declared on_hit overrides its (absent) default"
+    );
+
+    let text = dump(base).expect("dump");
+    assert!(
+        text.contains("policy:  # .mmz/config.yaml"),
+        "the policy header names the root manifest once, not per key: {text}"
+    );
+    assert!(
+        text.contains("gitignore: true  (default)"),
+        "a defaulted key is marked: {text}"
+    );
+    assert!(
+        text.contains("cache_dir: .mmz/cache  (default)"),
+        "a defaulted key is marked: {text}"
+    );
+    assert!(
+        text.contains("strict: [no_match, no_inputs]  (default)"),
+        "a defaulted key is marked: {text}"
+    );
+    assert!(
+        text.contains("on_hit: \"notify {cache:command}\"\n"),
+        "a declared key carries no (default) marker: {text}"
+    );
+    assert!(
+        !text.contains("on_hit: \"notify {cache:command}\"  (default)"),
+        "declared on_hit is not marked defaulted: {text}"
+    );
 }
 
 /// An import outside the project root — a Nix store path, in the wild — has

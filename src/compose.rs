@@ -355,40 +355,27 @@ fn parse_text(text: &str, path: &Path) -> Result<Document> {
 /// `on_hit` may be set on the root manifest but never on an imported
 /// fragment. This is the single source of truth for that surface — the only
 /// place the four names are spelled as literals — and it has two readers:
-/// [`check_no_policy_keys`] below, which is the rule actually enforced at
-/// load time, and the derivation test in `crate::schema` that asserts the
-/// fragment JSON Schema forbids exactly what this array names, so the
-/// schema (the discoverable form of the rule) cannot drift from the loader
-/// (the rule itself).
+/// `policy::check_no_policy_keys`, the rule actually enforced at load time,
+/// and the derivation test in `crate::schema` that asserts the fragment
+/// JSON Schema forbids exactly what this array names, so the schema (the
+/// discoverable form of the rule) cannot drift from the loader (the rule
+/// itself). Defined here rather than in `policy` below despite being used
+/// almost entirely there: `policy`'s own non-test code is its only
+/// unconditional user, and a `pub(crate) use` re-export of a name nothing
+/// outside `#[cfg(test)]` calls is flagged unused in a plain build — the
+/// const itself, sitting in the module that also reaches for it via
+/// `super::POLICY_KEYS`, has no such problem.
 pub(crate) const POLICY_KEYS: [&str; 4] = ["cache_dir", "gitignore", "strict", "on_hit"];
 
-/// Rejects a fragment that sets a root-only policy key, naming the first one
-/// found and the fragment that set it. `Option::is_some` on the outer
-/// double-`Option` is exactly "the key is present" regardless of its inner
-/// value, so a fragment that writes `gitignore:` (explicit `null`) is caught
-/// here exactly as one that writes `gitignore: true` is — presence is what
-/// this rule is about, not the value.
-///
-/// # Errors
-///
-/// Returns [`Error::FragmentPolicyKey`] if any of [`POLICY_KEYS`] is present,
-/// `null` included.
-fn check_no_policy_keys(document: &Document, path: &Path) -> Result<()> {
-    let [cache_dir, gitignore, strict, on_hit] = POLICY_KEYS;
-    let present = [
-        (cache_dir, document.cache_dir.is_some()),
-        (gitignore, document.gitignore.is_some()),
-        (strict, document.strict.is_some()),
-        (on_hit, document.on_hit.is_some()),
-    ];
-    if let Some((key, _)) = present.into_iter().find(|(_, set)| *set) {
-        return Err(Error::FragmentPolicyKey {
-            key: key.to_owned(),
-            path: path.to_path_buf(),
-        });
-    }
-    Ok(())
-}
+/// The check that rejects a policy key outside the root, and the query for
+/// whether one was written or defaulted — split out to `compose_policy.rs`
+/// once this file reached its own line cap. [`declared_policy_keys`] stays
+/// reachable at its original `crate::compose::…` path via the re-export
+/// below, so nothing outside this module has to know the split happened.
+#[path = "compose_policy.rs"]
+mod policy;
+use policy::check_no_policy_keys;
+pub(crate) use policy::declared_policy_keys;
 
 /// Renders an import chain root first, e.g. `a.yaml -> b.yaml -> a.yaml`.
 fn format_chain(chain: &[PathBuf]) -> String {
