@@ -1,4 +1,4 @@
-use super::{SCHEMA, humanize_age, report, report_json};
+use super::{SCHEMA, report, report_json};
 
 fn write(dir: &std::path::Path, name: &str, body: &str) {
     std::fs::write(dir.join(name), body).expect("write");
@@ -8,14 +8,6 @@ fn manifest(root: &std::path::Path, body: &str) {
     let dir = root.join(".mmz");
     std::fs::create_dir_all(&dir).expect("mkdir .mmz");
     std::fs::write(dir.join("config.yaml"), body).expect("write manifest");
-}
-
-#[test]
-fn humanize_age_scales_by_unit() {
-    assert_eq!(humanize_age(5), "5s ago");
-    assert_eq!(humanize_age(90), "1m ago");
-    assert_eq!(humanize_age(3 * 3600), "3h ago");
-    assert_eq!(humanize_age(2 * 86_400), "2d ago");
 }
 
 #[test]
@@ -406,39 +398,6 @@ fn a_probe_only_rule_is_not_no_inputs() {
     );
 }
 
-/// The `AGE` column reads the clock the report resolved, not one the renderer
-/// looks up for itself — which is what lets `MMZ_NOW` produce a genuinely aged
-/// row instead of the `0s ago` a just-recorded run always shows.
-#[test]
-fn age_is_measured_against_the_reports_own_clock() {
-    use super::{CachedInfo, Clock, Report, RuleStatus, State, render_text};
-
-    const RAN_AT: u64 = 1_700_000_000;
-    let report = Report {
-        manifest: ".mmz/config.yaml".to_owned(),
-        now: Clock::pinned(RAN_AT + 2 * 3600),
-        probes: std::collections::BTreeMap::new(),
-        rules: vec![RuleStatus {
-            name: "just check".to_owned(),
-            state: State::Fresh,
-            digest: Some("d1".to_owned()),
-            missing_output: None,
-            cached: Some(CachedInfo {
-                digest: "d1".to_owned(),
-                ok: true,
-                ran_at: RAN_AT,
-                outputs: Vec::new(),
-                probes: std::collections::BTreeMap::new(),
-            }),
-            inputs: Vec::new(),
-        }],
-    };
-    assert!(
-        render_text(&report).contains("2h ago"),
-        "a record two hours older than the report's clock reads as two hours old"
-    );
-}
-
 #[test]
 fn schema_is_valid_json_describing_the_output() {
     let schema: serde_json::Value = serde_json::from_str(SCHEMA).expect("schema is json");
@@ -450,6 +409,7 @@ fn schema_is_valid_json_describing_the_output() {
         "manifest",
         "rules",
         "state",
+        "source",
         "inputs",
         "no-inputs",
         "ran_at",

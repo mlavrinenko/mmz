@@ -50,6 +50,6 @@ groups:
       CHANGELOG.md: 32aab4a4568d7ad058995105b080ef156418858c06c41610a804d602f1f0fa1f
   status-schema:
     source:
-      src/status.rs: 6d635b6c65cca5a652fe3b850a498f43df4b5f05e4fbab8ca37eee6c5abe5513
+      src/status.rs: 51a57e2d54354094a08e8a7678515abf3eb60b73f5e23a25fa5c3f8db45ea05e
     dependents:
-      schema/status.schema.json: 4908c44ebc98d890688def6e8e6ad604d90fc630dfd840828167c4bdb66d88a4
+      schema/status.schema.json: 8c56f88f66dc54ede3060ee81d2309a7b57f0b9a5e504c99736a4b02c694adb0
