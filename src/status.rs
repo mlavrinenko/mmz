@@ -3,11 +3,18 @@
 //! For every rule the manifest declares, this resolves the rule's inputs,
 //! recomputes their digest, and compares it to the stored record — answering
 //! "would this rule skip or run right now, and why?" without running anything.
+//! Every rule also carries its `source`: the file that declared it, from the
+//! [`crate::provenance::Provenance`] the manifest merge already built — a
+//! composed project's rule can come from any file in its `imports:` chain, and
+//! a reader debugging a surprising skip needs to know which one.
 //!
-//! Two renderings share one model: a human table (`mmz --status`) and a machine
-//! report (`mmz --status=json`) that also lists every resolved input with its
-//! content hash, so an operator can diff runs or `jq` out the changed file. The
-//! JSON shape is described by [`SCHEMA`], printed by `mmz --status=json-schema`.
+//! Two renderings share one model: a human table (`mmz --status`, rendered by
+//! [`table`]) and a machine report (`mmz --status=json`) that also lists every
+//! resolved input with its content hash, so an operator can diff runs or `jq`
+//! out the changed file. The JSON shape is described by [`SCHEMA`], printed by
+//! `mmz --status=json-schema`. This module owns the report model — resolving
+//! every rule's inputs and verdict — and leaves rendering the table to
+//! [`table`], the seam that split off it once a `SOURCE` column needed a home.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -17,6 +24,7 @@ use serde::Serialize;
 use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
+use crate::provenance::Provenance;
 use crate::{cache, hashing, outputs, parametric, probe, resolve};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
@@ -49,6 +57,13 @@ struct Report {
 #[derive(Serialize)]
 struct RuleStatus {
     name: String,
+    /// The file that declared this rule, rendered through
+    /// [`Provenance::display`]: project-root-relative when it is under the
+    /// project root, absolute otherwise. Always present, including in a
+    /// single-file project with no `imports:` — the root manifest is the
+    /// source of its own rules, not a special case (see
+    /// [`crate::provenance`]).
+    source: String,
     state: State,
     /// Digest of the current inputs; absent when the rule resolves to no files.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -179,7 +194,7 @@ pub fn report(cwd: &Path, tags: &[String]) -> Result<String> {
     if report.rules.is_empty() {
         return Ok(format!("no rules defined in {}\n", report.manifest));
     }
-    Ok(render_text(&report))
+    Ok(table::render_text(&report))
 }
 
 /// Builds the `mmz --status=json` report: the same model as [`report`],
@@ -225,7 +240,13 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
         let shared = shared_by_rule
             .get(hit.rule.name.as_str())
             .expect("shared inputs resolved for every kept rule");
-        rules.push(rule_status(hit, shared, base, &cache_dir)?);
+        let source = located
+            .provenance
+            .commands
+            .get(hit.rule.name.as_str())
+            .map(|path| Provenance::display(path, base))
+            .expect("provenance recorded for every declared command");
+        rules.push(rule_status(hit, shared, base, &cache_dir, source)?);
     }
     Ok(Report {
         manifest: located.path.display().to_string(),
@@ -287,12 +308,15 @@ fn expansion_files(shared: &Shared, hit: &parametric::Match) -> Vec<String> {
 
 /// Computes one expansion's status: combine its pre-resolved shared inputs
 /// with any bound file, hash them, and compare the digest against the stored
-/// record.
+/// record. `source` is the rule's declaring file, already resolved by the
+/// caller — every expansion of a rule shares one source, so resolving it once
+/// per rule (rather than per expansion, like [`Shared`]) needs no memoization.
 fn rule_status(
     hit: &parametric::Match,
     shared: &Shared,
     base: &Path,
     cache_dir: &Path,
+    source: String,
 ) -> Result<RuleStatus> {
     let identity = hit.exp.identity.clone();
     let files = expansion_files(shared, hit);
@@ -300,6 +324,7 @@ fn rule_status(
     if files.is_empty() && shared.probes.is_empty() {
         return Ok(RuleStatus {
             name: identity,
+            source,
             state: State::NoInputs,
             digest: None,
             missing_output: None,
@@ -313,6 +338,7 @@ fn rule_status(
     let assessed = verdict(cached.as_ref(), &digest, missing, &shared.probes);
     Ok(RuleStatus {
         name: identity,
+        source,
         state: assessed.state,
         digest: Some(digest),
         missing_output: assessed.missing_output,
@@ -408,87 +434,13 @@ fn verdict(
     }
 }
 
-/// Renders the aligned `RULE / STATE / AGE` table. AGE is the time since the
-/// rule's record was written, measured against the report's own resolved clock
-/// (so `MMZ_NOW` pins it), and blank when the rule has no record.
-///
-/// A fourth `MISSING OUTPUT` column appears only when some rule's record was
-/// voided by a gone artifact, naming it: the path is what a reader needs, and
-/// a column that is blank in every ordinary report is noise. Without it the
-/// table is byte-identical to what it has always been.
-fn render_text(report: &Report) -> String {
-    let now = report.now.now_secs();
-    let ages: Vec<String> = report
-        .rules
-        .iter()
-        .map(|rule| {
-            rule.cached.as_ref().map_or_else(String::new, |record| {
-                humanize_age(now.saturating_sub(record.ran_at))
-            })
-        })
-        .collect();
-    let voided = report
-        .rules
-        .iter()
-        .any(|rule| rule.missing_output.is_some());
-    let rule_width = column_width(
-        report.rules.iter().map(|rule| rule.name.chars().count()),
-        "RULE",
-    );
-    let state_width = column_width(
-        report.rules.iter().map(|rule| rule.state.label().len()),
-        "STATE",
-    );
-    let age_width = if voided {
-        column_width(ages.iter().map(|age| age.chars().count()), "AGE")
-    } else {
-        0
-    };
-
-    let row = |rule: &str, state: &str, age: &str, missing: &str| {
-        let line =
-            format!("{rule:<rule_width$}  {state:<state_width$}  {age:<age_width$}  {missing}");
-        format!("{}\n", line.trim_end())
-    };
-    let mut out = row(
-        "RULE",
-        "STATE",
-        "AGE",
-        if voided { "MISSING OUTPUT" } else { "" },
-    );
-    for (rule, age) in report.rules.iter().zip(&ages) {
-        out.push_str(&row(
-            &rule.name,
-            rule.state.label(),
-            age,
-            rule.missing_output.as_deref().unwrap_or(""),
-        ));
-    }
-    out
-}
-
-/// The width of a table column: the widest cell, never narrower than `header`.
-fn column_width(cells: impl Iterator<Item = usize>, header: &str) -> usize {
-    cells.max().unwrap_or(0).max(header.len())
-}
-
-/// Renders a record's age as a coarse, human-readable span (`5s`, `3m`, `2h`,
-/// `4d` ago).
-fn humanize_age(secs: u64) -> String {
-    const MINUTE: u64 = 60;
-    const HOUR: u64 = 60 * MINUTE;
-    const DAY: u64 = 24 * HOUR;
-    if secs < MINUTE {
-        format!("{secs}s ago")
-    } else if secs < HOUR {
-        format!("{}m ago", secs / MINUTE)
-    } else if secs < DAY {
-        format!("{}h ago", secs / HOUR)
-    } else {
-        format!("{}d ago", secs / DAY)
-    }
-}
+#[path = "status_table.rs"]
+mod table;
 
 #[cfg(test)]
 #[path = "status_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "status_source_tests.rs"]
+mod source_tests;

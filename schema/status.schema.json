@@ -22,11 +22,15 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "state", "inputs"],
+        "required": ["name", "source", "state", "inputs"],
         "properties": {
           "name": {
             "type": "string",
             "description": "The rule's name (matcher and cache identity)."
+          },
+          "source": {
+            "type": "string",
+            "description": "The file that declared this rule: project-root-relative when it is under the project root, absolute otherwise (so a fragment outside the project, a Nix store path say, stays recognisable). Present for every rule, including in a single-file project with no `imports:` — the root manifest is the source of its own rules, not a special case."
           },
           "state": {
             "type": "string",
