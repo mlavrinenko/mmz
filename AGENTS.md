@@ -28,6 +28,7 @@ Reference material lives on the docs site, not here. Before writing about a feat
 | Rule matching, cache identity, parametric rules | [Matching and parametric rules](https://mlavrinenko.github.io/mmz/matching/) |
 | Declared outputs and voided records | [Declared outputs](https://mlavrinenko.github.io/mmz/outputs/) |
 | Tags and `--is-fresh` gating | [Gating with tags](https://mlavrinenko.github.io/mmz/gating/) |
+| Composing one manifest from several files | [Composing a manifest from imports](https://mlavrinenko.github.io/mmz/composition/) |
 | Every manifest key | [Manifest reference](https://mlavrinenko.github.io/mmz/manifest/) |
 | Every action and exit code | [CLI reference](https://mlavrinenko.github.io/mmz/cli/) |
 | Driving `mmz` as an agent | [For AI agents](https://mlavrinenko.github.io/mmz/agents/) |
