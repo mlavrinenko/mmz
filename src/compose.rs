@@ -17,11 +17,11 @@
 //!   *different* files is [`Error::DuplicateCommandAcrossFiles`]; the same name
 //!   twice in *one* file is still [`Error::DuplicateCommand`], caught by
 //!   [`Manifest::validate`] exactly as it is today.
-//! - `cache_dir`, `gitignore`, `strict` and `on_hit` are root-manifest-only,
-//!   set or explicit `null` alike (see [`double_option`]); either is
-//!   [`Error::FragmentPolicyKey`] in an imported file. A
+//! - `cache_dir`, `gitignore`, `strict` and `on_hit` are root-manifest-only;
+//!   any of them in an imported file is [`Error::FragmentPolicyKey`]. A
 //!   [`crate::manifest::Command`]'s own `on_hit` is unaffected — different key.
-//! - `imports` itself never reaches the merged [`Manifest`]; it is consumed.
+//! - `imports` itself never reaches the merged [`Manifest`]; it is consumed
+//!   here.
 //!
 //! # Paths
 //!
@@ -52,49 +52,29 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
+use crate::import_paths::expand_import;
 use crate::manifest::{
     Command, Manifest, Scope, StrictPolicy, default_cache_dir, default_gitignore,
 };
 use crate::probe::Probe;
-
-/// Which file contributed each scope, probe and command in a merged manifest.
-///
-/// The root manifest is recorded as the source of its own entries — a
-/// single-file project is the degenerate case, not a special case — so a
-/// lookup never needs to special-case "no imports". Every path is
-/// canonicalized; use [`Provenance::display`] to render one the way a user
-/// should see it.
-#[derive(Debug, Clone, Default)]
-pub struct Provenance {
-    /// Source file of each scope, keyed by scope name.
-    pub scopes: BTreeMap<String, PathBuf>,
-    /// Source file of each probe, keyed by probe name.
-    pub probes: BTreeMap<String, PathBuf>,
-    /// Source file of each command, keyed by command name (unique once the
-    /// merged manifest has validated).
-    pub commands: BTreeMap<String, PathBuf>,
-}
-
-impl Provenance {
-    /// Renders `path` project-root-relative when it is under `root`, absolute
-    /// otherwise — so an out-of-tree fragment (a Nix store path, say) stays
-    /// recognisable instead of collapsing into a long `../../..` climb.
-    #[must_use]
-    pub fn display(path: &Path, root: &Path) -> String {
-        match path.strip_prefix(root) {
-            Ok(relative) => relative.display().to_string(),
-            Err(_) => path.display().to_string(),
-        }
-    }
-}
+use crate::provenance::Provenance;
 
 /// One manifest file's own declarations, before merge.
 ///
 /// Shaped like [`Manifest`], but every root-only policy field is the
-/// double-`Option` idiom ([`double_option`]) rather than a plain `Option<T>`,
-/// which cannot tell "absent" from "present and explicitly `null`" apart.
-/// `deny_unknown_fields` applies here exactly as it does on [`Manifest`], so a
-/// fragment's syntax is validated per file, same as the root.
+/// double-`Option` idiom (`Option<Option<T>>`, see [`double_option`]) rather
+/// than a plain `Option<T>`. A plain `Option<T>` cannot tell three states
+/// apart: the key is absent (supplied by `#[serde(default)]`), the key is
+/// present and explicitly `null`, or the key is present with a value — the
+/// first two both deserialize to `None`. The distinction matters because
+/// presence, not value, is what the fragment policy-key check is about: a
+/// fragment that writes `gitignore:` (explicit `null`) is still *setting* the
+/// key and must be rejected exactly as `gitignore: true` would be, while the
+/// root manifest treats an explicit `null` on `gitignore`, `cache_dir` or
+/// `strict` as a hard error rather than silently falling through to the
+/// default (see [`require_or_default`]). `deny_unknown_fields` applies here
+/// exactly as it does on [`Manifest`], so a fragment's syntax is validated per
+/// file, same as the root.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Document {
@@ -116,10 +96,14 @@ struct Document {
     on_hit: Option<Option<String>>,
 }
 
-/// Deserializes a field as `Option<Option<T>>`, wrapping a present key —
-/// `null` or a value — in `Some`; `#[serde(default)]` handles absence. The
-/// standard double-`Option` idiom for telling "omitted" from "explicitly
-/// null" apart, which a plain `Option<T>` field cannot.
+/// Deserializes a field as `Option<Option<T>>`: `#[serde(default)]` supplies
+/// the outer `None` when the key is absent, and this function runs only when
+/// the key *is* present, wrapping whatever `Option<T>` deserializes to —
+/// `None` for an explicit `null`, `Some(value)` otherwise — in one more
+/// `Some`. The result is the standard double-`Option` idiom: outer `None` is
+/// "omitted", `Some(None)` is "present and `null`", `Some(Some(value))` is
+/// "present with a value" — three states a plain `Option<T>` field collapses
+/// into two.
 fn double_option<'de, D, T>(deserializer: D) -> std::result::Result<Option<Option<T>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -142,8 +126,8 @@ struct MergeState {
 }
 
 impl MergeState {
-    /// Folds one file's scopes, probes and commands into the merge, tagging each
-    /// with `source`.
+    /// Folds one file's own scopes, probes and commands into the merge,
+    /// tagging each with `source`.
     ///
     /// # Errors
     ///
@@ -183,12 +167,14 @@ impl MergeState {
     }
 
     /// Resolves and visits every entry in `importer`'s `imports:` list, in
-    /// order — the depth-first half of "host first, then imports depth-first".
+    /// order, folding each target's own declarations into the merge before
+    /// moving to the next entry — the depth-first half of "host first, then
+    /// imports depth-first".
     ///
     /// # Errors
     ///
     /// Returns [`Error::ImportMissing`] for a path that does not exist, or
-    /// propagates an error from loading a target fragment.
+    /// propagates any error from loading a target fragment.
     fn visit_imports(&mut self, importer: &Path, imports: &[String]) -> Result<()> {
         let base_dir = importer
             .parent()
@@ -201,10 +187,12 @@ impl MergeState {
         Ok(())
     }
 
-    /// Loads one fragment: cycle- and diamond-checks it, reads and parses it,
-    /// rejects any root-only policy key, then absorbs its declarations before
-    /// recursing into its own `imports:`. A path already on the stack is a
-    /// cycle; already loaded but off the stack is a diamond, skipped silently.
+    /// Loads one fragment file: cycle- and diamond-checks it, reads and
+    /// parses it, rejects any root-only policy key, then absorbs its own
+    /// declarations before recursing into its own `imports:`.
+    ///
+    /// A path already on the current stack is a cycle; a path already fully
+    /// loaded but not on the stack is a diamond and is skipped silently.
     ///
     /// # Errors
     ///
@@ -312,14 +300,22 @@ pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
     ))
 }
 
-/// Resolves one root-only policy field's double-`Option`: absent uses
-/// `default`, a value is used as written, and an explicit `null` is
-/// [`Error::NullPolicyKey`] rather than falling through to `default` — an
-/// author who wrote `gitignore:` meaning `false` must not silently get `true`.
+/// Resolves one root-only policy field's double-`Option` into the value
+/// [`Manifest`] wants: an absent key (`None`) uses `default`, a present value
+/// (`Some(Some(value))`) is used as written, and a present-but-explicit
+/// `null` (`Some(None)`) is [`Error::NullPolicyKey`] rather than being allowed
+/// to fall through to `default` silently. Before composition existed these
+/// fields were plain, non-nullable types, so `null` was already a hard parse
+/// error; the shared per-file [`Document`] has to accept `null` so a
+/// *fragment* setting one is still caught by [`Error::FragmentPolicyKey`],
+/// which means the root's own explicit `null` has to be checked here instead
+/// — an author who wrote `gitignore:` meaning `false` must not silently
+/// resolve to `true` with no diagnostic.
 ///
 /// # Errors
 ///
-/// Returns [`Error::NullPolicyKey`] naming `key` and `path` on `Some(None)`.
+/// Returns [`Error::NullPolicyKey`] naming `key` and `path` when `value` is
+/// `Some(None)`.
 fn require_or_default<T>(
     value: Option<Option<T>>,
     key: &str,
@@ -347,9 +343,11 @@ fn parse_text(text: &str, path: &Path) -> Result<Document> {
 }
 
 /// Rejects a fragment that sets a root-only policy key, naming the first one
-/// found and the fragment that set it. `is_some` on the outer double-`Option`
-/// is exactly "present", so `gitignore:` (explicit `null`) is caught here just
-/// as `gitignore: true` is — presence is the rule, not the value.
+/// found and the fragment that set it. `Option::is_some` on the outer
+/// double-`Option` is exactly "the key is present" regardless of its inner
+/// value, so a fragment that writes `gitignore:` (explicit `null`) is caught
+/// here exactly as one that writes `gitignore: true` is — presence is what
+/// this rule is about, not the value.
 ///
 /// # Errors
 ///
@@ -369,63 +367,6 @@ fn check_no_policy_keys(document: &Document, path: &Path) -> Result<()> {
         });
     }
     Ok(())
-}
-
-/// Resolves one `imports:` entry declared in `importer` (whose directory is
-/// `base_dir`) to the manifest files it names: itself, if it names a file, or
-/// the `*.yaml`/`*.yml` files directly inside it, lexically sorted, if it
-/// names a directory.
-///
-/// # Errors
-///
-/// Returns [`Error::ImportMissing`] if the resolved path is neither a file nor
-/// a directory.
-fn expand_import(importer: &Path, base_dir: &Path, entry: &str) -> Result<Vec<PathBuf>> {
-    let candidate = PathBuf::from(entry);
-    let resolved = if candidate.is_absolute() {
-        candidate
-    } else {
-        base_dir.join(candidate)
-    };
-    if resolved.is_dir() {
-        return list_yaml_files(&resolved);
-    }
-    if resolved.is_file() {
-        return Ok(vec![resolved]);
-    }
-    Err(Error::ImportMissing {
-        importer: importer.to_path_buf(),
-        path: resolved,
-    })
-}
-
-/// Lists the `*.yaml` and `*.yml` files directly inside `dir` (not recursive),
-/// sorted lexically by file name.
-fn list_yaml_files(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    let entries = fs::read_dir(dir).map_err(|source| Error::ImportNotReadable {
-        path: dir.to_path_buf(),
-        source,
-    })?;
-    for entry in entries {
-        let entry = entry.map_err(|source| Error::ImportNotReadable {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        let candidate = entry.path();
-        if !candidate.is_file() {
-            continue;
-        }
-        let is_yaml = candidate
-            .extension()
-            .and_then(std::ffi::OsStr::to_str)
-            .is_some_and(|extension| extension == "yaml" || extension == "yml");
-        if is_yaml {
-            files.push(candidate);
-        }
-    }
-    files.sort();
-    Ok(files)
 }
 
 /// Renders an import chain root first, e.g. `a.yaml -> b.yaml -> a.yaml`.
@@ -496,3 +437,11 @@ fn split_commands(merged: Vec<(Command, PathBuf)>) -> (Vec<Command>, BTreeMap<St
 #[cfg(test)]
 #[path = "compose_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "compose_merge_tests.rs"]
+mod merge_tests;
+
+#[cfg(test)]
+#[path = "compose_cycles_tests.rs"]
+mod cycles_tests;

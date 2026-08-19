@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Deserializer};
 
-use crate::compose::Provenance;
 use crate::error::{Error, Result};
 use crate::probe::Probe;
+use crate::provenance::Provenance;
 use crate::resolve::GlobGroup;
 
 /// Directory holding mmz's per-project state, found by walking upward. The

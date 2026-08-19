@@ -38,7 +38,7 @@ groups:
       www/utils/config-notes.typ: f583de7ced91b8f86a1c67f77926d536fdd2ad8d4a08c420df8890e63a252494
   manifest-schema:
     source:
-      src/manifest.rs: 1dfb904969f7d602499609e741831901bcde58c12ad1e61fe41cd0b7d677ea24
+      src/manifest.rs: f2f888b35ec30e794edc4df0efeac42968fb92d839b2f706fb3526f2531653c3
       src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
     dependents:
       schema/mmz.schema.json: ec7a187d324a5f2d6c164b3a9835165348a6c8427b5516bc1b1ed9b31dfdc566

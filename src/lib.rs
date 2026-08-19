@@ -34,8 +34,10 @@
 //! that want the parsed model directly.
 //!
 //! Modules: the manifest ([`manifest`]), fragment import resolution and merge
-//! ([`compose`]), pattern resolution ([`resolve`]), content hashing
-//! ([`hashing`]), command-driven inputs ([`probe`]), declared artifact outputs
+//! ([`compose`]), `imports:` path resolution ([`import_paths`]), the source
+//! of every scope, probe and command a merge produces ([`provenance`]),
+//! pattern resolution ([`resolve`]), content hashing ([`hashing`]),
+//! command-driven inputs ([`probe`]), declared artifact outputs
 //! ([`outputs`]), rule matching ([`matcher`]), glob-fanned parametric rules
 //! ([`parametric`]), the cache ([`cache`]), cache-hit notices ([`notice`]), the
 //! process clock ([`clock`]), and the orchestration engine ([`engine`]). The
@@ -56,6 +58,7 @@ pub mod engine;
 pub mod error;
 pub mod freshness;
 pub mod hashing;
+pub mod import_paths;
 pub mod init;
 pub mod manifest;
 pub mod matcher;
@@ -63,6 +66,7 @@ pub mod notice;
 pub mod outputs;
 pub mod parametric;
 pub mod probe;
+pub mod provenance;
 pub mod prune;
 pub mod resolve;
 pub mod schema;
