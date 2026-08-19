@@ -53,3 +53,31 @@ a syscall per rendered row.
 A project root reached through a symlink renders an in-root fragment's source
 relative, not absolute. Construct the symlink in the test rather than relying
 on the ambient filesystem.
+
+== The same thread fixes a second inconsistency
+
+Composition errors print absolute paths, while `--status` and `--dump-config`
+print the same files root-relative:
+
+```
+mmz: scope `rust` is declared in both /home/me/proj/.mmz/config.yaml and
+     /home/me/proj/.mmz/conf.d/lint.yaml
+```
+
+The errors are built inside the loader, which never receives the project root —
+`Manifest::locate` computes the root and then calls `load` without it — so they
+have no way to shorten a path even when it sits under the root. Reports go
+through `Provenance::display`, which does.
+
+Nobody is misled: an absolute path is unambiguous, and the errors read fine.
+But it means the docs cannot show a real error capture without either pasting
+someone's home directory or normalising it away, which is what the composition
+page does today (following `www/generate.sh`'s established sed). Threading the
+root into the loader closes both this and the canonicalization mismatch above,
+which is why they are one task rather than two.
+
+Weigh one thing before doing it: an absolute path is the more useful form when
+the error is about a file *outside* the root, which is exactly the store-path
+case composition exists to support. `Provenance::display`'s rule — relative
+under the root, absolute otherwise — already handles that correctly, so reusing
+it rather than inventing a second rule is the whole job.

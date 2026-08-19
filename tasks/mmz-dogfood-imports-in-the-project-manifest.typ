@@ -10,7 +10,7 @@
       + depends-on("mmz-dump-the-merged-manifest-with-provenance.typ")[the
         before/after proof runs through it]
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20)[wave 5],
 )
 
 == Summary
