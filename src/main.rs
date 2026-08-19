@@ -26,6 +26,8 @@ Usage:
     mmz --prune                       delete cache records whose rule no longer exists
     mmz --schema                      print the config JSON Schema
     mmz --schema=fragment             print the JSON Schema for an imported fragment
+    mmz --dump-config                 print the merged manifest and where each entry came from
+    mmz --dump-config=json            the same as JSON
     mmz --version                     print version
     mmz --help                        print this help
     mmz -- <command> [args]           run a command whose name begins with a dash
@@ -84,6 +86,9 @@ fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
         schema if schema == "--schema" || schema.starts_with("--schema=") => {
             Some(run_schema(schema, rest))
+        }
+        dump if dump == "--dump-config" || dump.starts_with("--dump-config=") => {
+            Some(run_dump_config(dump, rest))
         }
         "--init" => Some(run_init(rest)),
         "--prune" => Some(run_prune(rest)),
@@ -149,6 +154,36 @@ fn run_schema(arg: &str, rest: &[String]) -> ExitCode {
             "unknown `--schema` format `{}`; use fragment, or omit the suffix for the config schema",
             other.trim_start_matches('=')
         )),
+    }
+}
+
+/// Handles `--dump-config` and `--dump-config=json`. `arg` is the full token,
+/// so its `=suffix` selects the rendering. There is no `=json-schema` arm —
+/// unlike `--schema` and `--status`, this document's only consumer today is a
+/// gate that can assert on keys directly (see `mmz::dump`), so a schema for
+/// it is deferred until a second consumer needs one.
+fn run_dump_config(arg: &str, rest: &[String]) -> ExitCode {
+    if !rest.is_empty() {
+        return usage("`--dump-config` takes no arguments");
+    }
+    let cwd = match current_dir() {
+        Ok(dir) => dir,
+        Err(code) => return code,
+    };
+    let format = arg.strip_prefix("--dump-config").unwrap_or("");
+    let rendered = match format {
+        "" => mmz::dump::dump(&cwd),
+        "=json" => mmz::dump::dump_json(&cwd),
+        other => {
+            return usage(&format!(
+                "unknown `--dump-config` format `{}`; use json, or omit the suffix for the human form",
+                other.trim_start_matches('=')
+            ));
+        }
+    };
+    match rendered {
+        Ok(text) => emit(&text),
+        Err(err) => report_error(&err),
     }
 }
 

@@ -42,7 +42,7 @@
 //! ([`parametric`]), the cache ([`cache`]), cache-hit notices ([`notice`]), the
 //! process clock ([`clock`]), and the orchestration engine ([`engine`]). The
 //! `mmz --…` actions live in [`init`], [`schema`], [`status`], [`freshness`],
-//! and [`prune`].
+//! [`prune`], and [`dump`].
 //!
 //! # Reproducible output
 //!
@@ -54,6 +54,7 @@
 pub mod cache;
 pub mod clock;
 pub mod compose;
+pub mod dump;
 pub mod engine;
 pub mod error;
 pub mod freshness;

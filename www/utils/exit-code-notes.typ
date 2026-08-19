@@ -16,7 +16,8 @@
     meaning: [Fresh and skipped, or the wrapped command ran and succeeded.],
     detail: [
       Also the exit for a satisfied `--is-fresh` gate, and for the read-only
-      actions (`--status`, `--schema`, `--version`, `--help`, `--prune`).
+      actions (`--status`, `--schema`, `--dump-config`, `--version`, `--help`,
+      `--prune`).
     ],
   ),
   "1": (
