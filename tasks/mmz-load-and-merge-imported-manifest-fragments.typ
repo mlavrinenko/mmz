@@ -8,7 +8,11 @@
     parent("mmz-config-composition-via-imported-fragments.typ")[the settled
       design this implements]
   ),
-  status: wip(2026, 8, 20)[wave 1: the loader],
+  status: done(
+    2026,
+    8,
+    20,
+  )[merged as 6054bf1; just check green on the merged HEAD],
 )
 
 == Summary
