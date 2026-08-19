@@ -6,6 +6,11 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "imports": {
+      "description": "Paths to other YAML files whose scopes, probes and commands are merged into this one. A directory entry expands to every *.yaml and *.yml file directly inside it (not recursive), sorted lexically; a missing file or directory is an error, an empty directory is not. Relative paths resolve against the directory of the file that names them, not the project root, so a fragment can reference a sibling fragment; absolute paths (store paths included) are used as written. A fragment may declare imports of its own. A key declared in two files is an error naming both; cache_dir, gitignore, strict and on_hit may only be set in the root manifest.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "scopes": {
       "description": "Named glob sets, each referenced by command rules. A scope is either an array of patterns, or an object naming those patterns under globs alongside a per-scope gitignore override.",
       "type": "object",

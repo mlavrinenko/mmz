@@ -315,7 +315,15 @@ fn exit_for(err: &Error) -> u8 {
         | Error::InvalidOutput { .. }
         | Error::MacroSyntax { .. }
         | Error::CollidingIdentity { .. }
-        | Error::Pattern { .. } => 4,
+        | Error::Pattern { .. }
+        | Error::ImportMissing { .. }
+        | Error::ImportNotReadable { .. }
+        | Error::ImportCycle { .. }
+        | Error::DuplicateScope { .. }
+        | Error::DuplicateProbe { .. }
+        | Error::DuplicateCommandAcrossFiles { .. }
+        | Error::FragmentPolicyKey { .. }
+        | Error::NullPolicyKey { .. } => 4,
         Error::MissingOutput { .. } => 5,
         Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
         Error::Spawn { .. } => 127,

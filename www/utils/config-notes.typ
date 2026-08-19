@@ -15,6 +15,14 @@
 // when to reach for the key, what it costs, and which failure it prevents.
 
 #let config-notes = (
+  imports: [
+    What lets a generated fragment and a hand-written manifest coexist instead
+    of one clobbering the other. A duplicate key across files is always an
+    error, never last-wins — a stale hand-written rule silently replacing a
+    regenerated one is exactly the false green this tool exists to prevent.
+    Order matters for `commands`: the importing file's own rules get first
+    crack at an invocation, so nothing generated can shadow them.
+  ],
   scopes: [
     Declared once, referenced by many rules, so a shared input path lives in one
     place. Globs follow the common convention: `*` stays within a directory,

@@ -16,6 +16,7 @@ mod tests {
     fn schema_documents_every_manifest_field() {
         assert!(SCHEMA.contains("\"$schema\""), "declares its meta-schema");
         for key in [
+            "imports",
             "scopes",
             "globs",
             "commands",
