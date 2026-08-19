@@ -33,7 +33,7 @@ one project.
 ```yaml
 # .mmz/config.yaml
 imports:
-  - .mmz/conf.d/                       # every *.yaml inside, lexical order
+  - conf.d/                            # every *.yaml inside, lexical order
   - /nix/store/…-wormfork-mmz/rules.yaml
 
 scopes:
@@ -103,6 +103,13 @@ one resolution rule under which a store fragment can reference a sibling store
 fragment at all. Note the asymmetry loudly in the docs: import paths are
 file-relative, while globs and outputs stay project-root-relative as they are
 today — a fragment in the store cannot express globs about itself anyway.
+
+The asymmetry has one sharp edge, and this task's first draft fell straight on
+it: the common case is a `conf.d` beside the config, and the path everyone
+*thinks* in is `.mmz/conf.d/`. From inside `.mmz/config.yaml` that resolves to
+`.mmz/.mmz/conf.d/` and errors. The error names the resolved path, so it fails
+closed and reads clearly — but every example anyone copies has to say
+`conf.d/`, and the docs page owes this a worked example rather than a sentence.
 
 Absolute paths, store paths included, are allowed with no special casing. A
 tool that already runs `probes` is not newly exposed by reading a YAML file

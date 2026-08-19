@@ -25,7 +25,7 @@ choice to re-open while implementing.
 
 ```yaml
 imports:
-  - .mmz/conf.d/                       # directory: every *.yaml / *.yml inside
+  - conf.d/                            # directory: every *.yaml / *.yml inside
   - shared/gates.yaml                  # relative to THIS file's directory
   - /nix/store/…-wormfork-mmz/rules.yaml
 ```

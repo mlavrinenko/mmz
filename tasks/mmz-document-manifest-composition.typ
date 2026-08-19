@@ -45,6 +45,11 @@ while deciding.
 - The path asymmetry, stated loudly: import paths resolve against the importing
   file's directory, globs and outputs against the project root. Show a nested
   fragment so the difference is concrete rather than asserted.
+- The sharp edge of that asymmetry, as a worked example rather than a caveat:
+  the `conf.d` beside the config is imported as `conf.d/`, not `.mmz/conf.d/`,
+  because the importing file already sits in `.mmz`. The path everyone thinks
+  in is the wrong one, so print the right one next to a scope glob that is
+  root-relative and looks like it disagrees.
 - The fragment surface: rules, not policy, and the fragment schema to validate
   against.
 - Ordering: host rules first, imports depth-first, and that this only matters
