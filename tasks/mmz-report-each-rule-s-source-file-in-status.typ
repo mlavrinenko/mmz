@@ -9,7 +9,7 @@
       + depends-on("mmz-load-and-merge-imported-manifest-fragments.typ")[the
         merge is what carries the source]
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20)[wave 2],
 )
 
 == Summary
