@@ -12,7 +12,7 @@
       + related("mmz-review-the-composition-docs-page-in-a-browser.typ")[the
         human pass over what this writes]
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20)[wave 4],
 )
 
 == Summary

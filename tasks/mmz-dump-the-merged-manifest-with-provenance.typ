@@ -8,7 +8,7 @@
     parent("mmz-config-composition-via-imported-fragments.typ")
       + depends-on("mmz-load-and-merge-imported-manifest-fragments.typ")
   ),
-  status: wip(2026, 8, 20)[wave 3],
+  status: done(2026, 8, 20)[merged; just check green on the merged HEAD],
 )
 
 == Summary
