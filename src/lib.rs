@@ -33,13 +33,14 @@
 //! records, and [`Manifest`] loads and validates a `.mmz/config.yaml` for callers
 //! that want the parsed model directly.
 //!
-//! Modules: the manifest ([`manifest`]), pattern resolution ([`resolve`]),
-//! content hashing ([`hashing`]), command-driven inputs ([`probe`]), declared
-//! artifact outputs ([`outputs`]), rule matching ([`matcher`]), glob-fanned
-//! parametric rules ([`parametric`]), the cache ([`cache`]), cache-hit notices
-//! ([`notice`]), the process clock ([`clock`]), and the orchestration engine
-//! ([`engine`]). The `mmz --…` actions live in [`init`], [`schema`],
-//! [`status`], [`freshness`], and [`prune`].
+//! Modules: the manifest ([`manifest`]), fragment import resolution and merge
+//! ([`compose`]), pattern resolution ([`resolve`]), content hashing
+//! ([`hashing`]), command-driven inputs ([`probe`]), declared artifact outputs
+//! ([`outputs`]), rule matching ([`matcher`]), glob-fanned parametric rules
+//! ([`parametric`]), the cache ([`cache`]), cache-hit notices ([`notice`]), the
+//! process clock ([`clock`]), and the orchestration engine ([`engine`]). The
+//! `mmz --…` actions live in [`init`], [`schema`], [`status`], [`freshness`],
+//! and [`prune`].
 //!
 //! # Reproducible output
 //!
@@ -50,6 +51,7 @@
 
 pub mod cache;
 pub mod clock;
+pub mod compose;
 pub mod engine;
 pub mod error;
 pub mod freshness;

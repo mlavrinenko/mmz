@@ -2,11 +2,11 @@
 //! rules that reference them.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Deserializer};
 
+use crate::compose::Provenance;
 use crate::error::{Error, Result};
 use crate::probe::Probe;
 use crate::resolve::GlobGroup;
@@ -18,14 +18,17 @@ pub const CONFIG_DIR: &str = ".mmz";
 /// Config file names within [`CONFIG_DIR`], tried in order during discovery.
 const CONFIG_NAMES: [&str; 2] = ["config.yaml", "config.yml"];
 
-/// Default for [`Manifest::gitignore`].
-const fn default_gitignore() -> bool {
+/// Default for [`Manifest::gitignore`]. `pub(crate)` so [`crate::compose`] can
+/// apply the same default when a root manifest omits the key.
+pub(crate) const fn default_gitignore() -> bool {
     true
 }
 
 /// Default for [`Manifest::cache_dir`] — the gitignored state directory, nested
 /// under [`CONFIG_DIR`] so a single `.mmz/.gitignore` can cover it.
-fn default_cache_dir() -> String {
+/// `pub(crate)` so [`crate::compose`] can apply the same default when a root
+/// manifest omits the key.
+pub(crate) fn default_cache_dir() -> String {
     ".mmz/cache".to_owned()
 }
 
@@ -289,22 +292,23 @@ pub struct Command {
 }
 
 impl Manifest {
-    /// Loads and validates a manifest from `path`.
+    /// Loads and validates a manifest from `path`, following its `imports:`
+    /// chain (if any) and merging every fragment it names into one model. See
+    /// [`crate::compose`] for the merge rules; [`Manifest::locate`] is the
+    /// entry point that also keeps the provenance this discards.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::ManifestParse`] when the file cannot be parsed, or a
-    /// validation error ([`Error::EmptyCommandName`], [`Error::DuplicateCommand`],
-    /// [`Error::UnknownInput`], [`Error::NameCollision`]) when its contents are
-    /// inconsistent.
+    /// Returns [`Error::ManifestParse`] when a file cannot be parsed, an import
+    /// error ([`Error::ImportMissing`], [`Error::ImportNotReadable`],
+    /// [`Error::ImportCycle`], [`Error::DuplicateScope`],
+    /// [`Error::DuplicateProbe`], [`Error::DuplicateCommandAcrossFiles`],
+    /// [`Error::FragmentPolicyKey`]), or a validation error
+    /// ([`Error::EmptyCommandName`], [`Error::DuplicateCommand`],
+    /// [`Error::UnknownInput`], [`Error::NameCollision`]) when the merged
+    /// contents are inconsistent.
     pub fn load(path: &Path) -> Result<Self> {
-        let text = fs::read_to_string(path)?;
-        let manifest: Self =
-            serde_yaml_ng::from_str(&text).map_err(|source| Error::ManifestParse {
-                path: path.to_path_buf(),
-                source: Box::new(source),
-            })?;
-        manifest.validate()?;
+        let (manifest, _provenance) = crate::compose::load(path)?;
         Ok(manifest)
     }
 
@@ -424,13 +428,15 @@ impl Manifest {
     }
 
     /// Discovers, loads, and validates the nearest manifest above `cwd`, pairing
-    /// it with the project root its relative paths resolve against.
+    /// it with the project root its relative paths resolve against and the
+    /// provenance of every scope, probe and command in the merged model.
     ///
     /// # Errors
     ///
     /// Returns [`Error::NoManifest`] when none is found, a load/validation error
-    /// from [`Manifest::load`], or [`Error::Internal`] if the config path has no
-    /// project root (it always does in practice — `<root>/.mmz/config.yaml`).
+    /// from [`crate::compose::load`], or [`Error::Internal`] if the config path
+    /// has no project root (it always does in practice —
+    /// `<root>/.mmz/config.yaml`).
     pub fn locate(cwd: &Path) -> Result<Located> {
         let path = Self::discover(cwd).ok_or_else(|| Error::NoManifest {
             start: cwd.to_path_buf(),
@@ -440,17 +446,19 @@ impl Manifest {
             .and_then(Path::parent)
             .ok_or_else(|| Error::Internal("config path has no project root".to_owned()))?
             .to_path_buf();
-        let manifest = Self::load(&path)?;
+        let (manifest, provenance) = crate::compose::load(&path)?;
         Ok(Located {
             path,
             root,
             manifest,
+            provenance,
         })
     }
 }
 
 /// A discovered manifest: the config file, the project root its relative paths
-/// resolve against, and the parsed, validated model.
+/// resolve against, the parsed, validated model, and the provenance of every
+/// entry in it.
 ///
 /// Config lives at `<root>/.mmz/config.yaml`, so the project root is the parent
 /// of `.mmz`. Input globs and `cache_dir` resolve against `root`, never `.mmz`.
@@ -461,6 +469,8 @@ pub struct Located {
     pub root: PathBuf,
     /// The parsed, validated manifest.
     pub manifest: Manifest,
+    /// Which file contributed each scope, probe and command in `manifest`.
+    pub provenance: Provenance,
 }
 
 #[cfg(test)]

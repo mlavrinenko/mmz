@@ -1,0 +1,441 @@
+//! Unit tests for [`crate::compose`], covering import resolution, cycle
+//! detection, the merge rules, and the byte-for-byte guarantee for a manifest
+//! that declares no `imports:` at all.
+
+use std::path::{Path, PathBuf};
+
+use super::{Provenance, load};
+use crate::error::Error;
+use crate::manifest::Manifest;
+
+/// Writes `body` to `relative` under `dir`, creating parent directories as
+/// needed, and returns the written path.
+fn write(dir: &Path, relative: &str, body: &str) -> PathBuf {
+    let path = dir.join(relative);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("mkdir");
+    }
+    std::fs::write(&path, body).expect("write");
+    path
+}
+
+/// The command names in `manifest`, in declaration order.
+fn names(manifest: &Manifest) -> Vec<&str> {
+    manifest.commands.iter().map(|c| c.name.as_str()).collect()
+}
+
+#[test]
+fn fragment_scopes_probes_and_commands_reach_the_merged_model() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(
+        dir.path(),
+        "frag.yaml",
+        concat!(
+            "scopes:\n  rust: [\"src/**/*.rs\"]\n",
+            "probes:\n  toolchain:\n    run: \"echo pinned\"\n",
+            "commands:\n  - name: cargo test\n    inputs: [rust, toolchain]\n",
+        ),
+    );
+    let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
+    let (manifest, _) = load(&root).expect("loads");
+    assert!(manifest.scopes.contains_key("rust"), "scope reached");
+    assert!(manifest.probes.contains_key("toolchain"), "probe reached");
+    assert_eq!(names(&manifest), vec!["cargo test"], "command reached");
+}
+
+#[test]
+fn command_order_is_host_first_then_imports_depth_first() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(dir.path(), "nested.yaml", "commands:\n  - name: nested\n");
+    write(
+        dir.path(),
+        "a.yaml",
+        "commands:\n  - name: a\nimports: [nested.yaml]\n",
+    );
+    write(dir.path(), "b.yaml", "commands:\n  - name: b\n");
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "commands:\n  - name: root\nimports: [a.yaml, b.yaml]\n",
+    );
+    let (manifest, _) = load(&root).expect("loads");
+    assert_eq!(
+        names(&manifest),
+        vec!["root", "a", "nested", "b"],
+        "host first, imports in listed order, nested import depth-first"
+    );
+}
+
+#[test]
+fn duplicate_scope_across_files_names_both() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(dir.path(), "frag.yaml", "scopes:\n  rust: [\"a/**\"]\n");
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "scopes:\n  rust: [\"b/**\"]\nimports: [frag.yaml]\n",
+    );
+    let err = load(&root).expect_err("duplicate scope across files");
+    let text = err.to_string();
+    assert!(text.contains("root.yaml"), "names root: {text}");
+    assert!(text.contains("frag.yaml"), "names fragment: {text}");
+    assert!(text.contains("rust"), "names the key: {text}");
+    assert!(matches!(err, Error::DuplicateScope { .. }));
+}
+
+#[test]
+fn duplicate_probe_across_files_names_both() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(
+        dir.path(),
+        "frag.yaml",
+        "probes:\n  toolchain:\n    run: \"echo a\"\n",
+    );
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "probes:\n  toolchain:\n    run: \"echo b\"\nimports: [frag.yaml]\n",
+    );
+    let err = load(&root).expect_err("duplicate probe across files");
+    let text = err.to_string();
+    assert!(text.contains("root.yaml"), "names root: {text}");
+    assert!(text.contains("frag.yaml"), "names fragment: {text}");
+    assert!(matches!(err, Error::DuplicateProbe { .. }));
+}
+
+#[test]
+fn duplicate_command_across_files_names_both() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(dir.path(), "frag.yaml", "commands:\n  - name: cargo test\n");
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "commands:\n  - name: cargo test\nimports: [frag.yaml]\n",
+    );
+    let err = load(&root).expect_err("duplicate command across files");
+    let text = err.to_string();
+    assert!(text.contains("root.yaml"), "names root: {text}");
+    assert!(text.contains("frag.yaml"), "names fragment: {text}");
+    assert!(matches!(err, Error::DuplicateCommandAcrossFiles { .. }));
+}
+
+#[test]
+fn a_policy_key_in_a_fragment_errors_naming_the_key_and_file() {
+    let cases = [
+        ("gitignore", "gitignore: false\n"),
+        ("cache_dir", "cache_dir: .cache\n"),
+        ("strict", "strict: []\n"),
+        ("on_hit", "on_hit: note\n"),
+    ];
+    for (key, line) in cases {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write(dir.path(), "frag.yaml", line);
+        let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
+        let err = load(&root).expect_err("policy key in a fragment is rejected");
+        let text = err.to_string();
+        assert!(text.contains(key), "names the key `{key}`: {text}");
+        assert!(text.contains("frag.yaml"), "names the fragment: {text}");
+        assert!(matches!(err, Error::FragmentPolicyKey { .. }));
+    }
+}
+
+#[test]
+fn the_same_policy_keys_in_the_root_do_not_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "gitignore: false\ncache_dir: .cache\nstrict: []\non_hit: note\ncommands: []\n",
+    );
+    let (manifest, _) = load(&root).expect("the root may set every policy key");
+    assert!(!manifest.gitignore);
+    assert_eq!(manifest.cache_dir, ".cache");
+    assert_eq!(manifest.on_hit.as_deref(), Some("note"));
+}
+
+#[test]
+fn a_fragment_invalid_alone_but_valid_merged_is_accepted() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let uses = write(
+        dir.path(),
+        "uses.yaml",
+        "commands:\n  - name: cargo test\n    inputs: [rust]\n",
+    );
+    write(
+        dir.path(),
+        "defines.yaml",
+        "scopes:\n  rust: [\"src/**\"]\n",
+    );
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "imports: [uses.yaml, defines.yaml]\n",
+    );
+
+    let alone: Manifest = serde_yaml_ng::from_str(&std::fs::read_to_string(&uses).expect("read"))
+        .expect("parses alone");
+    assert!(
+        alone.validate().is_err(),
+        "uses.yaml alone references an undeclared scope"
+    );
+
+    let (manifest, _) = load(&root).expect("valid once merged with the sibling that defines it");
+    assert_eq!(names(&manifest), vec!["cargo test"]);
+}
+
+#[test]
+fn a_merge_invalid_even_when_every_fragment_is_valid_alone_is_rejected() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(
+        dir.path(),
+        "scope.yaml",
+        "scopes:\n  shared: [\"src/**\"]\n",
+    );
+    write(
+        dir.path(),
+        "probe.yaml",
+        "probes:\n  shared:\n    run: \"echo x\"\n",
+    );
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "imports: [scope.yaml, probe.yaml]\n",
+    );
+
+    let scope_only: Manifest =
+        serde_yaml_ng::from_str("scopes:\n  shared: [\"src/**\"]\n").expect("parses");
+    scope_only.validate().expect("valid alone");
+    let probe_only: Manifest =
+        serde_yaml_ng::from_str("probes:\n  shared:\n    run: \"echo x\"\n").expect("parses");
+    probe_only.validate().expect("valid alone");
+
+    let err = load(&root).expect_err("a scope and a probe named `shared` collide once merged");
+    assert!(matches!(err, Error::NameCollision { .. }));
+}
+
+#[test]
+fn import_cycle_errors_with_the_chain() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(dir.path(), "a.yaml", "imports: [b.yaml]\n");
+    write(dir.path(), "b.yaml", "imports: [a.yaml]\n");
+    let root = write(dir.path(), "root.yaml", "imports: [a.yaml]\n");
+    let err = load(&root).expect_err("import cycle");
+    let text = err.to_string();
+    assert!(text.contains("root.yaml"), "chain starts at root: {text}");
+    assert!(text.contains("a.yaml"), "chain includes a: {text}");
+    assert!(text.contains("b.yaml"), "chain includes b: {text}");
+    assert!(matches!(err, Error::ImportCycle { .. }));
+}
+
+#[test]
+fn a_diamond_loads_once_and_does_not_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(dir.path(), "shared.yaml", "scopes:\n  rust: [\"src/**\"]\n");
+    write(
+        dir.path(),
+        "a.yaml",
+        "imports: [shared.yaml]\ncommands:\n  - name: a\n",
+    );
+    write(
+        dir.path(),
+        "b.yaml",
+        "imports: [shared.yaml]\ncommands:\n  - name: b\n",
+    );
+    let root = write(dir.path(), "root.yaml", "imports: [a.yaml, b.yaml]\n");
+    let (manifest, provenance) = load(&root).expect("a diamond loads once rather than erroring");
+    assert!(manifest.scopes.contains_key("rust"));
+    assert_eq!(names(&manifest), vec!["a", "b"]);
+    assert!(provenance.scopes.contains_key("rust"));
+}
+
+#[test]
+fn a_missing_import_file_errors_naming_the_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(dir.path(), "root.yaml", "imports: [ghost.yaml]\n");
+    let err = load(&root).expect_err("missing import file");
+    let text = err.to_string();
+    assert!(
+        text.contains("ghost.yaml"),
+        "names the missing path: {text}"
+    );
+    assert!(matches!(err, Error::ImportMissing { .. }));
+}
+
+#[test]
+fn a_missing_import_directory_errors_naming_the_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(dir.path(), "root.yaml", "imports: [conf.d/]\n");
+    let err = load(&root).expect_err("missing import directory");
+    let text = err.to_string();
+    assert!(text.contains("conf.d"), "names the missing path: {text}");
+    assert!(matches!(err, Error::ImportMissing { .. }));
+}
+
+#[test]
+fn an_empty_import_directory_is_accepted() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir_all(dir.path().join("conf.d")).expect("mkdir");
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "imports: [conf.d/]\ncommands: []\n",
+    );
+    let (manifest, _) = load(&root).expect("an empty declared directory is fine");
+    assert!(manifest.commands.is_empty());
+}
+
+#[test]
+fn a_directory_entry_sorts_lexically_and_ignores_non_yaml_files() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(dir.path(), "conf.d/b.yaml", "commands:\n  - name: b\n");
+    write(dir.path(), "conf.d/a.yml", "commands:\n  - name: a\n");
+    write(dir.path(), "conf.d/notes.txt", "not yaml\n");
+    let root = write(dir.path(), "root.yaml", "imports: [conf.d/]\n");
+    let (manifest, _) = load(&root).expect("directory expands");
+    assert_eq!(
+        names(&manifest),
+        vec!["a", "b"],
+        "a.yml sorts before b.yaml; notes.txt is ignored"
+    );
+}
+
+#[test]
+fn relative_paths_resolve_against_the_importing_file_not_the_root() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write(
+        dir.path(),
+        "sub/sibling.yaml",
+        "commands:\n  - name: sibling\n",
+    );
+    write(
+        dir.path(),
+        "sub/frag.yaml",
+        "imports: [sibling.yaml]\ncommands:\n  - name: frag\n",
+    );
+    let root = write(dir.path(), "root.yaml", "imports: [sub/frag.yaml]\n");
+    let (manifest, _) =
+        load(&root).expect("frag.yaml's own import resolves against sub/, not the root's dir");
+    assert_eq!(names(&manifest), vec!["frag", "sibling"]);
+}
+
+#[test]
+fn an_absolute_path_outside_the_project_root_loads() {
+    let project = tempfile::tempdir().expect("tempdir");
+    let outside = tempfile::tempdir().expect("tempdir");
+    let fragment = write(
+        outside.path(),
+        "rules.yaml",
+        "commands:\n  - name: outside\n",
+    );
+    let root = write(
+        project.path(),
+        "root.yaml",
+        &format!("imports: [{}]\n", fragment.display()),
+    );
+    let (manifest, _) = load(&root).expect("an absolute path is used as written");
+    assert_eq!(names(&manifest), vec!["outside"]);
+}
+
+#[test]
+fn provenance_records_the_root_as_source_of_its_own_entries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(
+        dir.path(),
+        "root.yaml",
+        "scopes:\n  rust: [\"src/**\"]\ncommands: []\n",
+    );
+    let (_, provenance) = load(&root).expect("loads");
+    assert_eq!(
+        provenance.scopes.get("rust"),
+        Some(&std::fs::canonicalize(&root).expect("canonicalize")),
+        "a single-file project is the degenerate case, not a special case"
+    );
+}
+
+#[test]
+fn provenance_records_a_fragment_as_source_of_its_own_entries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let fragment = write(dir.path(), "frag.yaml", "scopes:\n  rust: [\"src/**\"]\n");
+    let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
+    let (_, provenance) = load(&root).expect("loads");
+    assert_eq!(
+        provenance.scopes.get("rust"),
+        Some(&std::fs::canonicalize(&fragment).expect("canonicalize"))
+    );
+}
+
+#[test]
+fn provenance_display_is_root_relative_under_root_and_absolute_otherwise() {
+    let root = Path::new("/tmp/project");
+    let under = Path::new("/tmp/project/.mmz/conf.d/a.yaml");
+    let outside = Path::new("/nix/store/xyz/rules.yaml");
+    assert_eq!(Provenance::display(under, root), ".mmz/conf.d/a.yaml");
+    assert_eq!(
+        Provenance::display(outside, root),
+        "/nix/store/xyz/rules.yaml"
+    );
+}
+
+#[test]
+fn no_imports_key_produces_the_same_model_as_a_direct_parse() {
+    let body = concat!(
+        "scopes:\n  rust: [\"src/**\"]\n",
+        "probes:\n  toolchain:\n    run: \"echo hi\"\n",
+        "commands:\n  - name: cargo test\n    inputs: [rust, toolchain]\n",
+        "gitignore: false\n",
+        "cache_dir: .cache/mmz\n",
+        "on_hit: note\n",
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(dir.path(), "root.yaml", body);
+    let (composed, _) = load(&root).expect("loads");
+    let direct: Manifest = serde_yaml_ng::from_str(body).expect("parses");
+    direct.validate().expect("validates");
+
+    assert_eq!(
+        composed.scopes.keys().collect::<Vec<_>>(),
+        direct.scopes.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        composed.probes.keys().collect::<Vec<_>>(),
+        direct.probes.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(names(&composed), names(&direct));
+    assert_eq!(composed.gitignore, direct.gitignore);
+    assert_eq!(composed.cache_dir, direct.cache_dir);
+    assert_eq!(composed.on_hit, direct.on_hit);
+}
+
+#[test]
+fn no_imports_key_reproduces_every_existing_validation_error_message() {
+    let cases = [
+        "commands:\n  - name: \"  \"\n",
+        "commands:\n  - name: sh\n  - name: sh\n",
+        "commands:\n  - name: sh\n    inputs: [ghost]\n",
+        "commands:\n  - name: sh\n    tags: [gate, gate]\n",
+        "commands:\n  - name: sh\n    outputs: [\"target/*.info\"]\n",
+    ];
+    for body in cases {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = write(dir.path(), "root.yaml", body);
+        let composed_err = load(&root)
+            .expect_err("still invalid once merged")
+            .to_string();
+
+        let direct: Manifest = serde_yaml_ng::from_str(body).expect("parses");
+        let direct_err = direct
+            .validate()
+            .expect_err("still invalid directly")
+            .to_string();
+
+        assert_eq!(composed_err, direct_err, "identical message for: {body}");
+    }
+}
+
+#[test]
+fn no_imports_key_keeps_deny_unknown_fields_as_a_parse_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(dir.path(), "root.yaml", "commands: []\nbogus: 1\n");
+    let err = load(&root).expect_err("unknown top-level field is rejected");
+    assert!(matches!(err, Error::ManifestParse { .. }));
+}

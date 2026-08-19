@@ -235,6 +235,82 @@ pub enum Error {
     /// An invariant that should hold by construction did not.
     #[error("internal error: {0}")]
     Internal(String),
+
+    /// A path named by `imports:` does not exist.
+    #[error("import in {importer} names `{path}`, which does not exist")]
+    ImportMissing {
+        /// The file whose `imports:` list named the missing path.
+        importer: PathBuf,
+        /// The resolved path (directory or file) that was not found.
+        path: PathBuf,
+    },
+
+    /// A path named by `imports:` exists but could not be read.
+    ///
+    /// Named so this cannot be confused with [`Error::Io`]'s pathless message —
+    /// the root manifest keeps using that generic variant, since a missing or
+    /// unreadable root manifest is not a new failure mode this feature adds.
+    #[error("failed to read import {path}: {source}")]
+    ImportNotReadable {
+        /// The unreadable path.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+
+    /// An `imports:` chain leads back to a file already being loaded.
+    #[error("import cycle: {chain}")]
+    ImportCycle {
+        /// The chain of files, root first, ending back at the repeated path.
+        chain: String,
+    },
+
+    /// Two different files each declare a scope with the same name.
+    #[error("scope `{name}` is declared in both {first} and {second}")]
+    DuplicateScope {
+        /// The name declared twice.
+        name: String,
+        /// The file that declared it first.
+        first: PathBuf,
+        /// The file that declared it again.
+        second: PathBuf,
+    },
+
+    /// Two different files each declare a probe with the same name.
+    #[error("probe `{name}` is declared in both {first} and {second}")]
+    DuplicateProbe {
+        /// The name declared twice.
+        name: String,
+        /// The file that declared it first.
+        first: PathBuf,
+        /// The file that declared it again.
+        second: PathBuf,
+    },
+
+    /// Two different files each declare a command rule with the same `name`.
+    ///
+    /// [`Error::DuplicateCommand`] keeps its single-file message unchanged, so
+    /// a manifest with no imports sees no change; this is the cross-file
+    /// spelling, naming both files.
+    #[error("command `{name}` is declared in both {first} and {second}")]
+    DuplicateCommandAcrossFiles {
+        /// The command name declared twice.
+        name: String,
+        /// The file that declared it first.
+        first: PathBuf,
+        /// The file that declared it again.
+        second: PathBuf,
+    },
+
+    /// An imported file (not the root manifest) sets a key that only the root
+    /// manifest may set (`cache_dir`, `gitignore`, `strict`, `on_hit`).
+    #[error("`{key}` is set in {path}, but may only be set in the root manifest")]
+    FragmentPolicyKey {
+        /// The offending top-level key.
+        key: String,
+        /// The fragment that set it.
+        path: PathBuf,
+    },
 }
 
 /// Convenience alias for fallible operations in this crate.
