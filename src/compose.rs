@@ -17,11 +17,11 @@
 //!   *different* files is [`Error::DuplicateCommandAcrossFiles`]; the same name
 //!   twice in *one* file is still [`Error::DuplicateCommand`], caught by
 //!   [`Manifest::validate`] exactly as it is today.
-//! - `cache_dir`, `gitignore`, `strict` and `on_hit` are root-manifest-only;
-//!   any of them in an imported file is [`Error::FragmentPolicyKey`]. A
+//! - `cache_dir`, `gitignore`, `strict` and `on_hit` are root-manifest-only,
+//!   set or explicit `null` alike (see [`double_option`]); either is
+//!   [`Error::FragmentPolicyKey`] in an imported file. A
 //!   [`crate::manifest::Command`]'s own `on_hit` is unaffected — different key.
-//! - `imports` itself never reaches the merged [`Manifest`]; it is consumed
-//!   here.
+//! - `imports` itself never reaches the merged [`Manifest`]; it is consumed.
 //!
 //! # Paths
 //!
@@ -49,7 +49,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
 use crate::manifest::{
@@ -90,9 +90,9 @@ impl Provenance {
 
 /// One manifest file's own declarations, before merge.
 ///
-/// Shaped like [`Manifest`], but every root-only policy field is `Option` so
-/// the loader can tell "this file wrote `gitignore: true`" from "this file
-/// said nothing" — the distinction [`Error::FragmentPolicyKey`] depends on.
+/// Shaped like [`Manifest`], but every root-only policy field is the
+/// double-`Option` idiom ([`double_option`]) rather than a plain `Option<T>`,
+/// which cannot tell "absent" from "present and explicitly `null`" apart.
 /// `deny_unknown_fields` applies here exactly as it does on [`Manifest`], so a
 /// fragment's syntax is validated per file, same as the root.
 #[derive(Debug, Deserialize)]
@@ -106,14 +106,26 @@ struct Document {
     probes: BTreeMap<String, Probe>,
     #[serde(default)]
     commands: Vec<Command>,
-    #[serde(default)]
-    gitignore: Option<bool>,
-    #[serde(default)]
-    cache_dir: Option<String>,
-    #[serde(default)]
-    strict: Option<StrictPolicy>,
-    #[serde(default)]
-    on_hit: Option<String>,
+    #[serde(default, deserialize_with = "double_option")]
+    gitignore: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "double_option")]
+    cache_dir: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    strict: Option<Option<StrictPolicy>>,
+    #[serde(default, deserialize_with = "double_option")]
+    on_hit: Option<Option<String>>,
+}
+
+/// Deserializes a field as `Option<Option<T>>`, wrapping a present key —
+/// `null` or a value — in `Some`; `#[serde(default)]` handles absence. The
+/// standard double-`Option` idiom for telling "omitted" from "explicitly
+/// null" apart, which a plain `Option<T>` field cannot.
+fn double_option<'de, D, T>(deserializer: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::deserialize(deserializer).map(Some)
 }
 
 /// Accumulates the merge across the whole import tree: the current chain (for
@@ -130,8 +142,8 @@ struct MergeState {
 }
 
 impl MergeState {
-    /// Folds one file's own scopes, probes and commands into the merge,
-    /// tagging each with `source`.
+    /// Folds one file's scopes, probes and commands into the merge, tagging each
+    /// with `source`.
     ///
     /// # Errors
     ///
@@ -171,14 +183,12 @@ impl MergeState {
     }
 
     /// Resolves and visits every entry in `importer`'s `imports:` list, in
-    /// order, folding each target's own declarations into the merge before
-    /// moving to the next entry — the depth-first half of "host first, then
-    /// imports depth-first".
+    /// order — the depth-first half of "host first, then imports depth-first".
     ///
     /// # Errors
     ///
     /// Returns [`Error::ImportMissing`] for a path that does not exist, or
-    /// propagates any error from loading a target fragment.
+    /// propagates an error from loading a target fragment.
     fn visit_imports(&mut self, importer: &Path, imports: &[String]) -> Result<()> {
         let base_dir = importer
             .parent()
@@ -191,12 +201,10 @@ impl MergeState {
         Ok(())
     }
 
-    /// Loads one fragment file: cycle- and diamond-checks it, reads and
-    /// parses it, rejects any root-only policy key, then absorbs its own
-    /// declarations before recursing into its own `imports:`.
-    ///
-    /// A path already on the current stack is a cycle; a path already fully
-    /// loaded but not on the stack is a diamond and is skipped silently.
+    /// Loads one fragment: cycle- and diamond-checks it, reads and parses it,
+    /// rejects any root-only policy key, then absorbs its declarations before
+    /// recursing into its own `imports:`. A path already on the stack is a
+    /// cycle; already loaded but off the stack is a diamond, skipped silently.
     ///
     /// # Errors
     ///
@@ -250,17 +258,20 @@ impl MergeState {
 /// any file in the chain fails to parse, an import error
 /// ([`Error::ImportMissing`], [`Error::ImportNotReadable`],
 /// [`Error::ImportCycle`], [`Error::DuplicateScope`], [`Error::DuplicateProbe`],
-/// [`Error::DuplicateCommandAcrossFiles`], [`Error::FragmentPolicyKey`]), or a
-/// validation error from [`Manifest::validate`].
+/// [`Error::DuplicateCommandAcrossFiles`], [`Error::FragmentPolicyKey`],
+/// [`Error::NullPolicyKey`]), or a validation error from [`Manifest::validate`].
 pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
     let text = fs::read_to_string(path)?;
     let document = parse_text(&text, path)?;
     let canonical = fs::canonicalize(path)?;
 
-    let gitignore = document.gitignore.unwrap_or_else(default_gitignore);
-    let cache_dir = document.cache_dir.unwrap_or_else(default_cache_dir);
-    let strict = document.strict.unwrap_or_else(StrictPolicy::all);
-    let on_hit = document.on_hit;
+    let gitignore = require_or_default(document.gitignore, "gitignore", path, default_gitignore)?;
+    let cache_dir = require_or_default(document.cache_dir, "cache_dir", path, default_cache_dir)?;
+    let strict = require_or_default(document.strict, "strict", path, StrictPolicy::all)?;
+    // Unlike the other three, an explicit `on_hit: null` in the root has
+    // always been legal — `Manifest::on_hit` is `Option<String>` — so it
+    // collapses to `None` exactly like an absent key, not an error.
+    let on_hit = document.on_hit.flatten();
 
     let mut state = MergeState::default();
     state.stack.push(canonical.clone());
@@ -301,6 +312,30 @@ pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
     ))
 }
 
+/// Resolves one root-only policy field's double-`Option`: absent uses
+/// `default`, a value is used as written, and an explicit `null` is
+/// [`Error::NullPolicyKey`] rather than falling through to `default` — an
+/// author who wrote `gitignore:` meaning `false` must not silently get `true`.
+///
+/// # Errors
+///
+/// Returns [`Error::NullPolicyKey`] naming `key` and `path` on `Some(None)`.
+fn require_or_default<T>(
+    value: Option<Option<T>>,
+    key: &str,
+    path: &Path,
+    default: impl FnOnce() -> T,
+) -> Result<T> {
+    match value {
+        None => Ok(default()),
+        Some(None) => Err(Error::NullPolicyKey {
+            key: key.to_owned(),
+            path: path.to_path_buf(),
+        }),
+        Some(Some(resolved)) => Ok(resolved),
+    }
+}
+
 /// Parses `text` (read from `path`) into a [`Document`], naming `path` on
 /// failure — always the file actually being parsed, root or fragment, so a
 /// syntax error inside a fragment never gets blamed on the root manifest.
@@ -312,12 +347,14 @@ fn parse_text(text: &str, path: &Path) -> Result<Document> {
 }
 
 /// Rejects a fragment that sets a root-only policy key, naming the first one
-/// found and the fragment that set it.
+/// found and the fragment that set it. `is_some` on the outer double-`Option`
+/// is exactly "present", so `gitignore:` (explicit `null`) is caught here just
+/// as `gitignore: true` is — presence is the rule, not the value.
 ///
 /// # Errors
 ///
 /// Returns [`Error::FragmentPolicyKey`] if any of `gitignore`, `cache_dir`,
-/// `strict` or `on_hit` is present.
+/// `strict` or `on_hit` is present, `null` included.
 fn check_no_policy_keys(document: &Document, path: &Path) -> Result<()> {
     let present = [
         ("gitignore", document.gitignore.is_some()),

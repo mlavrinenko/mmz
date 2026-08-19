@@ -322,7 +322,8 @@ fn exit_for(err: &Error) -> u8 {
         | Error::DuplicateScope { .. }
         | Error::DuplicateProbe { .. }
         | Error::DuplicateCommandAcrossFiles { .. }
-        | Error::FragmentPolicyKey { .. } => 4,
+        | Error::FragmentPolicyKey { .. }
+        | Error::NullPolicyKey { .. } => 4,
         Error::MissingOutput { .. } => 5,
         Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
         Error::Spawn { .. } => 127,

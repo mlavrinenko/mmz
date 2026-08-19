@@ -311,6 +311,23 @@ pub enum Error {
         /// The fragment that set it.
         path: PathBuf,
     },
+
+    /// The root manifest set a policy key (`gitignore`, `cache_dir` or
+    /// `strict`) to explicit YAML `null`.
+    ///
+    /// Before composition existed these were plain, non-nullable fields, so
+    /// `null` was a hard parse error; composition's shared per-file parser
+    /// has to accept a present-but-null key so a *fragment* setting one is
+    /// still caught by [`Error::FragmentPolicyKey`]. That means the root's
+    /// own explicit null cannot be allowed to fall through to the default
+    /// silently — it must still fail, just later.
+    #[error("`{key}` is `null` in {path}; omit it to use the default, or give it a value")]
+    NullPolicyKey {
+        /// The key set to `null`.
+        key: String,
+        /// The root manifest that set it.
+        path: PathBuf,
+    },
 }
 
 /// Convenience alias for fallible operations in this crate.

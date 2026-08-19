@@ -153,6 +153,58 @@ fn the_same_policy_keys_in_the_root_do_not_error() {
     assert_eq!(manifest.on_hit.as_deref(), Some("note"));
 }
 
+/// A present-but-`null` policy key is still *setting* the key, not omitting
+/// it: `Option<T>` alone cannot tell "absent" from "explicit null" apart, and
+/// the fragment check must not let a bare `gitignore:` slip through where
+/// `gitignore: false` would have been caught.
+#[test]
+fn an_explicit_null_policy_key_in_a_fragment_is_still_treated_as_set() {
+    for key in ["gitignore", "cache_dir", "strict", "on_hit"] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write(dir.path(), "frag.yaml", &format!("{key}:\n"));
+        let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
+        let err = load(&root).expect_err("an explicit null still sets the key");
+        let text = err.to_string();
+        assert!(text.contains(key), "names the key `{key}`: {text}");
+        assert!(text.contains("frag.yaml"), "names the fragment: {text}");
+        assert!(
+            matches!(err, Error::FragmentPolicyKey { .. }),
+            "for `{key}`: {err}"
+        );
+    }
+}
+
+/// `gitignore`, `cache_dir` and `strict` are not nullable manifest fields —
+/// before composition, `null` on any of them was a hard parse error. Falling
+/// through to the default instead would be a silent behaviour change: a
+/// `gitignore:` written to mean `false` (the artifact-scope escape hatch)
+/// must not quietly resolve to `true` and start filtering inputs nobody
+/// hashed. The exact error variant is not the point here — only that the
+/// manifest is rejected outright, never resolved to any particular value.
+#[test]
+fn an_explicit_null_gitignore_cache_dir_or_strict_in_the_root_is_rejected() {
+    for key in ["gitignore", "cache_dir", "strict"] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = write(dir.path(), "root.yaml", &format!("{key}:\ncommands: []\n"));
+        load(&root).expect_err(&format!(
+            "an explicit null `{key}` in the root must fail closed, not default silently"
+        ));
+    }
+}
+
+/// `on_hit` is the one policy key that was already `Option<String>` on
+/// [`Manifest`] before composition existed, so `on_hit:` (null) in the root
+/// has always meant "no `on_hit`" — exactly like omitting the key. Composition
+/// must not regress this into an error just because the other three keys now
+/// reject an explicit null.
+#[test]
+fn an_explicit_null_on_hit_in_the_root_stays_valid_and_means_none() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = write(dir.path(), "root.yaml", "on_hit:\ncommands: []\n");
+    let (manifest, _) = load(&root).expect("on_hit: null has always been legal in the root");
+    assert_eq!(manifest.on_hit, None);
+}
+
 #[test]
 fn a_fragment_invalid_alone_but_valid_merged_is_accepted() {
     let dir = tempfile::tempdir().expect("tempdir");
