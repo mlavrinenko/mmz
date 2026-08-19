@@ -66,6 +66,7 @@ the page at `/<stem>/` is `www/content/<stem>.typ`.
   [Rule matching, cache identity, parametric rules], www-link("/matching/"),
   [Declared outputs and voided records], www-link("/outputs/"),
   [Tags and `--is-fresh` gating], www-link("/gating/"),
+  [Composing one manifest from several files], www-link("/composition/"),
   [Every manifest key], www-link("/manifest/"),
   [Every action and exit code], www-link("/cli/"),
   [Driving `mmz` as an agent], www-link("/agents/"),

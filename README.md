@@ -61,6 +61,7 @@ Broaden the scope when in doubt. `mmz` fails closed everywhere else: a missing o
 - [Matching and parametric rules](https://mlavrinenko.github.io/mmz/matching/) — How an invocation is matched to a rule, how the cache identity follows from that, and how one rule can fan over a scope's files.
 - [Declared outputs](https://mlavrinenko.github.io/mmz/outputs/) — A producer command's record can be undone without touching an input. Declaring what a run leaves behind is how mmz notices.
 - [Gating with tags](https://mlavrinenko.github.io/mmz/gating/) — Use --is-fresh to require that an expensive check already passed, and tags to decide which rules a gate is allowed to ask about.
+- [Composing a manifest from imports](https://mlavrinenko.github.io/mmz/composition/) — Why imports: merges files instead of overriding them, the one path rule that trips everyone the first time, and how to debug what a composed manifest actually resolved to.
 - [Manifest reference](https://mlavrinenko.github.io/mmz/manifest/) — Every key .mmz/config.yaml can declare, generated from the JSON Schema the binary ships.
 - [CLI reference](https://mlavrinenko.github.io/mmz/cli/) — Every action mmz accepts, every exit code it returns, and the JSON it can be asked for — generated from the binary's own help text.
 - [Rust library](https://mlavrinenko.github.io/mmz/library/) — mmz ships as a library crate as well as a binary; the binary is a thin wrapper over it.

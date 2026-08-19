@@ -20,8 +20,11 @@
 // and cannot carry prose for a key that no longer exists.
 
 `mmz` reads the nearest `.mmz/config.yaml`, searching upward from the working
-directory. The directory holding `.mmz` is the project root, and every relative
-path in the manifest resolves against it.
+directory, plus whatever it names in a top-level `imports:` list — see
+#link(u("/composition/"))[composing a manifest from imports]. The directory
+holding `.mmz` is the project root, and every relative path in the manifest
+resolves against it, except an `imports:` entry itself, which resolves against
+the *importing file's* directory.
 
 #listing("demo-config.yaml", lang: "yaml")
 

@@ -59,7 +59,14 @@
   (title: "Start", items: ("/", "/quickstart/")),
   (
     title: "Guide",
-    items: ("/concepts/", "/inputs/", "/matching/", "/outputs/", "/gating/"),
+    items: (
+      "/concepts/",
+      "/inputs/",
+      "/matching/",
+      "/outputs/",
+      "/gating/",
+      "/composition/",
+    ),
   ),
   (title: "Reference", items: ("/manifest/", "/cli/", "/library/")),
   (title: "More", items: ("/agents/", "/comparison/")),
