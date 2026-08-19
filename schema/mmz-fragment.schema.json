@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mlavrinenko/mmz/main/schema/mmz-fragment.schema.json",
+  "title": "mmz fragment",
+  "description": "Configuration for a file named in a manifest's imports: list. A fragment declares scopes, probes and commands, and may itself import; it may not set cache_dir, gitignore, strict or on_hit — those are root-manifest-only policy keys, and setting one in a fragment is a load error.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "imports": {
+      "description": "Paths to other YAML files whose scopes, probes and commands are merged into this one. A directory entry expands to every *.yaml and *.yml file directly inside it (not recursive), sorted lexically; a missing file or directory is an error, an empty directory is not. Relative paths resolve against the directory of the file that names them, not the project root, so a fragment can reference a sibling fragment; absolute paths (store paths included) are used as written. A fragment may declare imports of its own. A key declared in two files is an error naming both; cache_dir, gitignore, strict and on_hit may only be set in the root manifest.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "scopes": {
+      "description": "Named glob sets, each referenced by command rules. A scope is either an array of patterns, or an object naming those patterns under globs alongside a per-scope gitignore override.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "array",
+            "description": "The scope's patterns; the manifest-level gitignore setting applies.",
+            "items": { "type": "string" }
+          },
+          {
+            "type": "object",
+            "description": "The scope's patterns plus an optional per-scope gitignore override.",
+            "additionalProperties": false,
+            "required": ["globs"],
+            "properties": {
+              "globs": {
+                "type": "array",
+                "description": "The scope's patterns. At least one is required; use the array form when there is no override to declare.",
+                "minItems": 1,
+                "items": { "type": "string" }
+              },
+              "gitignore": {
+                "type": "boolean",
+                "description": "Overrides the manifest-level gitignore for this scope only; omit to inherit it. Set false for a scope naming build artifacts: they live in git-ignored paths by definition, so under the filter the scope resolves empty and the rules referencing it are fresh forever."
+              }
+            }
+          }
+        ]
+      }
+    },
+    "probes": {
+      "description": "Named commands whose stdout is an input. A rule's inputs references a probe by name exactly as it references a scope, and the hash of the probe's stdout joins that rule's input digest — which is how a rule depends on part of a file (one recipe body out of a Justfile) or on something that is not a file at all (a toolchain fingerprint). One namespace with scopes: a probe sharing a name with a scope is a manifest error. A probe is resolved once per mmz invocation, however many rules name it. Weigh the trade before reaching for one: a wrong scope costs time, a wrong probe can lie.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run"],
+        "properties": {
+          "run": {
+            "type": "string",
+            "description": "The command line whose stdout is hashed, run by `sh -c` from the project root with stdin closed. A non-zero exit is a hard error naming the probe, its exit code, and its stderr: mmz exits without consuming the output and without writing a record, so a failed command never reaches the hasher. A probe that cannot be spawned is the same error. Content correctness and determinism are the manifest author's, not mmz's — pin the ordering, strip the timestamps, and assert the shape inside the probe (jq -e, a schema check) so a bad shape becomes a non-zero exit."
+          },
+          "allow_empty": {
+            "type": "boolean",
+            "default": false,
+            "description": "Accept stdout that is empty (or only whitespace) as a valid input. By default it is an error, because it is the cheapest catch for a selector that matched nothing."
+          }
+        }
+      }
+    },
+    "commands": {
+      "description": "Ordered command rules; the first token-prefix match wins.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Matcher and the cache identity. A single {scope} macro (one whitespace token, possibly embedded like --file={scope}) fans the rule over that scope's files: one per-file cache record per matched file, each keyed by the expanded name and scoped to that file plus the shared `inputs` pins."
+          },
+          "inputs": {
+            "type": "array",
+            "description": "Input names, each either a scope (whose globs union into this rule's file set) or a probe (whose stdout hash joins its digest) — one namespace, written identically. For a parametric rule these are the shared pins added to every per-file record; keep the fan scope out of them.",
+            "items": { "type": "string" }
+          },
+          "outputs": {
+            "type": "array",
+            "description": "Literal artifact paths a successful run of this command is expected to produce, relative to the project root. The rule is fresh only when its inputs still hash the same AND every declared output exists, so an artifact deleted out from under a record (cargo clean, a fresh clone, a pruned target/) voids that record instead of leaving the rule fresh with nothing to show for it. Existence only — an output is never hashed. Each path is stat-ed, never walked, so the gitignore filter never applies to it and an artifact under an ignored tree needs no opt-out. Patterns are rejected at load: a glob here would never match. A run that exits 0 without producing a declared output is a hard error (exit 5) and records nothing.",
+            "items": { "type": "string" }
+          },
+          "match": {
+            "type": "string",
+            "enum": ["prefix", "exact"],
+            "default": "prefix",
+            "description": "How name matches argv. prefix (default): name's tokens are a leading slice of the command. exact: the whole command equals name's tokens."
+          },
+          "tags": {
+            "type": "array",
+            "description": "Free-form labels for filtering with `mmz --is-fresh --tag <tag>` (and `--status --tag <tag>`); repeat --tag to require every listed tag (AND). A rule with no tags never matches a --tag filter. Each tag is trimmed and blank entries are dropped; duplicates within one rule are rejected.",
+            "items": { "type": "string" }
+          },
+          "on_hit": {
+            "type": "string",
+            "description": "Overrides the top-level on_hit for this rule. An empty string suppresses the cache-hit notice."
+          }
+        }
+      }
+    }
+  }
+}

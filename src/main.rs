@@ -25,6 +25,7 @@ Usage:
                                       exit 0 if cmd's rule (or every/tagged rule) is fresh; runs nothing
     mmz --prune                       delete cache records whose rule no longer exists
     mmz --schema                      print the config JSON Schema
+    mmz --schema=fragment             print the JSON Schema for an imported fragment
     mmz --version                     print version
     mmz --help                        print this help
     mmz -- <command> [args]           run a command whose name begins with a dash
@@ -81,7 +82,9 @@ fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
     match first {
         "--version" | "-V" => Some(meta(rest, &format!("mmz {VERSION}\n"))),
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
-        "--schema" => Some(meta(rest, mmz::schema::SCHEMA)),
+        schema if schema == "--schema" || schema.starts_with("--schema=") => {
+            Some(run_schema(schema, rest))
+        }
         "--init" => Some(run_init(rest)),
         "--prune" => Some(run_prune(rest)),
         "--is-fresh" => Some(run_is_fresh(rest)),
@@ -127,6 +130,25 @@ fn run_prune(rest: &[String]) -> ExitCode {
     match mmz::prune::prune(&cwd) {
         Ok(text) => emit(&text),
         Err(err) => report_error(&err),
+    }
+}
+
+/// Handles `--schema` and `--schema=fragment`. `arg` is the full token, so its
+/// `=suffix` selects which document prints: the config manifest schema, or
+/// the narrower schema for a file its `imports:` names — see
+/// `mmz::schema` for how the two are kept from drifting apart.
+fn run_schema(arg: &str, rest: &[String]) -> ExitCode {
+    if !rest.is_empty() {
+        return usage("`--schema` takes no arguments");
+    }
+    let format = arg.strip_prefix("--schema").unwrap_or("");
+    match format {
+        "" => emit(mmz::schema::SCHEMA),
+        "=fragment" => emit(mmz::schema::FRAGMENT_SCHEMA),
+        other => usage(&format!(
+            "unknown `--schema` format `{}`; use fragment, or omit the suffix for the config schema",
+            other.trim_start_matches('=')
+        )),
     }
 }
 
