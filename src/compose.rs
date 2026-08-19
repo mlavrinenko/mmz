@@ -114,12 +114,18 @@ where
 
 /// Accumulates the merge across the whole import tree: the current chain (for
 /// cycle detection), the set of canonical paths already fully merged (for
-/// diamond skipping), and the entries collected so far, each tagged with its
-/// source file.
+/// diamond skipping), the order files were first visited in (for
+/// [`Provenance::sources`]), and the entries collected so far, each tagged
+/// with its source file.
 #[derive(Default)]
 struct MergeState {
     stack: Vec<PathBuf>,
     loaded: BTreeSet<PathBuf>,
+    /// Every visited file, root first, in first-visit order — `loaded` is a
+    /// `BTreeSet` for fast membership checks and sorts alphabetically, which
+    /// throws away the load order a source list needs, so this tracks it
+    /// separately rather than trying to recover it from `loaded`.
+    order: Vec<PathBuf>,
     scopes: BTreeMap<String, (Scope, PathBuf)>,
     probes: BTreeMap<String, (Probe, PathBuf)>,
     commands: Vec<(Command, PathBuf)>,
@@ -221,6 +227,7 @@ impl MergeState {
         check_no_policy_keys(&document, &canonical)?;
 
         self.stack.push(canonical.clone());
+        self.order.push(canonical.clone());
         self.absorb(
             &canonical,
             document.scopes,
@@ -263,6 +270,7 @@ pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
 
     let mut state = MergeState::default();
     state.stack.push(canonical.clone());
+    state.order.push(canonical.clone());
     state.absorb(
         &canonical,
         document.scopes,
@@ -293,6 +301,7 @@ pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
     Ok((
         manifest,
         Provenance {
+            sources: state.order,
             scopes: scope_sources,
             probes: probe_sources,
             commands: command_sources,

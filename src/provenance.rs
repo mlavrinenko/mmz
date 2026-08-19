@@ -28,6 +28,13 @@ use std::path::{Path, PathBuf};
 /// should see it.
 #[derive(Debug, Clone, Default)]
 pub struct Provenance {
+    /// Every file that contributed to the merge, in load order: the root
+    /// manifest first, then each import depth-first — the same order
+    /// `imports:` lists them in. A file reached twice by different routes (a
+    /// diamond) appears once, at the point it was first visited, matching the
+    /// "loads once" rule for diamonds themselves. `mmz --dump-config` numbers
+    /// this list to show the import graph before the entries it fed.
+    pub sources: Vec<PathBuf>,
     /// Source file of each scope, keyed by scope name.
     pub scopes: BTreeMap<String, PathBuf>,
     /// Source file of each probe, keyed by probe name.

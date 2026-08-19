@@ -104,6 +104,25 @@
       own `# yaml-language-server: $schema=…` line here.
     ],
   ),
+  "--dump-config": (
+    summary: [Print the manifest mmz actually assembled, with the source file
+      of every scope, probe and command.],
+    detail: [
+      Leads with the source list in load order, so the import graph is
+      visible before the entries it fed are. Read-only, and prints the merged
+      model only *after* validation — it is not a debugging aid for a
+      manifest that fails to merge; that error already names both files.
+    ],
+  ),
+  "--dump-config=json": (
+    summary: [The same dump as JSON, with a `source` on every scope, probe and
+      command.],
+    detail: [
+      Aimed at a gate hook: a generator that emits a fragment can assert the
+      fragment it wrote is the one actually in effect, not merely present on
+      disk.
+    ],
+  ),
   "--version": (summary: [Print the version.]),
   "--help": (summary: [Print the usage text, including the exit-code table.]),
 )
