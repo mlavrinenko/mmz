@@ -68,16 +68,21 @@ groups:
       - CHANGELOG.md
 
   # The Justfile is the gate surface. Its recipes are mirrored three ways that
-  # no generator closes: each gate's prose, the .mmz/config.yaml rule that
+  # no generator closes: each gate's prose, the .mmz/conf.d/ fragment that
   # memoizes it (rule name = `just <recipe>`, plus the probe pinning its body),
-  # and the deep dive arguing the wiring.
+  # and the deep dive arguing the wiring. All three conf.d fragments are listed
+  # — not .mmz/config.yaml itself, which holds only policy and the `imports:`
+  # list since composition split the rules out — because any of the three
+  # could be the one that grew or dropped a rule for a Justfile change.
   - name: gates
     source:
       - Justfile
       - .just/docs.just
     dependents:
       - www/utils/gate-notes.typ
-      - .mmz/config.yaml
+      - .mmz/conf.d/10-rust.yaml
+      - .mmz/conf.d/20-docs.yaml
+      - .mmz/conf.d/30-repo.yaml
       - docs/src/contributing/gates.typ
 
   # The gate scripts and the doc generators define the pipeline that

@@ -90,8 +90,21 @@ A gate is wired in three places, and the build fails if you stop at two:
 
 1. The recipe carries `[group("gate")]` and a `[doc(...)]` string.
 2. `check`'s dependency list names it, as `(memo "<name>")`.
-3. `.mmz/config.yaml` declares a rule named `just <name>`, tagged `gate`, with
-  the scopes and probe that gate really reads.
+3. The right fragment under `.mmz/conf.d/` declares a rule named
+  `just <name>`, tagged `gate`, with the scopes and probe that gate really
+  reads.
+
+`.mmz/config.yaml` itself never grows a rule for this — it holds policy and the
+`imports:` list, nothing else, since
+#link("https://mlavrinenko.github.io/mmz/composition/")[composition] landed.
+Picking (3)'s fragment is picking which concern the gate belongs to:
+`.mmz/conf.d/10-rust.yaml` for a gate reading Rust sources or the toolchain,
+`.mmz/conf.d/20-docs.yaml` for the docs pipeline, `.mmz/conf.d/30-repo.yaml`
+for a repo-wide script or drift check. A gate that needs a scope another
+fragment already declares references it by name rather than redeclaring it —
+a scope lives in exactly one file, and `mmz --dump-config` prints which. A
+gate that fits none of the three earns its own fragment; the numbering leaves
+room between and after the existing files.
 
 Miss (1) or (2) and `www/gates.jq` halts naming both sides — membership is
 derived from the group tag and cross-checked against the dependency list,
