@@ -12,7 +12,7 @@
     related("mmz-query-json-inputs-in-process-instead-of-shelling-out.typ")[what
       makes the lockfile half of this cost nothing],
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20),
 )
 
 == Summary
