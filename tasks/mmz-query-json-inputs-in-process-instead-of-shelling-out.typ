@@ -12,7 +12,11 @@
     related("mmz-the-close-gate-depends-on-which-just-is-on-path.typ")[where
       the cost of shelling out first showed up],
   ),
-  status: wip(2026, 8, 20),
+  status: done(
+    2026,
+    8,
+    20,
+  )[Shipped with jaq (1.41 MiB binary delta, under the 3 MB guardrail). Orchestrator verified end-to-end against the real flake.lock: per-node granularity holds (an unrelated node moving does not bust; the named node does), and all four refusals — null selection, empty selection, both sources, file without json — behave as specified.],
 )
 
 == Summary
