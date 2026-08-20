@@ -7,6 +7,8 @@
   links: (
     related("mmz-the-close-gate-depends-on-which-just-is-on-path.typ")[found
       while auditing that one's "add the toolchain to the input set" option],
+    related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[the general
+      form of this gap, which would subsume it],
   ),
   status: proposed(2026, 8, 20),
 )

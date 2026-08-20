@@ -33,5 +33,25 @@
 imports:
   - conf.d/                            # every *.yaml inside, lexical order
 
+# Deliberately unset. Every probe below shells out to `just` and `jq`, and a
+# probe resolves those through whatever PATH the caller had — so a bare
+# `mt done` outside the dev shell measures a different `just` than `just check`
+# recorded against. `probe_shell` is the key that closes that:
+#
+#   probe_shell: ["direnv", "exec", ".", "sh", "-c"]
+#
+# It is not set because neither candidate value is both cheap and available in
+# CI. Each distinct probe is its own process and there are eleven, so the
+# wrapper is paid eleven times per `mmz --is-fresh`: `direnv exec .` measures
+# 0.12s (~1.3s total), `nix develop --command` 4.4s (~48s total). The second
+# defeats the memoization this whole file exists to exploit. The first is
+# cheap, but CI runs `nix develop --command just check` with no direnv in the
+# dev shell, and `direnv exec` refuses an `.envrc` nobody allowed — so adopting
+# it means a CI step that trusts a checked-out `.envrc`.
+#
+# See tasks/mmz-adopt-probe-shell-in-this-repo-s-own-manifest.typ (cancelled,
+# with the numbers) before setting this. Until then the probes carry `jq -S`,
+# which closes the accidental half of the exposure but not this one.
+
 # Note printed to stderr on a cache hit, pulling the rule name from the record.
 on_hit: "mmz: skipped {cache:command} (inputs unchanged)"

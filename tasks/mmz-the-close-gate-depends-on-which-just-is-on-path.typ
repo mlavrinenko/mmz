@@ -7,6 +7,10 @@
   links: (
     related("mmz-just-machete-is-not-busted-by-a-dev-shell-bump.typ")[the
       under-declared gate found while auditing this one's fourth option],
+    related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[the
+      input-side answer to the same question this one asks about environment],
+    related("mmz-adopt-probe-shell-in-this-repo-s-own-manifest.typ")[the
+      deferred adoption of the key this one produced],
   ),
   status: proposed(2026, 8, 20),
 )

@@ -8,7 +8,11 @@
     related("mmz-the-close-gate-depends-on-which-just-is-on-path.typ")[the key
       exists because of that one; this is the half that dogfoods it],
   ),
-  status: proposed(2026, 8, 20),
+  status: cancelled(
+    2026,
+    8,
+    20,
+  )[Deferred: neither candidate value is both cheap and CI-available, and the direnv-allow-in-CI trust question is not one to settle as a side effect. The measurements stay on record here; \`.mmz/config.yaml\` carries a commented \`probe\_shell\` pointing back at this task.],
 )
 
 == Summary
