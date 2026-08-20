@@ -10,7 +10,11 @@
       + depends-on("mmz-dump-the-merged-manifest-with-provenance.typ")[the
         before/after proof runs through it]
   ),
-  status: wip(2026, 8, 20)[wave 5],
+  status: done(
+    2026,
+    8,
+    20,
+  )[merged; split proven behaviour-preserving against the same tree, is-fresh exits 0 with no re-run],
 )
 
 == Summary
@@ -57,7 +61,11 @@ leaves every existing cache record valid:
 + Capture `mmz --status=json` before the split.
 + Split.
 + `mmz --status=json` after must differ only by each rule's new `source`. Same
-  rules, same digests, same freshness — no rule re-runs.
+  rules, same digests, same freshness — no rule re-runs. *Sort both captures by
+  rule name before diffing.* `--status` lists rules in load order, which is
+  match-precedence order, and a split by concern reorders that on purpose — an
+  unsorted diff reports a difference on a correct split and reads as a
+  regression that is not there.
 + `mmz --is-fresh --tag gate` still exits 0 without running anything. If it
   does not, the split changed a rule's inputs and the diff says which.
 
