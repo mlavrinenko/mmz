@@ -16,33 +16,25 @@
 # Determinism: everything a capture carries that is not a function of the repo
 # is pinned rather than corrected afterwards. The clock comes from `$MMZ_NOW`
 # below, so a record's `ran_at` and `--status`'s ages are the binary's own
-# output and still identical build-to-build. That leaves TWO post-processing
-# seds, both on absolute paths (the fixture's temp location) rewritten to a
-# project-relative form; each is marked at its call site, and every other byte
-# in every capture is stdout as written.
+# output and still identical build-to-build. The fixture's temp location cannot
+# be pinned that way, so a capture naming it is marked `rel` at the call site and
+# every other byte is stdout as written — a convention no comment can enforce, so
+# check-capture-paths.sh at the end fails the build on a capture that still leaks.
 #
 # `just docs::gen` invokes this; docs::build / docs::serve / docs::check run it
 # first.
 #
-# Docs SSG gotchas (tola), learned building this generator:
-#   - `tola serve` caches its file index at startup: a brand-new generated/ file
-#     is not found by an already-running serve (pre-existing files read fine).
-#     Restart serve after adding a capture here; `tola build` (the gate path)
-#     always re-scans and is unaffected.
-#   - `tola validate` statically flags an `image("<path>")` string literal as a
-#     broken link when the target is not a copied asset. Anything built here is
-#     under generated/, which is never copied to public/, so a build-time image
-#     must be inlined via `image(read(path, encoding: none), …)` rather than by
-#     path. (No such image today; the rule is here before the first one.)
+# Two tola behaviours bite whoever edits this file — a serve that will not see a
+# brand-new capture, and an `image()` path that validate calls broken. Both are
+# written up under "Docs SSG gotchas" in docs/src/contributing/generated-docs.typ.
 set -eo pipefail
 
 # The clock every capture below is taken against: 2026-08-17T17:00:00Z. mmz
 # resolves it once per invocation and both stamps and renders from it, so a
-# record's `ran_at` and the ages in a `--status` table are fixed by this line
-# instead of by when the build ran. A run and the `--status` that follows it
-# share the pin, which is why every AGE reads `0s ago`; a capture that wanted to
-# show a genuinely aged record would run `MMZ_NOW=$((PINNED + 7200))` for that
-# one command.
+# record's `ran_at` and a `--status` table's ages are fixed by this line, not by
+# when the build ran. A run and the `--status` after it share the pin, which is
+# why every AGE reads `0s ago`; a capture wanting a genuinely aged record would
+# run `MMZ_NOW=$((PINNED + 7200))` for that one command.
 export MMZ_NOW=1786986000
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -128,6 +120,12 @@ gen_run() {
   "$MMZ" "$@" >"$OUT/$slug.txt" 2>&1
 }
 
+# Rewrite the fixture copy's absolute path out of a capture whose command names
+# the manifest by path: the copy lives under $TMPDIR, so those bytes differ on
+# every build. Opt-in per capture, the ONLY post-processing any capture gets, and
+# check-capture-paths.sh below refuses one that needed it and went without.
+rel() { sed -i "s#$COPY/#./#g" "$OUT/$1.txt"; }
+
 # The headline pair: the same command twice. The first runs and streams the
 # script's own output; the second prints the on_hit note and exits 0 having run
 # nothing.
@@ -139,6 +137,7 @@ gen_run run-report ./bin/report.sh
 gen_run status --status
 gen_run status-tag --status --tag report
 gen_run status-json --status=json
+rel status-json
 
 # A tag no rule carries — `gate` with one letter changed. The gate refuses it
 # (exit 7, hence the `|| true`) instead of passing over an empty selection,
@@ -146,10 +145,7 @@ gen_run status-json --status=json
 # the SAME typo, because the pair is the point: one asserts, one describes.
 gen_run is-fresh-empty-tag --is-fresh --tag gats || true
 gen_run status-empty-tag --status --tag gats
-# The second of the two normalizing seds (see the header): this report names the
-# manifest by path, and the copy lives in $TMPDIR, so the raw capture would carry
-# a different directory on every build.
-sed -i "s#$COPY/#./#" "$OUT/status-empty-tag.txt"
+rel status-empty-tag
 
 # A stale gate: edit an input, then ask. `--is-fresh` exits 1 here, which is the
 # whole point, so the `|| true` keeps `set -e` from treating the documented
@@ -194,5 +190,10 @@ bash "$SCRIPT_DIR/generate-facts.sh"
 # imports layout.typ -> site.typ -> crate-map.json (PKG_VERSION) plus every
 # capture written above. Its own file because this one is already long enough.
 bash "$SCRIPT_DIR/generate-site-pages.sh"
+
+# Last, over everything the three scripts wrote: no capture may name a directory
+# this build invented. The two mktemp roots are passed down by value — gone from
+# disk by now — so the check is exact about THIS run, not a guess at mktemp names.
+bash "$REPO/.just/scripts/check-capture-paths.sh" "$OUT" "$(dirname "$COPY")" "$INIT_DIR"
 
 echo "generate.sh: $(find "$OUT" -type f | wc -l) files under $OUT"

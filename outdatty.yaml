@@ -94,6 +94,7 @@ groups:
       - www/generate-facts.sh
       - www/generate-site-pages.sh
       - docs/generate-md.sh
+      - .just/scripts/check-capture-paths.sh
       - .just/scripts/check-doc-coverage.sh
       - .just/scripts/check-doc-facts.sh
       - .just/scripts/docs-md-check.sh

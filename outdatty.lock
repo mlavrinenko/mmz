@@ -14,15 +14,16 @@ groups:
       docs/src/contributing.typ: 88ac45a01f8e5c8c3fb10eacbb1c30a3a7873b5c2fa2e42d18e933a1a2cbb366
   docs-pipeline:
     source:
+      .just/scripts/check-capture-paths.sh: ef7de8ddaddbe3de6b805649ea1d29c512e7785e05fb93032133b52d4821dbee
       .just/scripts/check-doc-coverage.sh: 0a8722c438087bccb932b18b446c4e48c6ae38d0a28c28f3bd7307772b2495ea
       .just/scripts/check-doc-facts.sh: ce7b870531a41f876062f95f94cdc52a094b66f49bb39d94b62f7cb090e4eac3
       .just/scripts/docs-md-check.sh: 946444f2048c19a8075205ceae282048176d97d7ec51fb4cbc5a4746af0b6d08
       docs/generate-md.sh: fcebb5efa2271a4137c1bc30087fd2d2cc853a2e74569297511898557245ec87
       www/generate-facts.sh: 9b3e9b05c9162b026de18e81505ad8383a1a7fa581d86349b8e426b000c676a5
       www/generate-site-pages.sh: 7200a107f5b83e68573e1e4b3ac623d51e34ec7a5e171dc3877794aba55f80db
-      www/generate.sh: d900351bc3b18b2a35d9ecb4c8c04743cadfef5c0c1e3c8877c6d2e11d7797e0
+      www/generate.sh: 07abbbac4ae2b709867d41471a018361cdda5c61176468bce87f09e34a37f36f
     dependents:
-      docs/src/contributing/generated-docs.typ: dff4ffafa11c1cdf47654a3b765b49f4424444131c0aadee1abba4385b6611dc
+      docs/src/contributing/generated-docs.typ: e652d0b3ebe171b6cd364ca243d500227d2bacf78a49daf9cc89e27c3a47c0cb
   gates:
     source:
       .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a

@@ -81,10 +81,26 @@ needs both the facts and the captures already in place.
 A capture must also be the same bytes on every build, and the way to get that is
 to pin the input rather than to correct the output. `generate.sh` exports
 `MMZ_NOW`, so a record's `ran_at` and the ages in a `--status` table are the
-binary's own stdout and still identical run to run. One post-processing `sed`
-survives, on the fixture's absolute temp path. Reach for a new one only when
-nothing can be pinned instead: a normalized capture is a place where the docs
-and the binary are allowed to disagree.
+binary's own stdout and still identical run to run. Reach for post-processing
+only when nothing can be pinned instead: a normalized capture is a place where
+the docs and the binary are allowed to disagree.
+
+The fixture's location is the one input that cannot be pinned that way. The
+mutating captures run against a copy of `examples/demo` under `$TMPDIR`, so a
+command that prints a path — `--status=json` names the manifest — carries that
+build's `mktemp` directory verbatim, and `/tmp/tmp.BIg78u4JqB/demo/.mmz/config.yaml`
+is neither reproducible nor readable. A capture that names it is marked `rel` at
+its call site in `generate.sh`, which rewrites the copy's path to a
+project-relative one; every other byte is stdout as written.
+
+That marking is a convention, and a convention no gate reads is a leak waiting
+for the next path-printing capture. `.just/scripts/check-capture-paths.sh` runs
+last inside `generate.sh` and fails the build on any generated file still naming
+a temp directory — matching both `mktemp`'s own naming and, exactly, the two
+directories this run created and passed down. It is the one reader in the repo
+that distrusts a capture's bytes: #just.docs-check() builds the site and
+validates its links, #just.docs-md-check() diffs Markdown against its source, and
+neither can see inside stdout, because stdout is the thing being trusted.
 
 All three serialize on `target/www-generated.lock`, because #just.check() runs
 its arms in parallel and more than one of them is inside that directory at once.
@@ -155,6 +171,21 @@ longer exists, which reads as current and is worse.
 Read the notes dict by evaluating it, never by grepping quoted strings out of the
 file. The keys are Typst code, and a regex cannot tell a key from a word in a
 comment.
+
+= Working within tola
+
+Two behaviours of the SSG bite whoever edits a generator:
+
+- #strong[`tola serve` caches its file index at startup.] A brand-new
+  `www/generated/` file is invisible to an already-running serve, though
+  pre-existing ones read fine. Restart serve after adding a capture;
+  #just.docs-check() goes through `tola build`, which re-scans and is unaffected.
+- #strong[`tola validate` statically flags an `image("<path>")` string literal]
+  as a broken link when the target is not a copied asset. Everything the
+  generators write is under `generated/`, which is never copied to `public/`, so
+  a build-time image must be inlined via `image(read(path, encoding: none), …)`
+  rather than by path. No such image exists today; the rule is written down
+  before the first one.
 
 = Working within typlite
 
