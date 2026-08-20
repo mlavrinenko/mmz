@@ -12,7 +12,7 @@
     related("mmz-the-close-gate-depends-on-which-just-is-on-path.typ")[where
       the cost of shelling out first showed up],
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20),
 )
 
 == Summary

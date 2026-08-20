@@ -10,7 +10,7 @@
     related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[the general
       form of this gap, which would subsume it],
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20),
 )
 
 == Summary
