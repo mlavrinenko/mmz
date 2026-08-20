@@ -29,6 +29,22 @@ probes:
   # `nixpkgs-tools`, so `nix flake update nixpkgs` no longer re-runs the size and
   # drift gates. Under the whole-file flake.lock these two busted on every input
   # in the repo.
+  #
+  # Both recipes are nonetheless *launched* by `just`, which comes out of
+  # nixpkgs — so why is `nixpkgs-tools` absent? Because the rule this manifest
+  # applies is: declare the tool that produces the VERDICT, not the launcher
+  # that invokes it. linecop decides whether a file is too long; outdatty
+  # decides whether a dependent drifted; `just` only shells out to them. That
+  # reading is applied uniformly — no gate anywhere declares `just` as a tool,
+  # and the Rust gates name `nixpkgs-tools` for cargo, clippy and rustfmt
+  # rather than for the launcher they share with these two.
+  #
+  # The alternative — every gate names `nixpkgs-tools` because every recipe is
+  # run by `just` — is defensible and was considered. It was rejected because
+  # it makes the proxy universal, and a probe every rule names is the
+  # whole-file `flake.lock` again under a longer name. If a `just` upgrade ever
+  # does change a gate's outcome without changing its dumped recipe body, this
+  # is the decision to revisit; it is one probe name away.
   qahq-tools:
     file: flake.lock
     json: '.nodes["qahq"]["locked"]["narHash"]'

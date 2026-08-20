@@ -59,7 +59,7 @@ Miss (1) or (2) and `www/gates.jq` halts naming both sides — membership is der
 
 You also need a `www/utils/gate-notes.typ` entry, or `just check-doc-facts` fails naming the gate — CONTRIBUTING.md’s table has a column that has to say something.
 
-## Getting the scopes right
+## Getting the inputs right
 
 The gate rules are the highest-stakes rules in the repo, because a wrongly-fresh gate is a green build that proved nothing. The rule of thumb from [the correctness contract](https://mlavrinenko.github.io/mmz/concepts/) applies with extra force here: **over-declare**.
 

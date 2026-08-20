@@ -12,7 +12,11 @@
     related("mmz-adopt-probe-shell-in-this-repo-s-own-manifest.typ")[the
       deferred adoption of the key this one produced],
   ),
-  status: proposed(2026, 8, 20),
+  status: done(
+    2026,
+    8,
+    20,
+  )[Closed by the milestone rather than by one change: jq -S removed the accidental version dependency, probe\_shell answered the precondition side, and per-flake-input tool probes answered the identity side.],
 )
 
 == Summary
@@ -109,9 +113,23 @@ rule's *identity*, or a *precondition* of the measurement?
 a scan asserting every jq probe in this repo sorts). That closes the
 accidental version dependency.
 
-What remains open is the deliberate one: the probes still run under whatever
-PATH `sh -c` inherits, and nothing declares what that PATH must contain. Decide
-identity vs precondition before implementing further.
+Both halves of the identity-vs-precondition fork then landed, which is what
+closes this.
+
+*Precondition:* `probe_shell` lets a manifest pin the argv every probe's `run`
+line is handed to, so the answer stops depending on where mmz was invoked from.
+Adopting it in this repo is deferred — neither candidate value is both cheap and
+CI-available, and `.mmz/config.yaml` carries the measurements and a commented
+form pointing at the cancelled adoption task.
+
+*Identity:* each gate now declares the tools it runs, as per-flake-input probes
+reading one node of `flake.lock` with no subprocess. That is the input-side
+answer, and it turned out finer than the blanket it replaced rather than
+coarser: bumping tola re-runs one gate and qahq two, where each previously
+re-ran nine.
+
+The probes still resolve through the caller's PATH by default, which is now a
+declared default rather than an unexamined one.
 
 == Regression test
 

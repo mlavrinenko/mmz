@@ -21,7 +21,7 @@
 
 Every gate rule but one names the `rust` scope, and `rust` carries
 `flake.lock` — so bumping the dev shell busts them, which is the behaviour
-`docs/contributing/gates.md` argues for under "Getting the scopes right".
+`docs/contributing/gates.md` argues for under "Getting the inputs right".
 
 `just machete` is the exception. Its inputs are `[manifests, recipe-machete]`:
 

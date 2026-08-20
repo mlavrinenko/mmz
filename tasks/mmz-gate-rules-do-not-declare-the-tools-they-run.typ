@@ -12,7 +12,11 @@
     related("mmz-query-json-inputs-in-process-instead-of-shelling-out.typ")[what
       makes the lockfile half of this cost nothing],
   ),
-  status: wip(2026, 8, 20),
+  status: done(
+    2026,
+    8,
+    20,
+  )[Three per-flake-input node probes replace the whole-file flake.lock stand-in. Orchestrator verified the blast radius empirically against the real lockfile: tola moves 1 gate, qahq 2, nixpkgs 8, where each previously moved 9. The launcher question was resolved as 'declare the tool that produces the verdict, not the launcher that invokes it', recorded in 30-repo.yaml.],
 )
 
 == Summary
@@ -122,5 +126,5 @@ look identical in `inputs:` and are not.
 
 Assert that every rule tagged `gate` names at least one input whose digest
 moves when the toolchain does. That is the property
-`docs/contributing/gates.md` already claims under "Getting the scopes right"
+`docs/contributing/gates.md` already claims under "Getting the inputs right"
 and nothing currently enforces.

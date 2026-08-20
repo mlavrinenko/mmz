@@ -9,7 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `just machete` now busts when the dev shell moves. It was the one gate rule
+- Each gate now declares the tools it runs, by flake input rather than by the
+  whole lockfile. `flake.lock` sat in the `rust` scope as a blanket stand-in,
+  which was wrong in both directions: too coarse, since bumping a transitive
+  input like `nixpkgs-lib` re-ran clippy and the full suite, and absent from
+  `just machete` entirely until the fix below.
+
+  Three probes replace it, one per flake input the dev shell draws binaries
+  from — `qahq-tools`, `tola-tools`, `nixpkgs-tools` — each reading one node's
+  `narHash` out of `flake.lock` with no subprocess. The blast radius of a
+  `nix flake update` drops accordingly: bumping `tola` re-runs one gate,
+  `qahq` two, where every one of them previously re-ran nine.
+
+  The two spellings are not the same mechanism and look identical from
+  `inputs:`. A tool that is its own flake input is pinned exactly. A tool out of
+  nixpkgs has no node of its own, so `nixpkgs-tools` is a proxy that over-busts
+  — still strictly finer than the whole file, because it does not move when
+  qahq or tola do. The manifest says which is which where a reader meets it.
+
+  `tests/gate_inputs_pin_the_toolchain.rs` (renamed from
+  `gate_inputs_close_over_flake_lock.rs`) now resolves probes as well as scopes,
+  and deliberately does not accept `rust-toolchain.toml` as satisfying it: nine
+  of ten gates name `rust`, so accepting it would pass almost everything for
+  free. Nothing here installs a compiler from that file — the dev shell does.
+
+- `just machete` now busts when the dev shell moves.
+ It was the one gate rule
   naming no toolchain pin — `[manifests, recipe-machete]`, where `manifests` is
   the two Cargo files — while `cargo-machete` itself comes from the dev shell.
   A `nix flake update` that changed which binary runs left its recorded pass
