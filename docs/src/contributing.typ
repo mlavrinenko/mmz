@@ -187,6 +187,20 @@ every transcript from a real run against `examples/demo`, and the gate table
 above from `just --dump`. If you find yourself typing a fact that already exists
 in a file the build can read, derive it instead.
 
+= Adding a manifest key
+
+`Manifest` carries `deny_unknown_fields`, so the struct in `src/manifest.rs` is
+the manifest's whole surface — and the JSON Schema, the reference page's prose
+notes and the composition layer's policy-key handling are all derived from it
+rather than discovering it. A key added in one place and nowhere else fails a
+gate rather than shipping half-wired.
+
+The step list lives on `Manifest`'s own doc comment, next to the field you are
+adding, so it cannot drift away from the struct it describes.
+#link("docs/contributing/manifest-keys.md")[docs/contributing/manifest-keys.md]
+covers why each coupling exists, which of them will catch you, and what makes a
+key a root-only policy key.
+
 = Dependency drift
 
 `outdatty.yaml` declares groups coupling `source` files to the `dependents` that

@@ -26,6 +26,11 @@ groups:
   - name: manifest-schema
     source:
       - src/manifest.rs
+      # The `strict` types split out of manifest.rs once it hit its line cap.
+      # Listed because the split moved a schema-bearing surface, not because
+      # the file is new: a key edited here reaches the schema exactly as one
+      # edited in manifest.rs does.
+      - src/manifest_strict.rs
       - src/probe.rs
     dependents:
       - schema/mmz.schema.json
