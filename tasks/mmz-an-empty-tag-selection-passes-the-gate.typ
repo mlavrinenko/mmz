@@ -7,6 +7,8 @@
   links: (
     related("mmz-the-manifest-does-not-feed-any-cache-digest.typ")[turned up
       while disconfirming that one],
+    related("mmz-a-docs-capture-can-leak-the-fixture-s-temp-path.typ")[the
+      transcript this one added leaked a temp path no gate would have caught],
   ),
   status: done(2026, 8, 20),
 )
