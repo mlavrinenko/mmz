@@ -15,7 +15,11 @@
       + related("mmz-the-manifest-does-not-feed-any-cache-digest.typ")[noticed
         while settling this design]
   ),
-  status: accepted(2026, 8, 20),
+  status: done(
+    2026,
+    8,
+    20,
+  )[every implementation task closed and merged; the browser review remains, filed separately],
 )
 
 == Summary
