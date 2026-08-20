@@ -34,14 +34,15 @@ Every gate rule pins its own recipe body through a probe:
 ```yaml
 probes:
   recipe-clippy:
-    run: just --dump --dump-format json | jq -e -c '.recipes["clippy"]'
+    run: just --dump --dump-format json | jq -S -e -c '.recipes["clippy"]'
 ```
 
 The whole `Justfile` used to be a scope on every rule, which meant editing one docs recipe busted clippy and the full test suite. Hashing one recipe’s dumped JSON instead scopes the dependency to what actually changed.
 
-Two details are load-bearing:
+Three details are load-bearing:
 
 - `jq -e` exits non-zero when its selector yields `null`, so a **renamed recipe becomes a loud probe failure** rather than a digest that quietly stops tracking anything. Without `-e`, a rename would leave the rule permanently fresh — the exact silent failure the whole design is built to avoid.
+- `jq -S` sorts object keys, so the digest tracks the recipe’s content rather than the key order whichever `just` is on PATH happens to emit. Two just versions render the same recipe into the same JSON with the keys ordered differently; without `-S` that alone reads as every gate stale. It removes the accidental version dependency, not the deliberate one — a `just` whose rendering differs in substance still moves the digest, as it should.
 - Probes are resolved once per invocation however many rules name them, but each distinct probe is its own process. Ten recipe probes are ten `just --dump` runs. That is the cost of the granularity, it is paid on every `mmz --is-fresh`, and it is small enough only because `just --dump` is fast.
 
 ## Wiring a new gate

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The gate probes in this repo's own manifest now sort their JSON
+  (`jq -S`). `just --dump --dump-format json` renders the same recipe with its
+  object keys in different orders across `just` versions, so hashing the
+  unsorted selection made every gate read stale whenever the `just` resolving
+  on PATH was not the dev shell's — a `mt done` outside `nix develop` reported
+  ten stale gates against a worktree whose checks had just passed. This removes
+  the accidental version dependency; the deliberate one, a probe measuring
+  whatever tool PATH offers rather than the declared toolchain, is unchanged
+  and tracked separately.
 - `mmz --is-fresh` no longer exits 0 over a selection that holds no rule. A
   `--tag` no rule carries — a typo, a rename, a rule that quietly lost its
   `tags:` entry — used to be indistinguishable from a passing build, which is

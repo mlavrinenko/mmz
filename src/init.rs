@@ -48,10 +48,11 @@ commands:
 # scope costs time, a wrong probe can lie. A non-zero exit, a failed spawn, or
 # empty stdout (unless `allow_empty: true`) is a hard error and records
 # nothing; content correctness stays yours, so assert the shape in the probe
-# (`jq -e`) and a bad shape becomes a non-zero exit.
+# (`jq -e`) and a bad shape becomes a non-zero exit. Sort what you select
+# (`jq -S`) so the digest tracks content, not the key order the tool printed.
 #   probes:
 #     fmt-recipe:
-#       run: just --dump --dump-format json | jq -e -c '.recipes[\"fmt-check\"]'
+#       run: just --dump --dump-format json | jq -S -e -c '.recipes[\"fmt-check\"]'
 #   commands:
 #     - name: just fmt-check
 #       inputs: [rust, fmt-recipe]

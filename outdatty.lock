@@ -42,7 +42,7 @@ groups:
   manifest-schema:
     source:
       src/manifest.rs: 647742a184f85a60ba9016c99de1b76e0447ddf9faef3b63c64f2c532607daa6
-      src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
+      src/probe.rs: 45e7409c5df3fc28cab15853cc7f3d89e7375167c4871e3b8eb4bf1924801549
     dependents:
       schema/mmz.schema.json: ec7a187d324a5f2d6c164b3a9835165348a6c8427b5516bc1b1ed9b31dfdc566
       src/schema.rs: ab0e907d9108618f1dba682fb54ae525553f0a8e1259e563f6778271988827b7

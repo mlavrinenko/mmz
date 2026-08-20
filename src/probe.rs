@@ -9,7 +9,7 @@
 //! ```yaml
 //! probes:
 //!   fmt-recipe:
-//!     run: just --dump --dump-format json | jq -c '.recipes["fmt-check"]'
+//!     run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
 //! commands:
 //!   - name: just fmt-check
 //!     inputs: [rust, fmt-recipe]
@@ -29,7 +29,7 @@
 //! - Content correctness is the consumer's. A probe that prints valid but wrong
 //!   output, or that is not deterministic, is the manifest author's bug: pin the
 //!   ordering, strip the timestamps, assert the shape in the probe itself
-//!   (`jq -e`, a schema check) so a bad shape becomes a non-zero exit and hits
+//!   (`jq -S -e`, a schema check) so a bad shape becomes a non-zero exit and hits
 //!   the rule above. mmz does not validate meaning, and should not learn to.
 //!
 //! A wrong scope costs time; a wrong probe can lie. That asymmetry is why every

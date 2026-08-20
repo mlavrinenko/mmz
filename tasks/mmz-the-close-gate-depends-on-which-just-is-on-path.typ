@@ -4,6 +4,10 @@
   title: "mmz: the close gate depends on which just is on PATH",
   priority: framework("ice", confidence: 0.9, ease: 5.0, impact: 6.0),
   tags: ("gating", "tooling"),
+  links: (
+    related("mmz-just-machete-is-not-busted-by-a-dev-shell-bump.typ")[the
+      under-declared gate found while auditing this one's fourth option],
+  ),
   status: proposed(2026, 8, 20),
 )
 
@@ -67,8 +71,43 @@ just is on PATH*.
   `flake.lock` in the `rust` scope already does for rustc. Arguably correct, and
   the most expensive.
 
-`jq -S` plus one of the first or third is probably the answer. Decide before
-implementing.
+== What the audit found
+
+The fourth option is already implemented, and would not have helped.
+`flake.lock` is in the `rust` scope, and nine of the ten gates name `rust`, so
+a `nix flake update` that bumps `just` already busts them. (The tenth is
+`just machete`, which is a real gap — filed separately.)
+
+It would not have caught this bug because `flake.lock` is byte-identical
+inside and outside `nix develop`. It records what the shell *would* hand you,
+not what the probe *actually invoked*. Making the tool version a genuine input
+needs a self-reporting probe (`just --version`), which detects the mismatch but
+turns the phantom-stale into a real bust — honest, no more usable.
+
+So the four options all answer "how do we make the digest stable", and none
+answers the question the failure actually poses: is the environment part of the
+rule's *identity*, or a *precondition* of the measurement?
+
+- Identity means hashing the tool surface — every tool every recipe reaches.
+  Unbounded, and one will be missed.
+- Precondition means mmz *refuses to measure* in an environment it was not told
+  to expect, instead of quietly hashing a foreign tool's output. That is the
+  fifth option, and it matches the rest of the design: mmz already fails closed
+  on a missing manifest, an unmatched command, an empty probe. An unmet
+  environment precondition is the same class, and currently the only one that
+  degrades into a wrong answer rather than an error.
+
+== Progress
+
+`jq -S` landed on all eleven probes, with the rationale recorded in
+`.mmz/conf.d/10-rust.yaml` and the regression tests in
+`tests/gate_probe_normalisation.rs` (order-stability, an unsorted control, and
+a scan asserting every jq probe in this repo sorts). That closes the
+accidental version dependency.
+
+What remains open is the deliberate one: the probes still run under whatever
+PATH `sh -c` inherits, and nothing declares what that PATH must contain. Decide
+identity vs precondition before implementing further.
 
 == Regression test
 

@@ -101,7 +101,7 @@ scope:
 ```yaml
 probes:
   fmt-recipe:
-    run: just --dump --dump-format json | jq -e -c '.recipes["fmt-check"]'
+    run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
 
 commands:
   - name: just fmt-check
@@ -136,13 +136,18 @@ _inside_ the probe so a bad shape becomes a non-zero exit:
 
 ```yaml
 probes:
-  fmt-recipe:                                       # note the -e
-    run: just --dump --dump-format json | jq -e -c '.recipes["fmt-check"]'
+  fmt-recipe:                                   # note the -S and -e
+    run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
 ```
 
 `jq -e` exits non-zero when its selector yields `null` or `false`, turning a
 renamed recipe into a loud probe failure instead of a digest that quietly stops
-tracking anything. `mmz` does not validate meaning, and will not learn to.
+tracking anything. `jq -S` is the ordering half of the same discipline: it sorts
+object keys, so the digest tracks the selection's content rather than the key
+order the renderer happened to pick. An unsorted hash of a JSON object is a
+latent dependency on the tool that printed it — two `just` versions emit the
+same recipe with the keys in a different order, which without `-S` reads as a
+busted rule. `mmz` does not validate meaning, and will not learn to.
 
 == Mechanics
 
