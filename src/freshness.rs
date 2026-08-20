@@ -14,9 +14,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::error::{Error, Result};
-use crate::manifest::{Command, Manifest};
+use crate::manifest::Manifest;
 use crate::status::{self, Assessment, Shared, expansion_state};
-use crate::{parametric, probe};
+use crate::{parametric, probe, selection};
 
 /// Every kept rule's parametric matches, plus its pre-resolved shared
 /// `inputs` (files and probe digests) keyed by rule name —
@@ -85,28 +85,27 @@ impl Verdict {
 /// and returns one verdict per expansion, so a caller can gate the whole
 /// manifest at once.
 ///
+/// A selection that resolves to no expansion at all is refused rather than
+/// returning an empty verdict list: the caller's gate is an assertion, and an
+/// assertion over nothing passes without having checked anything.
+///
 /// # Errors
 ///
 /// Returns [`Error::TagWithCommand`] when `tags` is non-empty and `argv` is
 /// also given, [`Error::NoManifest`] when no manifest is found, a manifest
 /// error when one cannot be loaded, [`Error::NoMatch`] when `argv` matches no
-/// rule, [`Error::CollidingIdentity`] when two expansions share a cache
-/// identity, or a resolution/hashing error when a rule's inputs cannot be
-/// read.
+/// rule, [`Error::NoRules`], [`Error::NoTaggedRules`] or
+/// [`Error::NoExpansions`] when the selection is empty,
+/// [`Error::CollidingIdentity`] when two expansions share a cache identity, or
+/// a resolution/hashing error when a rule's inputs cannot be read.
 pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<Vec<Verdict>> {
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
     let cache_dir = base.join(&manifest.cache_dir);
 
-    if !tags.is_empty() {
-        if argv.is_some() {
-            return Err(Error::TagWithCommand);
-        }
-        let (matches, shared) = expand_matching(manifest, base, |rule| {
-            tags.iter().all(|tag| rule.tags.contains(tag))
-        })?;
-        return verdicts_for(&matches, &shared, base, &cache_dir);
+    if !tags.is_empty() && argv.is_some() {
+        return Err(Error::TagWithCommand);
     }
 
     if let Some(argv) = argv {
@@ -120,14 +119,17 @@ pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<
         return Ok(vec![verdict_for(hit, &shared, base, &cache_dir)?]);
     }
 
-    let (matches, shared) = expand_matching(manifest, base, |_| true)?;
+    let (matches, shared) = expand_matching(manifest, base, tags)?;
+    let kept: Vec<&str> = shared.keys().map(String::as_str).collect();
+    selection::ensure_gateable(manifest, &located.path, tags, &kept, matches.len())?;
     verdicts_for(&matches, &shared, base, &cache_dir)
 }
 
-/// Expands every rule passing `keep` into its parametric matches (one per
-/// domain file, or the rule itself when static), then checks the collected
-/// expansions for a colliding identity — the untargeted and tag-filtered
-/// gates share this shape, differing only in which rules they keep. Also
+/// Expands every rule carrying every tag in `tags` into its parametric matches
+/// (one per domain file, or the rule itself when static), then checks the
+/// collected expansions for a colliding identity — the untargeted and
+/// tag-filtered gates are one shape, since an empty `tags` keeps every rule
+/// (`all` over no tags is true) rather than being a second code path. Also
 /// resolves each kept rule's shared `inputs` once, keyed by rule name, so
 /// every expansion a rule fans into reuses the same resolved file set
 /// instead of re-walking the tree per expansion. One [`probe::Resolver`] spans
@@ -137,12 +139,16 @@ pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<
 fn expand_matching<'a>(
     manifest: &'a Manifest,
     base: &Path,
-    keep: impl Fn(&Command) -> bool,
+    tags: &[String],
 ) -> Result<Expanded<'a>> {
     let mut matches = Vec::new();
     let mut shared = BTreeMap::new();
     let mut probes = probe::Resolver::new(manifest, base);
-    for rule in manifest.commands.iter().filter(|rule| keep(rule)) {
+    let kept = manifest
+        .commands
+        .iter()
+        .filter(|rule| tags.iter().all(|tag| rule.tags.contains(tag)));
+    for rule in kept {
         shared.insert(
             rule.name.clone(),
             status::shared_inputs(manifest, rule, base, &mut probes)?,

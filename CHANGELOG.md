@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `mmz --is-fresh` no longer exits 0 over a selection that holds no rule. A
+  `--tag` no rule carries — a typo, a rename, a rule that quietly lost its
+  `tags:` entry — used to be indistinguishable from a passing build, which is
+  the false green the tool exists to refuse. It is now an error (exit 7,
+  never relaxable) naming the tags it filtered on and listing the ones the
+  manifest declares. Two more ways to gate nothing are refused with it: a
+  manifest that declares no `commands:` at all, and a selected rule that fans
+  over a scope resolving to no files. The code is distinct from `1` so a hook
+  branching on `$?` can tell a stale build from a gate pointed at nothing.
+- `mmz --status --tag <tag>` no longer answers a filter that kept no rule with
+  "no rules defined in …" — a sentence written for a manifest with no
+  `commands:` at all, and untrue of one whose rules simply do not carry that
+  tag. It still exits 0, because a report asserts nothing, and now names which
+  emptiness it is along with the tags the manifest declares.
 - The project root a manifest is anchored to is now canonicalized, so it agrees
   with the canonical paths provenance records. A root reached through a symlink
   — a library caller passing `mmz::run(&argv, path)` its own path, never having

@@ -39,6 +39,8 @@ has no inputs; relax the last two per project with the `strict` list.
 `--tag`/`-t <tag>` (repeatable) narrows --is-fresh/--status to rules carrying
 every listed tag (AND, not OR); untagged rules never match. Combining --tag
 with a targeted command is a usage error — a command already resolves to one rule.
+A --is-fresh whose selection holds no rule is refused (exit 7) rather than passing
+on the strength of having checked nothing; --status reports it and exits 0.
 
 Environment:
     MMZ_NOW    pin \"now\" to a Unix epoch in seconds, so a record's ran_at and
@@ -46,12 +48,13 @@ Environment:
                refused, never ignored. Unset, mmz reads the system clock.
 
 Exit codes:
-    0    fresh, skipped, or succeeded        5    declared output missing after a
-    1    --is-fresh: not fresh                    successful run (nothing recorded)
-    2    usage error                         6    a probe failed, could not run, or
-    3    strict refusal (no rule / inputs)        printed nothing (nothing recorded)
+    0    fresh, skipped, or succeeded        6    a probe failed, could not run, or
+    1    --is-fresh: not fresh                    printed nothing (nothing recorded)
+    2    usage error                         7    --is-fresh: nothing to gate (the
+    3    strict refusal (no rule / inputs)        selection holds no rule)
     4    manifest missing or invalid         70   internal error
-                                             127  command could not be spawned
+    5    declared output missing after a     127  command could not be spawned
+         successful run (nothing recorded)
     otherwise the wrapped command's own exit code"
 );
 
@@ -383,6 +386,7 @@ fn exit_for(err: &Error) -> u8 {
         | Error::NullPolicyKey { .. } => 4,
         Error::MissingOutput { .. } => 5,
         Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
+        Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,
     }

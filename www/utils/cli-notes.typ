@@ -52,6 +52,12 @@
     detail: [
       Read-only: it resolves inputs and compares digests, and runs no wrapped
       command. `--tag`/`-t` narrows it to rules carrying every listed tag.
+
+      A filter that keeps no rule still exits 0 — a report asserts nothing, so
+      an empty one is an answer — but it says which emptiness it is, naming the
+      tags it filtered on and the ones the manifest declares. `--is-fresh` over
+      the same selection is refused instead (exit 7): that one is an assertion,
+      and an assertion over nothing passes without having checked anything.
     ],
   ),
   "--status=json": (
@@ -77,6 +83,10 @@
       names each offender and why, then prints one hint to re-run the listed
       commands under mmz — a standalone run is not observed, so it leaves the
       rule exactly as stale as it found it.
+
+      A gate that selected no rule at all is refused with exit 7 rather than
+      passing: a typo'd tag, a renamed one, or a rule that lost its `tags:`
+      entry would otherwise be indistinguishable from a green build.
     ],
   ),
   "--prune": (

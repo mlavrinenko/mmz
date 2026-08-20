@@ -8,7 +8,7 @@
     related("mmz-the-manifest-does-not-feed-any-cache-digest.typ")[turned up
       while disconfirming that one],
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 20),
 )
 
 == Summary

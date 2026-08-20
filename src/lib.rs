@@ -73,6 +73,11 @@ pub mod resolve;
 pub mod schema;
 pub mod status;
 
+/// Whether a chosen set of rules is something to gate or report on, and what
+/// to say when it came out empty. Internal: it decides the wording of an
+/// error and of one report line, neither of which a library caller composes.
+mod selection;
+
 pub use engine::run;
 pub use error::{Error, Result};
 pub use manifest::Manifest;

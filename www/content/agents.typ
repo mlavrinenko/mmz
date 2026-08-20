@@ -57,8 +57,11 @@ Every code means one thing, so branching on `$?` is safe:
 - `4` is a manifest problem, and is the one case no setting relaxes.
 - `5` and `6` both mean a run happened and deliberately left no record: a
   declared output was missing, or a probe failed.
+- `7` is a gate that selected no rule — a tag nothing carries, most often. It is
+  not a stale build and not a passing one; it is a gate asking about nothing.
 
-An agent should treat `4`, `5` and `6` as "fix the cause", never as "retry".
+An agent should treat `4`, `5`, `6` and `7` as "fix the cause", never as
+"retry".
 
 = Recording a pass
 

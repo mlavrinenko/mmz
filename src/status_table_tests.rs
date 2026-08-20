@@ -22,6 +22,7 @@ fn report(rules: Vec<RuleStatus>) -> Report {
     Report {
         manifest: ".mmz/config.yaml".to_owned(),
         now: Clock::pinned(0),
+        empty_note: String::new(),
         probes: BTreeMap::new(),
         rules,
     }
@@ -44,6 +45,7 @@ fn age_is_measured_against_the_reports_own_clock() {
     let report = Report {
         manifest: ".mmz/config.yaml".to_owned(),
         now: Clock::pinned(RAN_AT + 2 * 3600),
+        empty_note: String::new(),
         probes: BTreeMap::new(),
         rules: vec![RuleStatus {
             name: "just check".to_owned(),
@@ -78,6 +80,7 @@ fn single_source_table_is_byte_identical_to_before_the_source_column() {
     let report = Report {
         manifest: ".mmz/config.yaml".to_owned(),
         now: Clock::pinned(RAN_AT + 2 * 3600),
+        empty_note: String::new(),
         probes: BTreeMap::new(),
         rules: vec![RuleStatus {
             name: "sh".to_owned(),

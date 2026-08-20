@@ -16,10 +16,10 @@
 # Determinism: everything a capture carries that is not a function of the repo
 # is pinned rather than corrected afterwards. The clock comes from `$MMZ_NOW`
 # below, so a record's `ran_at` and `--status`'s ages are the binary's own
-# output and still identical build-to-build. That leaves ONE post-processing
-# sed, on absolute paths (the fixture's temp location) to a project-relative
-# form; it is marked at its call site, and every other byte in every capture is
-# stdout as written.
+# output and still identical build-to-build. That leaves TWO post-processing
+# seds, both on absolute paths (the fixture's temp location) rewritten to a
+# project-relative form; each is marked at its call site, and every other byte
+# in every capture is stdout as written.
 #
 # `just docs::gen` invokes this; docs::build / docs::serve / docs::check run it
 # first.
@@ -139,6 +139,17 @@ gen_run run-report ./bin/report.sh
 gen_run status --status
 gen_run status-tag --status --tag report
 gen_run status-json --status=json
+
+# A tag no rule carries — `gate` with one letter changed. The gate refuses it
+# (exit 7, hence the `|| true`) instead of passing over an empty selection,
+# while the report answers the same question and exits 0. Both captures are of
+# the SAME typo, because the pair is the point: one asserts, one describes.
+gen_run is-fresh-empty-tag --is-fresh --tag gats || true
+gen_run status-empty-tag --status --tag gats
+# The second of the two normalizing seds (see the header): this report names the
+# manifest by path, and the copy lives in $TMPDIR, so the raw capture would carry
+# a different directory on every build.
+sed -i "s#$COPY/#./#" "$OUT/status-empty-tag.txt"
 
 # A stale gate: edit an input, then ask. `--is-fresh` exits 1 here, which is the
 # whole point, so the `|| true` keeps `set -e` from treating the documented

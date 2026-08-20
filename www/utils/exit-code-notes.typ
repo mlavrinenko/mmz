@@ -68,6 +68,20 @@
       reaches the hasher, so no digest is computed from partial output.
     ],
   ),
+  "7": (
+    meaning: [`--is-fresh`: the selection holds no rule, so the gate would have
+      asserted nothing.],
+    detail: [
+      Three ways to reach it: the manifest declares no `commands:`, a `--tag`
+      filter no rule carries (a typo, a rename, a rule that quietly lost its
+      `tags:` entry), or a selected rule that fans over a scope resolving to no
+      files. All three would otherwise exit 0 — a pass over an empty set, which
+      reads exactly like a build that ran. The message names the tags and lists
+      the ones the manifest does declare. Never relaxable, and distinct from
+      `1` on purpose: a hook branching on `$?` can tell a stale build from a
+      gate pointed at nothing.
+    ],
+  ),
   "70": (
     meaning: [Internal error.],
     detail: [Worth reporting: nothing a manifest can say should produce one.],

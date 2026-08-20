@@ -25,7 +25,7 @@ use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
 use crate::provenance::Provenance;
-use crate::{cache, hashing, outputs, parametric, probe, resolve};
+use crate::{cache, hashing, outputs, parametric, probe, resolve, selection};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
 /// `mmz --status=json-schema`.
@@ -50,6 +50,16 @@ struct Report {
     /// exactly what mmz saw. Omitted when no rule in the report named one.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     probes: BTreeMap<String, String>,
+    /// The line the table rendering prints in place of itself when `rules` is
+    /// empty, explaining WHICH emptiness this is — no rules declared, a
+    /// `--tag` filter that kept none, or kept rules that fanned to nothing.
+    ///
+    /// Not serialized, and carried on the model rather than recomputed by
+    /// [`report`], because [`collect`] is the only place that still knows the
+    /// filter and what it kept. A JSON consumer needs no line: an empty
+    /// `rules` array is already the whole answer.
+    #[serde(skip)]
+    empty_note: String,
     rules: Vec<RuleStatus>,
 }
 
@@ -192,7 +202,7 @@ impl Assessment {
 pub fn report(cwd: &Path, tags: &[String]) -> Result<String> {
     let report = collect(cwd, tags)?;
     if report.rules.is_empty() {
-        return Ok(format!("no rules defined in {}\n", report.manifest));
+        return Ok(format!("{}\n", report.empty_note));
     }
     Ok(table::render_text(&report))
 }
@@ -248,8 +258,16 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
             .expect("provenance recorded for every declared command");
         rules.push(rule_status(hit, shared, base, &cache_dir, source)?);
     }
+    let manifest_path = located.path.display().to_string();
+    let empty_note = if rules.is_empty() {
+        let kept: Vec<&str> = shared_by_rule.keys().map(String::as_str).collect();
+        selection::empty_note(manifest, &manifest_path, tags, &kept)
+    } else {
+        String::new()
+    };
     Ok(Report {
-        manifest: located.path.display().to_string(),
+        empty_note,
+        manifest: manifest_path,
         now,
         probes: probes.resolved().clone(),
         rules,
