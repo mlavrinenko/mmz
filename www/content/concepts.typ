@@ -85,7 +85,29 @@ of every file any matching invocation could depend on. When in doubt, broaden.
 
 Toolchain sensitivity is modelled as an ordinary input rather than as ambient
 magic: put `rust-toolchain.toml` or `flake.lock` in a scope and a toolchain bump
-busts the cache. `mmz` trusts file content, not the environment it happens to be
+busts the cache.
+
+That is the right spelling while the pin is small. A `flake.lock` with three
+inputs is a fine scope; one with a hundred nodes hashes all hundred, so a
+transitive `nixpkgs-lib` bump re-runs clippy and the whole test suite. When that
+starts to hurt — or when one input's tools are wanted without the rest — name
+the single node a rule's tools come out of instead:
+
+```yaml
+probes:
+  tola-tools:
+    file: flake.lock
+    json: '.nodes["tola"]["locked"]["narHash"]'
+```
+
+The two are not equivalent in kind. A tool that is its own flake input has a
+node whose hash moves when and only when that tool's binaries move, so the probe
+is exact; a tool out of nixpkgs shares one node with everything else from
+nixpkgs, so the probe is a proxy — finer than the whole lockfile, still coarser
+than the tool. Which one a tool gets is decided by where it comes from, not by
+preference, and nothing at a rule's `inputs:` says which it got.
+
+`mmz` trusts file content, not the environment it happens to be
 running in — and a #link(u("/inputs/"))[probe] only shifts who is trusted, from
 a file's bytes to a command's stdout, which is why a probe's content is the
 manifest author's to get right.

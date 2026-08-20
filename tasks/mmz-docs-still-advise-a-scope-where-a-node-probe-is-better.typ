@@ -8,7 +8,7 @@
     related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[the change
       that made this advice sit at odds with the project's own practice],
   ),
-  status: proposed(2026, 8, 20),
+  status: done(2026, 8, 21),
 )
 
 == Summary

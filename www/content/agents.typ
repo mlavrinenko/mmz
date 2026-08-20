@@ -87,7 +87,14 @@ list every file the command could read.
 - Sources, and the manifests and lockfiles that pin its dependencies.
 - The toolchain pins, if a toolchain change should re-run it —
   `rust-toolchain.toml`, `flake.lock`. `mmz` trusts file content, never the
-  ambient environment.
+  ambient environment. A whole `flake.lock` in a scope is the simple default,
+  and it over-busts once the lockfile is big: a hundred nodes hashed together
+  means any transitive bump re-runs every rule that pins it. Name the one node
+  a rule's tools come out of instead — a `file:` +
+  #link(u("/inputs/"))[`json:` probe] on
+  `.nodes["<input>"]["locked"]["narHash"]` — remembering that such a probe is
+  exact for a tool that is its own flake input and only a proxy for one out of
+  `nixpkgs`.
 - The recipe or script body that defines the command, if it lives in a file. If
   it lives in _part_ of a file, use a #link(u("/inputs/"))[probe] rather than
   hashing the whole file.
