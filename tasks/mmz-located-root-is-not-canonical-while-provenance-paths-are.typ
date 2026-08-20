@@ -8,7 +8,11 @@
     related("mmz-report-each-rule-s-source-file-in-status.typ")[surfaced while
       reviewing the `source` field]
   ),
-  status: proposed(2026, 8, 20),
+  status: done(
+    2026,
+    8,
+    20,
+  )[Located::at canonicalizes the config path and derives the root from it, so root and provenance share one representation; the loader gets that root and renders every path it names through Provenance::shorten. Regression tests: a symlinked root, and the duplicate-key error in both directions.],
 )
 
 == Summary
