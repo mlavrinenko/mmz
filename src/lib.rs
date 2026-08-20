@@ -73,6 +73,11 @@ pub mod resolve;
 pub mod schema;
 pub mod status;
 
+/// The in-process jq engine a probe's `json:` key selects with. Internal: it
+/// takes bytes and a program and hands back bytes, so no jaq type reaches a
+/// library caller's signature and the engine stays swappable.
+mod json;
+
 /// Whether a chosen set of rules is something to gate or report on, and what
 /// to say when it came out empty. Internal: it decides the wording of an
 /// error and of one report line, neither of which a library caller composes.

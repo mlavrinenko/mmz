@@ -41,20 +41,35 @@ commands:
   - name: cargo test
     inputs: [rust]
 
-# Named commands whose stdout is hashed into the input digest of every rule
-# naming them in `inputs` — how a rule depends on part of a file, or on
+# Named inputs that are not whole files, hashed into the input digest of every
+# rule naming them in `inputs` — how a rule depends on part of a file, or on
 # something that is not a file. One namespace with scopes: a probe may not
 # share a name with one. Weigh the trade before reaching for this: a wrong
-# scope costs time, a wrong probe can lie. A non-zero exit, a failed spawn, or
-# empty stdout (unless `allow_empty: true`) is a hard error and records
-# nothing; content correctness stays yours, so assert the shape in the probe
-# (`jq -e`) and a bad shape becomes a non-zero exit. Sort what you select
-# (`jq -S`) so the digest tracks content, not the key order the tool printed.
-# A probe resolves through the caller's PATH; set top-level `probe_shell` (e.g.
-# [\"direnv\", \"exec\", \".\", \"sh\", \"-c\"]) to pin the one it is measured in.
+# scope costs time, a wrong probe can lie.
+#
+# `file:` + `json:` is the shape to reach for first. mmz reads the file and
+# runs the jq program in-process — no shell, nothing needed on PATH — and
+# hashes its own canonical rendering of the result, so object key order is
+# never an input and there is no `jq -S` to forget.
+#   probes:
+#     nixpkgs-input:
+#       file: flake.lock
+#       json: '.nodes[\"nixpkgs\"][\"locked\"][\"narHash\"]'
+#   commands:
+#     - name: nix flake check
+#       inputs: [nixpkgs-input]
+#
+# `run:` is for what genuinely is not on disk; it may carry a `json:` too, to
+# select out of the command's stdout instead of a file. A non-zero exit, a
+# failed spawn, an unreadable file, bytes that are not JSON, or a selection
+# that measured nothing (unless `allow_empty: true`) is a hard error and
+# records nothing. A `run:` line resolves through the caller's PATH; set
+# top-level `probe_shell` (e.g. [\"direnv\", \"exec\", \".\", \"sh\", \"-c\"]) to pin
+# the environment it is measured in.
 #   probes:
 #     fmt-recipe:
-#       run: just --dump --dump-format json | jq -S -e -c '.recipes[\"fmt-check\"]'
+#       run: just --dump --dump-format json
+#       json: '.recipes[\"fmt-check\"]'
 #   commands:
 #     - name: just fmt-check
 #       inputs: [rust, fmt-recipe]

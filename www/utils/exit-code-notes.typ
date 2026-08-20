@@ -49,7 +49,9 @@
     meaning: [The manifest is missing or invalid.],
     detail: [
       Never relaxable. `mmz` will not memoize against a manifest it could not
-      read or could not validate.
+      read or could not validate. Shape is checked here, at load, even for a
+      probe no rule names — a probe declaring both `run:` and `file:` is refused
+      before anything runs, rather than resolved by a precedence rule.
     ],
   ),
   "5": (
@@ -61,11 +63,16 @@
     ],
   ),
   "6": (
-    meaning: [A probe failed, could not be spawned, or printed nothing; nothing
-      was recorded.],
+    meaning: [A probe did not produce a value mmz can trust; nothing was
+      recorded.],
     detail: [
-      The probe is named, with its exit code and stderr. A failed probe never
-      reaches the hasher, so no digest is computed from partial output.
+      The probe is always named. A `run:` line that exits non-zero or cannot be
+      spawned comes with its exit code and stderr; a `file:` that is missing or
+      unreadable comes with the path; and a `json:` selector reports bytes that
+      were not one JSON value, a program that would not compile or that raised,
+      or — the case worth the code on its own — a selection that measured
+      nothing. None of them reach the hasher, so no digest is ever computed from
+      partial output.
     ],
   ),
   "7": (

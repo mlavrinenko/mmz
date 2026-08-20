@@ -46,16 +46,51 @@
     How a rule depends on something that is not a whole file. Read the trade
     before reaching for one — a wrong scope costs time, a wrong probe can lie —
     and note that mmz validates a probe's exit status, never its meaning.
+
+    Reach for `file:` + `json:` first. It is the only shape that costs nothing:
+    no process, no ambient tool, no shell quoting. `run:` is for what genuinely
+    is not on disk.
   ],
   "probes[].run": [
     Executed by `sh -c` from the project root with stdin closed, so a probe
     waiting on input fails instead of hanging a gate. Resolved once per mmz
     invocation however many rules name it.
+
+    A `run:` line is a dependency on the ambient environment — the tools it
+    calls must be installed, and must answer the same way here as on a
+    colleague's machine. That is the cost `file:` does not have.
+  ],
+  "probes[].file": [
+    Sourced from the repository rather than from a process, which is what makes
+    per-input tracking cheap enough to be routine: eleven lockfile-sourced
+    probes are eleven file reads, where eleven `--version` calls are eleven
+    spawns on every `mmz --is-fresh`.
+
+    The path is not filtered by `gitignore`, unlike a scope's globs — a probe
+    names one file explicitly, and a rule pinned to a generated lockfile is a
+    thing people legitimately want. Naming a file that is not there is an
+    error, not an empty input.
+  ],
+  "probes[].json": [
+    jq, not a narrower path syntax, and deliberately: a manifest key's meaning
+    must not change under a reader in a later version, and the probes in this
+    repo already use `,` and `with_entries(select(…))`. A spelling that could
+    not express what people already write would have had to grow into jq
+    anyway.
+
+    What it buys beyond narrowing is that key order stops being an input
+    _structurally_. Piping through `jq` hashes some renderer's bytes, so
+    forgetting `-S` makes a tool upgrade look like a busted rule; here mmz owns
+    the rendering and there is nothing to forget.
   ],
   "probes[].allow_empty": [
     Opt in only when empty output is genuinely a valid state. The default exists
-    because empty stdout is almost always a selector that matched nothing, and
-    that is the cheapest bug in this whole surface to catch.
+    because an empty result is almost always a selector that matched nothing,
+    and that is the cheapest bug in this whole surface to catch.
+
+    With `json:` it also accepts a lone `null`, which is the form "matched
+    nothing" actually takes in jq — `.a.b` on a document without them is a
+    successful selection of nothing at all.
   ],
   commands: [
     Ordered rules; the first token-prefix match wins, so specific rules go before

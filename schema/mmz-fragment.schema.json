@@ -43,21 +43,32 @@
       }
     },
     "probes": {
-      "description": "Named commands whose stdout is an input. A rule's inputs references a probe by name exactly as it references a scope, and the hash of the probe's stdout joins that rule's input digest — which is how a rule depends on part of a file (one recipe body out of a Justfile) or on something that is not a file at all (a toolchain fingerprint). One namespace with scopes: a probe sharing a name with a scope is a manifest error. A probe is resolved once per mmz invocation, however many rules name it. Weigh the trade before reaching for one: a wrong scope costs time, a wrong probe can lie.",
+      "description": "Named sources of input bytes. A rule's inputs references a probe by name exactly as it references a scope, and the hash of what the probe produced joins that rule's input digest — which is how a rule depends on part of a file (one node of a flake.lock, one recipe body out of a Justfile) or on something that is not a file at all (a toolchain fingerprint). A probe reads either a file (`file`, which needs a `json` selector) or the stdout of a command (`run`); the two are mutually exclusive, and a probe must declare one. One namespace with scopes: a probe sharing a name with a scope is a manifest error. A probe is resolved once per mmz invocation, however many rules name it. Weigh the trade before reaching for one: a wrong scope costs time, a wrong probe can lie.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["run"],
+        "oneOf": [
+          { "required": ["run"], "not": { "required": ["file"] } },
+          { "required": ["file", "json"], "not": { "required": ["run"] } }
+        ],
         "properties": {
           "run": {
             "type": "string",
-            "description": "The command line whose stdout is hashed, run by `sh -c` from the project root with stdin closed. A non-zero exit is a hard error naming the probe, its exit code, and its stderr: mmz exits without consuming the output and without writing a record, so a failed command never reaches the hasher. A probe that cannot be spawned is the same error. Content correctness and determinism are the manifest author's, not mmz's — pin the ordering, strip the timestamps, and assert the shape inside the probe (jq -e, a schema check) so a bad shape becomes a non-zero exit."
+            "description": "The command line whose stdout is the probe's bytes, run by `sh -c` from the project root with stdin closed. Mutually exclusive with `file`. A non-zero exit is a hard error naming the probe, its exit code, and its stderr: mmz exits without consuming the output and without writing a record, so a failed command never reaches the hasher. A probe that cannot be spawned is the same error. Content correctness and determinism are the manifest author's, not mmz's — pin the ordering, strip the timestamps, and assert the shape inside the probe (jq -e, a schema check) so a bad shape becomes a non-zero exit, or hand the shape to `json` below and let mmz enforce it."
+          },
+          "file": {
+            "type": "string",
+            "description": "A file to read, relative to the project root — the same base scope globs resolve against. Mutually exclusive with `run`, and requires `json`. This is the fully in-process shape: no process is spawned, nothing has to be on PATH, and there is no shell quoting to get wrong, so a rule can depend on one field of a lockfile that a scope could only name whole. A file that is missing or unreadable is a hard error naming the probe and the path. Hashing a whole file is what a scope is for, which is why a bare `file` with no selector is refused rather than accepted as a second spelling of one."
+          },
+          "json": {
+            "type": "string",
+            "description": "A jq program selecting out of the probe's bytes, run in-process by an embedded jq engine — no jq on PATH. mmz hashes its own canonical rendering of the selected value, object keys sorted at every depth and array order preserved, so a renderer's key order is structurally not an input and nobody has to remember jq -S. Multiple outputs (`.a, .b`) join one per line. A selection that measured nothing — no output at all, or a lone null — is a hard error, for the same reason jq -e exists: a probe tracking null reports one digest whatever the document does, leaving the rule fresh forever against an input nobody is measuring. `false` is a value and passes. Bytes that are not exactly one JSON value, a program that does not compile, and a program that raises against the document are each a hard error naming the probe."
           },
           "allow_empty": {
             "type": "boolean",
             "default": false,
-            "description": "Accept stdout that is empty (or only whitespace) as a valid input. By default it is an error, because it is the cheapest catch for a selector that matched nothing."
+            "description": "Accept an input that measured nothing: with `json`, a selection that yielded no value or only null; without it, stdout that is empty or only whitespace. One key, one meaning. By default it is an error, because it is the cheapest catch for a selector that matched nothing."
           }
         }
       }

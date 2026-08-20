@@ -49,6 +49,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `file:` and `json:` on a probe, so a rule can depend on one field of a JSON
+  file with no subprocess at all:
+
+  ```yaml
+  probes:
+    nixpkgs-input:
+      file: flake.lock
+      json: '.nodes["nixpkgs"]["locked"]["narHash"]'
+  ```
+
+  Every probe until now was a spawn. This one is not: mmz opens the file,
+  parses it, selects, and hashes the result. No shell, nothing required on
+  `PATH`, no shell quoting to get wrong, and no process per probe on an
+  `mmz --is-fresh` that gates every rule at once — which is the operation whose
+  entire value is being cheap enough to run in a hook.
+
+  It also reaches inputs that were previously inexpressible. A scope names whole
+  files, so a rule depending on one lockfile node had to hash a file with a
+  hundred of them; bumping any input busted every rule pinning it. That is not a
+  coarser version of the rule's dependency, it is a different dependency, and
+  there was no way to write the real one.
+
+  `run:` may carry a `json:` too, selecting out of a command's stdout instead of
+  a file. That halves the spawns rather than removing them, and it is the weaker
+  case — it earns its place by taking `jq` off the ambient-tool surface and by
+  making canonical hashing structural rather than conventional.
+
+  Which is the second thing this changes. mmz hashes its own rendering of the
+  selected value — object keys sorted at every depth, array order preserved —
+  never the bytes it read, so key order is not an input by construction. The
+  `jq -S` on every shelled-out probe in this repo is that same property
+  maintained by everyone remembering it, and forgetting once made a `just`
+  upgrade read as ten stale gates.
+
+  `json:` is jq, run in-process by an embedded engine (jaq), not a narrower
+  path syntax. The reason is compatibility over time rather than power: the
+  probes here already use `,` and `with_entries(select(…))`, so a path-only
+  spelling would have had to change meaning in a later version, and a manifest
+  key's semantics must not break under a reader.
+
+  Everything about it fails closed, exit 6 with nothing recorded: an unreadable
+  `file:`, bytes that are not exactly one JSON value, a program that does not
+  compile or that raises against the document, and — the load-bearing one — a
+  selection that measured nothing. `.a.b.c` against a document lacking them is
+  not a failure in jq but a successful selection of `null`, and a probe tracking
+  `null` reports one digest whatever the document does, leaving the rule fresh
+  forever against an input nobody is measuring. That is exactly what `jq -e`
+  exists to prevent, so `json:` refuses it too. `false` is a value and passes:
+  jq conflates it with `null` only because a shell exit code cannot tell them
+  apart, and mmz is under no such constraint. `allow_empty: true` opts into an
+  empty selection, the same key and the same meaning it already had for stdout.
+
+  `file:` and `run:` are mutually exclusive — a probe declaring both is a
+  manifest error (exit 4) naming the probe, not a precedence rule for a reader
+  to memorise. A `file:` with no `json:` is refused as well: hashing a whole
+  file is what a scope is for, and a scope keeps the gitignore filter and
+  reports which file moved, so a second spelling of it here would only be a
+  quieter one. The probes in this repo's own manifest are unchanged; migrating
+  them moves every gate's digest and belongs in its own reviewable change.
+
 - `probe_shell`, a root-manifest key naming the argv every probe's `run` line
   is executed by, with the line appended as one final argument. It defaults to
   `["sh", "-c"]`, which is what every probe ran under before, so nothing
