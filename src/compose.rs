@@ -112,13 +112,20 @@ where
     Option::deserialize(deserializer).map(Some)
 }
 
-/// Accumulates the merge across the whole import tree: the current chain (for
-/// cycle detection), the set of canonical paths already fully merged (for
-/// diamond skipping), the order files were first visited in (for
+/// Accumulates the merge across the whole import tree: the project root (for
+/// rendering the paths its errors name), the current chain (for cycle
+/// detection), the set of canonical paths already fully merged (for diamond
+/// skipping), the order files were first visited in (for
 /// [`Provenance::sources`]), and the entries collected so far, each tagged
 /// with its source file.
 #[derive(Default)]
 struct MergeState {
+    /// The project root every path these errors name is rendered against —
+    /// root-relative under it, absolute otherwise, the rule
+    /// [`Provenance::display`] renders a report's rows with. Never resolves
+    /// anything: an `imports:` entry resolves against the declaring file's
+    /// directory, not this.
+    root: PathBuf,
     stack: Vec<PathBuf>,
     loaded: BTreeSet<PathBuf>,
     /// Every visited file, root first, in first-visit order — `loaded` is a
@@ -150,8 +157,8 @@ impl MergeState {
             if let Some((_, first)) = self.scopes.get(&name) {
                 return Err(Error::DuplicateScope {
                     name,
-                    first: first.clone(),
-                    second: source.to_path_buf(),
+                    first: Provenance::shorten(first, &self.root),
+                    second: Provenance::shorten(source, &self.root),
                 });
             }
             self.scopes.insert(name, (scope, source.to_path_buf()));
@@ -160,8 +167,8 @@ impl MergeState {
             if let Some((_, first)) = self.probes.get(&name) {
                 return Err(Error::DuplicateProbe {
                     name,
-                    first: first.clone(),
-                    second: source.to_path_buf(),
+                    first: Provenance::shorten(first, &self.root),
+                    second: Provenance::shorten(source, &self.root),
                 });
             }
             self.probes.insert(name, (probe, source.to_path_buf()));
@@ -186,7 +193,7 @@ impl MergeState {
             .parent()
             .ok_or_else(|| Error::Internal("import path has no parent directory".to_owned()))?;
         for entry in imports {
-            for target in expand_import(importer, base_dir, entry)? {
+            for target in expand_import(importer, base_dir, entry, &self.root)? {
                 self.visit_fragment(&target)?;
             }
         }
@@ -212,7 +219,7 @@ impl MergeState {
             let mut chain = self.stack.clone();
             chain.push(canonical);
             return Err(Error::ImportCycle {
-                chain: format_chain(&chain),
+                chain: format_chain(&chain, &self.root),
             });
         }
         if self.loaded.contains(&canonical) {
@@ -220,11 +227,11 @@ impl MergeState {
         }
 
         let text = fs::read_to_string(&canonical).map_err(|source| Error::ImportNotReadable {
-            path: canonical.clone(),
+            path: Provenance::shorten(&canonical, &self.root),
             source,
         })?;
-        let document = parse_text(&text, &canonical)?;
-        check_no_policy_keys(&document, &canonical)?;
+        let document = parse_text(&text, &canonical, &self.root)?;
+        check_no_policy_keys(&document, &canonical, &self.root)?;
 
         self.stack.push(canonical.clone());
         self.order.push(canonical.clone());
@@ -247,6 +254,16 @@ impl MergeState {
 /// composition existed: the same read, the same parse, the same validation,
 /// so a manifest with no `imports:` key is unaffected byte-for-byte.
 ///
+/// `root` is the project root, and is used for one thing: rendering the paths
+/// these errors name, root-relative under it and absolute otherwise. That is
+/// [`Provenance::display`]'s rule, reused rather than reinvented, so an error
+/// names a file exactly as `--status` and `--dump-config` do — and so the
+/// store-path case composition exists for still reads as an absolute path,
+/// which is the useful form for a file outside the tree. Resolution never
+/// consults it: an `imports:` entry resolves against the declaring file's
+/// directory. [`crate::manifest::Located::at`] canonicalizes it, which is
+/// what lets it strip a prefix off the canonical paths recorded here.
+///
 /// # Errors
 ///
 /// Returns [`Error::Io`] if `path` cannot be read, [`Error::ManifestParse`] if
@@ -255,20 +272,35 @@ impl MergeState {
 /// [`Error::ImportCycle`], [`Error::DuplicateScope`], [`Error::DuplicateProbe`],
 /// [`Error::DuplicateCommandAcrossFiles`], [`Error::FragmentPolicyKey`],
 /// [`Error::NullPolicyKey`]), or a validation error from [`Manifest::validate`].
-pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
+pub(crate) fn load(path: &Path, root: &Path) -> Result<(Manifest, Provenance)> {
     let text = fs::read_to_string(path)?;
-    let document = parse_text(&text, path)?;
+    let document = parse_text(&text, path, root)?;
     let canonical = fs::canonicalize(path)?;
 
-    let gitignore = require_or_default(document.gitignore, "gitignore", path, default_gitignore)?;
-    let cache_dir = require_or_default(document.cache_dir, "cache_dir", path, default_cache_dir)?;
-    let strict = require_or_default(document.strict, "strict", path, StrictPolicy::all)?;
+    let gitignore = require_or_default(
+        document.gitignore,
+        "gitignore",
+        path,
+        root,
+        default_gitignore,
+    )?;
+    let cache_dir = require_or_default(
+        document.cache_dir,
+        "cache_dir",
+        path,
+        root,
+        default_cache_dir,
+    )?;
+    let strict = require_or_default(document.strict, "strict", path, root, StrictPolicy::all)?;
     // Unlike the other three, an explicit `on_hit: null` in the root has
     // always been legal — `Manifest::on_hit` is `Option<String>` — so it
     // collapses to `None` exactly like an absent key, not an error.
     let on_hit = document.on_hit.flatten();
 
-    let mut state = MergeState::default();
+    let mut state = MergeState {
+        root: root.to_path_buf(),
+        ..MergeState::default()
+    };
     state.stack.push(canonical.clone());
     state.order.push(canonical.clone());
     state.absorb(
@@ -281,7 +313,7 @@ pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
     state.stack.pop();
     state.loaded.insert(canonical);
 
-    check_cross_file_duplicate_commands(&state.commands)?;
+    check_cross_file_duplicate_commands(&state.commands, root)?;
 
     let (scopes, scope_sources) = split(state.scopes);
     let (probes, probe_sources) = split(state.probes);
@@ -323,19 +355,20 @@ pub(crate) fn load(path: &Path) -> Result<(Manifest, Provenance)> {
 ///
 /// # Errors
 ///
-/// Returns [`Error::NullPolicyKey`] naming `key` and `path` when `value` is
-/// `Some(None)`.
+/// Returns [`Error::NullPolicyKey`] naming `key` and `path` (rendered against
+/// `root`, see [`load`]) when `value` is `Some(None)`.
 fn require_or_default<T>(
     value: Option<Option<T>>,
     key: &str,
     path: &Path,
+    root: &Path,
     default: impl FnOnce() -> T,
 ) -> Result<T> {
     match value {
         None => Ok(default()),
         Some(None) => Err(Error::NullPolicyKey {
             key: key.to_owned(),
-            path: path.to_path_buf(),
+            path: Provenance::shorten(path, root),
         }),
         Some(Some(resolved)) => Ok(resolved),
     }
@@ -343,10 +376,11 @@ fn require_or_default<T>(
 
 /// Parses `text` (read from `path`) into a [`Document`], naming `path` on
 /// failure — always the file actually being parsed, root or fragment, so a
-/// syntax error inside a fragment never gets blamed on the root manifest.
-fn parse_text(text: &str, path: &Path) -> Result<Document> {
+/// syntax error inside a fragment never gets blamed on the root manifest —
+/// rendered against `root` (see [`load`]).
+fn parse_text(text: &str, path: &Path, root: &Path) -> Result<Document> {
     serde_yaml_ng::from_str(text).map_err(|source| Error::ManifestParse {
-        path: path.to_path_buf(),
+        path: Provenance::shorten(path, root),
         source: Box::new(source),
     })
 }
@@ -377,11 +411,12 @@ mod policy;
 use policy::check_no_policy_keys;
 pub(crate) use policy::declared_policy_keys;
 
-/// Renders an import chain root first, e.g. `a.yaml -> b.yaml -> a.yaml`.
-fn format_chain(chain: &[PathBuf]) -> String {
+/// Renders an import chain root first, e.g. `a.yaml -> b.yaml -> a.yaml`,
+/// each link rendered against `root` (see [`load`]).
+fn format_chain(chain: &[PathBuf], root: &Path) -> String {
     chain
         .iter()
-        .map(|entry| entry.display().to_string())
+        .map(|entry| Provenance::display(entry, root))
         .collect::<Vec<_>>()
         .join(" -> ")
 }
@@ -392,16 +427,17 @@ fn format_chain(chain: &[PathBuf]) -> String {
 ///
 /// # Errors
 ///
-/// Returns [`Error::DuplicateCommandAcrossFiles`] naming the two files.
-fn check_cross_file_duplicate_commands(commands: &[(Command, PathBuf)]) -> Result<()> {
+/// Returns [`Error::DuplicateCommandAcrossFiles`] naming the two files,
+/// rendered against `root` (see [`load`]).
+fn check_cross_file_duplicate_commands(commands: &[(Command, PathBuf)], root: &Path) -> Result<()> {
     let mut first_seen: BTreeMap<&str, &Path> = BTreeMap::new();
     for (command, source) in commands {
         match first_seen.get(command.name.as_str()) {
             Some(&existing) if existing != source.as_path() => {
                 return Err(Error::DuplicateCommandAcrossFiles {
                     name: command.name.clone(),
-                    first: existing.to_path_buf(),
-                    second: source.clone(),
+                    first: Provenance::shorten(existing, root),
+                    second: Provenance::shorten(source, root),
                 });
             }
             Some(_) => {}

@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-08-17
+### Fixed
+
+- The project root a manifest is anchored to is now canonicalized, so it agrees
+  with the canonical paths provenance records. A root reached through a symlink
+  — a library caller passing `mmz::run(&argv, path)` its own path, never having
+  touched `current_dir()` — made every source path in `--status` and
+  `--dump-config` render absolute instead of root-relative, because stripping
+  one representation off the other could not match. Globs, `outputs` and
+  `cache_dir` resolve against the same root, so they are now consistent too.
+- A composition error names a file the way a report does: relative to the
+  project root when it sits under it, absolute otherwise. Previously
+  `scope \`rust\` is declared in both …` printed two absolute paths while
+  `--status` and `--dump-config` printed the same files root-relative, because
+  the loader was never handed the root. A fragment outside the tree — a store
+  path — still prints in full, which is the only form of it a reader can act
+  on.
 
 ### Added
 

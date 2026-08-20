@@ -6,6 +6,13 @@ use thiserror::Error;
 
 /// Errors produced while loading the manifest, resolving inputs, hashing
 /// files, or spawning the wrapped command.
+///
+/// Every path a manifest-loading error names is rendered the way a report
+/// renders one — relative to the project root when it sits under it, absolute
+/// otherwise (see [`crate::provenance::Provenance::display`]). So an error and
+/// `--status` name the same file identically, and a fragment outside the tree
+/// (a store path, the case composition exists to support) stays absolute,
+/// which is the unambiguous form for it.
 #[derive(Debug, Error)]
 pub enum Error {
     /// An I/O operation failed.

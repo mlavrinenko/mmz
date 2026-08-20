@@ -8,7 +8,6 @@ use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
 use crate::probe::Probe;
-use crate::provenance::Provenance;
 use crate::resolve::GlobGroup;
 
 /// Directory holding mmz's per-project state, found by walking upward. The
@@ -299,17 +298,10 @@ impl Manifest {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::ManifestParse`] when a file cannot be parsed, an import
-    /// error ([`Error::ImportMissing`], [`Error::ImportNotReadable`],
-    /// [`Error::ImportCycle`], [`Error::DuplicateScope`],
-    /// [`Error::DuplicateProbe`], [`Error::DuplicateCommandAcrossFiles`],
-    /// [`Error::FragmentPolicyKey`]), or a validation error
-    /// ([`Error::EmptyCommandName`], [`Error::DuplicateCommand`],
-    /// [`Error::UnknownInput`], [`Error::NameCollision`]) when the merged
-    /// contents are inconsistent.
+    /// Same as [`Located::at`], whose result this discards all but the merged
+    /// manifest of.
     pub fn load(path: &Path) -> Result<Self> {
-        let (manifest, _provenance) = crate::compose::load(path)?;
-        Ok(manifest)
+        Ok(Located::at(path)?.manifest)
     }
 
     /// Checks invariants the schema cannot express: no probe shadows a scope;
@@ -433,45 +425,24 @@ impl Manifest {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::NoManifest`] when none is found, a load/validation error
-    /// from [`crate::compose::load`], or [`Error::Internal`] if the config path
-    /// has no project root (it always does in practice —
-    /// `<root>/.mmz/config.yaml`).
+    /// Returns [`Error::NoManifest`] when none is found, plus anything
+    /// [`Located::at`] returns for the manifest it found.
     pub fn locate(cwd: &Path) -> Result<Located> {
-        let path = Self::discover(cwd).ok_or_else(|| Error::NoManifest {
+        let discovered = Self::discover(cwd).ok_or_else(|| Error::NoManifest {
             start: cwd.to_path_buf(),
         })?;
-        let root = path
-            .parent()
-            .and_then(Path::parent)
-            .ok_or_else(|| Error::Internal("config path has no project root".to_owned()))?
-            .to_path_buf();
-        let (manifest, provenance) = crate::compose::load(&path)?;
-        Ok(Located {
-            path,
-            root,
-            manifest,
-            provenance,
-        })
+        Located::at(&discovered)
     }
 }
 
-/// A discovered manifest: the config file, the project root its relative paths
-/// resolve against, the parsed, validated model, and the provenance of every
-/// entry in it.
-///
-/// Config lives at `<root>/.mmz/config.yaml`, so the project root is the parent
-/// of `.mmz`. Input globs and `cache_dir` resolve against `root`, never `.mmz`.
-pub struct Located {
-    /// The config file, for display and error messages.
-    pub path: PathBuf,
-    /// Project root: the directory that holds `.mmz`.
-    pub root: PathBuf,
-    /// The parsed, validated manifest.
-    pub manifest: Manifest,
-    /// Which file contributed each scope, probe and command in `manifest`.
-    pub provenance: Provenance,
-}
+/// The discovered manifest and the root it is anchored to — the pairing every
+/// entry point above hands back, split out to `manifest_located.rs` once this
+/// file reached its own line cap. [`Located`] keeps its original
+/// `crate::manifest::Located` path via the re-export below, so nothing outside
+/// this module has to know the split happened.
+#[path = "manifest_located.rs"]
+mod located;
+pub use located::Located;
 
 #[cfg(test)]
 #[path = "manifest_tests.rs"]

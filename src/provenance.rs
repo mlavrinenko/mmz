@@ -50,10 +50,22 @@ impl Provenance {
     /// recognisable instead of collapsing into a long `../../..` climb.
     #[must_use]
     pub fn display(path: &Path, root: &Path) -> String {
-        match path.strip_prefix(root) {
-            Ok(relative) => relative.display().to_string(),
-            Err(_) => path.display().to_string(),
-        }
+        Self::shorten(path, root).display().to_string()
+    }
+
+    /// [`Provenance::display`]'s rule as a path rather than a string: `path`
+    /// relative to `root` when it sits under it, unchanged otherwise.
+    ///
+    /// Reports render through `display`; [`crate::compose::load`] builds the
+    /// paths its errors name through this, so a composition error names a
+    /// file the way `--status` and `--dump-config` do rather than answering
+    /// the same question with a second rule. Both readings only line up
+    /// because every path either side holds is canonical —
+    /// [`crate::manifest::Located::at`] canonicalizes the project root for
+    /// exactly that reason.
+    #[must_use]
+    pub fn shorten(path: &Path, root: &Path) -> PathBuf {
+        path.strip_prefix(root).unwrap_or(path).to_path_buf()
     }
 }
 
@@ -73,5 +85,20 @@ mod tests {
             Provenance::display(outside, root),
             "/nix/store/xyz/rules.yaml"
         );
+    }
+
+    #[test]
+    fn shorten_is_the_same_rule_as_display() {
+        let root = Path::new("/tmp/project");
+        for path in [
+            Path::new("/tmp/project/.mmz/conf.d/a.yaml"),
+            Path::new("/nix/store/xyz/rules.yaml"),
+        ] {
+            assert_eq!(
+                Provenance::shorten(path, root).display().to_string(),
+                Provenance::display(path, root),
+                "the loader's error paths and a report's rows answer alike",
+            );
+        }
     }
 }

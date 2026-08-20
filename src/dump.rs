@@ -253,7 +253,7 @@ fn collect(cwd: &Path) -> Result<Dump> {
 /// keep that function under clippy's line-count lint — this is a cohesive
 /// unit on its own, not a slice taken for size alone.
 fn collect_policy(manifest: &Manifest, root_path: &Path, base: &Path) -> Result<Policy> {
-    let declared = crate::compose::declared_policy_keys(root_path)?;
+    let declared = crate::compose::declared_policy_keys(root_path, base)?;
     Ok(Policy {
         source: Provenance::display(root_path, base),
         gitignore: manifest.gitignore,

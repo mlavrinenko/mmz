@@ -41,7 +41,7 @@ fn fragment_scopes_probes_and_commands_reach_the_merged_model() {
         ),
     );
     let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
-    let (manifest, _) = load(&root).expect("loads");
+    let (manifest, _) = load(&root, dir.path()).expect("loads");
     assert!(manifest.scopes.contains_key("rust"), "scope reached");
     assert!(manifest.probes.contains_key("toolchain"), "probe reached");
     assert_eq!(names(&manifest), vec!["cargo test"], "command reached");
@@ -62,7 +62,7 @@ fn command_order_is_host_first_then_imports_depth_first() {
         "root.yaml",
         "commands:\n  - name: root\nimports: [a.yaml, b.yaml]\n",
     );
-    let (manifest, _) = load(&root).expect("loads");
+    let (manifest, _) = load(&root, dir.path()).expect("loads");
     assert_eq!(
         names(&manifest),
         vec!["root", "a", "nested", "b"],
@@ -79,7 +79,7 @@ fn duplicate_scope_across_files_names_both() {
         "root.yaml",
         "scopes:\n  rust: [\"b/**\"]\nimports: [frag.yaml]\n",
     );
-    let err = load(&root).expect_err("duplicate scope across files");
+    let err = load(&root, dir.path()).expect_err("duplicate scope across files");
     let text = err.to_string();
     assert!(text.contains("root.yaml"), "names root: {text}");
     assert!(text.contains("frag.yaml"), "names fragment: {text}");
@@ -100,7 +100,7 @@ fn duplicate_probe_across_files_names_both() {
         "root.yaml",
         "probes:\n  toolchain:\n    run: \"echo b\"\nimports: [frag.yaml]\n",
     );
-    let err = load(&root).expect_err("duplicate probe across files");
+    let err = load(&root, dir.path()).expect_err("duplicate probe across files");
     let text = err.to_string();
     assert!(text.contains("root.yaml"), "names root: {text}");
     assert!(text.contains("frag.yaml"), "names fragment: {text}");
@@ -116,7 +116,7 @@ fn duplicate_command_across_files_names_both() {
         "root.yaml",
         "commands:\n  - name: cargo test\nimports: [frag.yaml]\n",
     );
-    let err = load(&root).expect_err("duplicate command across files");
+    let err = load(&root, dir.path()).expect_err("duplicate command across files");
     let text = err.to_string();
     assert!(text.contains("root.yaml"), "names root: {text}");
     assert!(text.contains("frag.yaml"), "names fragment: {text}");
@@ -135,7 +135,7 @@ fn a_policy_key_in_a_fragment_errors_naming_the_key_and_file() {
         let dir = tempfile::tempdir().expect("tempdir");
         write(dir.path(), "frag.yaml", line);
         let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
-        let err = load(&root).expect_err("policy key in a fragment is rejected");
+        let err = load(&root, dir.path()).expect_err("policy key in a fragment is rejected");
         let text = err.to_string();
         assert!(text.contains(key), "names the key `{key}`: {text}");
         assert!(text.contains("frag.yaml"), "names the fragment: {text}");
@@ -151,7 +151,7 @@ fn the_same_policy_keys_in_the_root_do_not_error() {
         "root.yaml",
         "gitignore: false\ncache_dir: .cache\nstrict: []\non_hit: note\ncommands: []\n",
     );
-    let (manifest, _) = load(&root).expect("the root may set every policy key");
+    let (manifest, _) = load(&root, dir.path()).expect("the root may set every policy key");
     assert!(!manifest.gitignore);
     assert_eq!(manifest.cache_dir, ".cache");
     assert_eq!(manifest.on_hit.as_deref(), Some("note"));
@@ -167,7 +167,7 @@ fn an_explicit_null_policy_key_in_a_fragment_is_still_treated_as_set() {
         let dir = tempfile::tempdir().expect("tempdir");
         write(dir.path(), "frag.yaml", &format!("{key}:\n"));
         let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
-        let err = load(&root).expect_err("an explicit null still sets the key");
+        let err = load(&root, dir.path()).expect_err("an explicit null still sets the key");
         let text = err.to_string();
         assert!(text.contains(key), "names the key `{key}`: {text}");
         assert!(text.contains("frag.yaml"), "names the fragment: {text}");
@@ -190,7 +190,7 @@ fn an_explicit_null_gitignore_cache_dir_or_strict_in_the_root_is_rejected() {
     for key in ["gitignore", "cache_dir", "strict"] {
         let dir = tempfile::tempdir().expect("tempdir");
         let root = write(dir.path(), "root.yaml", &format!("{key}:\ncommands: []\n"));
-        load(&root).expect_err(&format!(
+        load(&root, dir.path()).expect_err(&format!(
             "an explicit null `{key}` in the root must fail closed, not default silently"
         ));
     }
@@ -205,7 +205,8 @@ fn an_explicit_null_gitignore_cache_dir_or_strict_in_the_root_is_rejected() {
 fn an_explicit_null_on_hit_in_the_root_stays_valid_and_means_none() {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = write(dir.path(), "root.yaml", "on_hit:\ncommands: []\n");
-    let (manifest, _) = load(&root).expect("on_hit: null has always been legal in the root");
+    let (manifest, _) =
+        load(&root, dir.path()).expect("on_hit: null has always been legal in the root");
     assert_eq!(manifest.on_hit, None);
 }
 
@@ -235,7 +236,8 @@ fn a_fragment_invalid_alone_but_valid_merged_is_accepted() {
         "uses.yaml alone references an undeclared scope"
     );
 
-    let (manifest, _) = load(&root).expect("valid once merged with the sibling that defines it");
+    let (manifest, _) =
+        load(&root, dir.path()).expect("valid once merged with the sibling that defines it");
     assert_eq!(names(&manifest), vec!["cargo test"]);
 }
 
@@ -265,7 +267,8 @@ fn a_merge_invalid_even_when_every_fragment_is_valid_alone_is_rejected() {
         serde_yaml_ng::from_str("probes:\n  shared:\n    run: \"echo x\"\n").expect("parses");
     probe_only.validate().expect("valid alone");
 
-    let err = load(&root).expect_err("a scope and a probe named `shared` collide once merged");
+    let err = load(&root, dir.path())
+        .expect_err("a scope and a probe named `shared` collide once merged");
     assert!(matches!(err, Error::NameCollision { .. }));
 }
 
@@ -277,7 +280,7 @@ fn provenance_records_the_root_as_source_of_its_own_entries() {
         "root.yaml",
         "scopes:\n  rust: [\"src/**\"]\ncommands: []\n",
     );
-    let (_, provenance) = load(&root).expect("loads");
+    let (_, provenance) = load(&root, dir.path()).expect("loads");
     assert_eq!(
         provenance.scopes.get("rust"),
         Some(&std::fs::canonicalize(&root).expect("canonicalize")),
@@ -290,7 +293,7 @@ fn provenance_records_a_fragment_as_source_of_its_own_entries() {
     let dir = tempfile::tempdir().expect("tempdir");
     let fragment = write(dir.path(), "frag.yaml", "scopes:\n  rust: [\"src/**\"]\n");
     let root = write(dir.path(), "root.yaml", "imports: [frag.yaml]\n");
-    let (_, provenance) = load(&root).expect("loads");
+    let (_, provenance) = load(&root, dir.path()).expect("loads");
     assert_eq!(
         provenance.scopes.get("rust"),
         Some(&std::fs::canonicalize(&fragment).expect("canonicalize"))
@@ -309,7 +312,7 @@ fn no_imports_key_produces_the_same_model_as_a_direct_parse() {
     );
     let dir = tempfile::tempdir().expect("tempdir");
     let root = write(dir.path(), "root.yaml", body);
-    let (composed, _) = load(&root).expect("loads");
+    let (composed, _) = load(&root, dir.path()).expect("loads");
     let direct: Manifest = serde_yaml_ng::from_str(body).expect("parses");
     direct.validate().expect("validates");
 
@@ -339,7 +342,7 @@ fn no_imports_key_reproduces_every_existing_validation_error_message() {
     for body in cases {
         let dir = tempfile::tempdir().expect("tempdir");
         let root = write(dir.path(), "root.yaml", body);
-        let composed_err = load(&root)
+        let composed_err = load(&root, dir.path())
             .expect_err("still invalid once merged")
             .to_string();
 
@@ -357,6 +360,6 @@ fn no_imports_key_reproduces_every_existing_validation_error_message() {
 fn no_imports_key_keeps_deny_unknown_fields_as_a_parse_error() {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = write(dir.path(), "root.yaml", "commands: []\nbogus: 1\n");
-    let err = load(&root).expect_err("unknown top-level field is rejected");
+    let err = load(&root, dir.path()).expect_err("unknown top-level field is rejected");
     assert!(matches!(err, Error::ManifestParse { .. }));
 }

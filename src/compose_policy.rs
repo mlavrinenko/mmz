@@ -10,6 +10,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::{Error, Result};
+use crate::provenance::Provenance;
 
 use super::{Document, POLICY_KEYS, parse_text};
 
@@ -23,13 +24,14 @@ use super::{Document, POLICY_KEYS, parse_text};
 /// # Errors
 ///
 /// Returns [`Error::FragmentPolicyKey`] if any of [`POLICY_KEYS`] is present,
-/// `null` included.
+/// `null` included, naming the fragment as [`super::load`] renders a path:
+/// relative to `root` under it, absolute otherwise.
 ///
 /// `pub(super)`, not `pub(crate)`: only `compose::visit_fragment` calls this,
 /// and keeping it scoped to the parent module is what lets `Document` — a
 /// type private to `compose` — appear in the signature without a
 /// private-interface leak.
-pub(super) fn check_no_policy_keys(document: &Document, path: &Path) -> Result<()> {
+pub(super) fn check_no_policy_keys(document: &Document, path: &Path, root: &Path) -> Result<()> {
     let [cache_dir, gitignore, strict, on_hit] = POLICY_KEYS;
     let present = [
         (cache_dir, document.cache_dir.is_some()),
@@ -40,13 +42,14 @@ pub(super) fn check_no_policy_keys(document: &Document, path: &Path) -> Result<(
     if let Some((key, _)) = present.into_iter().find(|(_, set)| *set) {
         return Err(Error::FragmentPolicyKey {
             key: key.to_owned(),
-            path: path.to_path_buf(),
+            path: Provenance::shorten(path, root),
         });
     }
     Ok(())
 }
 
-/// Which of [`POLICY_KEYS`] the root manifest at `path` sets explicitly,
+/// Which of [`POLICY_KEYS`] the root manifest at `path` sets explicitly
+/// (`root` only names the file in the parse error, as in [`super::load`]),
 /// rather than leaving to its default. [`super::load`] resolves each key to
 /// its effective value but does not keep whether it was written or
 /// assumed — that distinction is only interesting to `mmz --dump-config`'s
@@ -65,9 +68,9 @@ pub(super) fn check_no_policy_keys(document: &Document, path: &Path) -> Result<(
 /// gets here, since [`super::load`] already parsed the same file
 /// successfully, but the signature stays honest about doing its own read
 /// rather than trusting that.
-pub(crate) fn declared_policy_keys(path: &Path) -> Result<BTreeSet<&'static str>> {
+pub(crate) fn declared_policy_keys(path: &Path, root: &Path) -> Result<BTreeSet<&'static str>> {
     let text = fs::read_to_string(path)?;
-    let document = parse_text(&text, path)?;
+    let document = parse_text(&text, path, root)?;
     let [cache_dir, gitignore, strict, on_hit] = POLICY_KEYS;
     Ok([
         (cache_dir, document.cache_dir.is_some()),

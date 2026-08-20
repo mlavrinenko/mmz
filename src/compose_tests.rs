@@ -30,7 +30,7 @@ fn names(manifest: &Manifest) -> Vec<&str> {
 fn a_missing_import_file_errors_naming_the_path() {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = write(dir.path(), "root.yaml", "imports: [ghost.yaml]\n");
-    let err = load(&root).expect_err("missing import file");
+    let err = load(&root, dir.path()).expect_err("missing import file");
     let text = err.to_string();
     assert!(
         text.contains("ghost.yaml"),
@@ -43,7 +43,7 @@ fn a_missing_import_file_errors_naming_the_path() {
 fn a_missing_import_directory_errors_naming_the_path() {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = write(dir.path(), "root.yaml", "imports: [conf.d/]\n");
-    let err = load(&root).expect_err("missing import directory");
+    let err = load(&root, dir.path()).expect_err("missing import directory");
     let text = err.to_string();
     assert!(text.contains("conf.d"), "names the missing path: {text}");
     assert!(matches!(err, Error::ImportMissing { .. }));
@@ -58,7 +58,7 @@ fn an_empty_import_directory_is_accepted() {
         "root.yaml",
         "imports: [conf.d/]\ncommands: []\n",
     );
-    let (manifest, _) = load(&root).expect("an empty declared directory is fine");
+    let (manifest, _) = load(&root, dir.path()).expect("an empty declared directory is fine");
     assert!(manifest.commands.is_empty());
 }
 
@@ -69,7 +69,7 @@ fn a_directory_entry_sorts_lexically_and_ignores_non_yaml_files() {
     write(dir.path(), "conf.d/a.yml", "commands:\n  - name: a\n");
     write(dir.path(), "conf.d/notes.txt", "not yaml\n");
     let root = write(dir.path(), "root.yaml", "imports: [conf.d/]\n");
-    let (manifest, _) = load(&root).expect("directory expands");
+    let (manifest, _) = load(&root, dir.path()).expect("directory expands");
     assert_eq!(
         names(&manifest),
         vec!["a", "b"],
@@ -91,8 +91,8 @@ fn relative_paths_resolve_against_the_importing_file_not_the_root() {
         "imports: [sibling.yaml]\ncommands:\n  - name: frag\n",
     );
     let root = write(dir.path(), "root.yaml", "imports: [sub/frag.yaml]\n");
-    let (manifest, _) =
-        load(&root).expect("frag.yaml's own import resolves against sub/, not the root's dir");
+    let (manifest, _) = load(&root, dir.path())
+        .expect("frag.yaml's own import resolves against sub/, not the root's dir");
     assert_eq!(names(&manifest), vec!["frag", "sibling"]);
 }
 
@@ -110,6 +110,6 @@ fn an_absolute_path_outside_the_project_root_loads() {
         "root.yaml",
         &format!("imports: [{}]\n", fragment.display()),
     );
-    let (manifest, _) = load(&root).expect("an absolute path is used as written");
+    let (manifest, _) = load(&root, project.path()).expect("an absolute path is used as written");
     assert_eq!(names(&manifest), vec!["outside"]);
 }

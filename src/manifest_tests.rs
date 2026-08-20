@@ -287,11 +287,15 @@ fn locate_roots_at_the_parent_of_dot_mmz() {
     let nested = dir.path().join("a/b");
     std::fs::create_dir_all(&nested).expect("mkdir");
     write_config(dir.path(), "commands: []\n");
+    // Canonical on both sides: `Located` canonicalizes, and a temp directory
+    // is reached through a symlink on some platforms (macOS's `/var`), which
+    // would make an otherwise-correct root compare unequal.
+    let base = dir.path().canonicalize().expect("canonicalize");
     let located = Manifest::locate(&nested).expect("locate");
-    assert_eq!(located.root, dir.path(), "root is the parent of .mmz");
+    assert_eq!(located.root, base, "root is the parent of .mmz");
     assert_eq!(
         located.root.join(&located.manifest.cache_dir),
-        dir.path().join(".mmz/cache"),
+        base.join(".mmz/cache"),
         "cache_dir resolves under the project root, not inside .mmz",
     );
 }
