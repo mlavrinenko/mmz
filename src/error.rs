@@ -131,6 +131,88 @@ pub enum Error {
         run: String,
     },
 
+    /// A probe's source keys do not describe one readable thing: both `run:`
+    /// and `file:`, neither of them, or a `file:` with no `json:` to select
+    /// from it.
+    ///
+    /// Checked at load with the manifest's other shape rules, so a malformed
+    /// probe is refused even when no rule names it, and the message can name
+    /// the probe — which a `serde` conversion on the value alone could not.
+    #[error("probe `{name}` {reason}")]
+    ProbeSource {
+        /// Name of the offending probe.
+        name: String,
+        /// What is wrong with its source keys, and what to write instead.
+        reason: String,
+    },
+
+    /// A probe's `file:` could not be read, so there are no bytes to select
+    /// from. Named separately from [`Error::Io`] because a probe's error must
+    /// name the probe: a bare "no such file" leaves a reader hunting.
+    #[error(
+        "probe `{name}` could not read `{path}`; mmz consumed no output and wrote no cache record\n  {source}"
+    )]
+    ProbeFileUnreadable {
+        /// Name of the offending probe.
+        name: String,
+        /// The path, as the manifest spells it.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+
+    /// The bytes a `json:` probe was pointed at are not one JSON value — an
+    /// empty file, a tool that logged a line before its JSON, a truncated
+    /// write.
+    #[error(
+        "probe `{name}` read {origin}, which is not one JSON value ({reason}); mmz consumed no output and wrote no cache record"
+    )]
+    ProbeJsonInput {
+        /// Name of the offending probe.
+        name: String,
+        /// What was read, as the manifest points at it.
+        origin: String,
+        /// What the parser objected to.
+        reason: String,
+    },
+
+    /// A `json:` program did not compile, or raised while running. One variant
+    /// for both because the fix is the same edit — the program is wrong for
+    /// the document it was pointed at — and the reason says which half broke.
+    #[error(
+        "probe `{name}` could not select from {origin} ({reason}); mmz consumed no output and wrote no cache record\n  json: {program}"
+    )]
+    ProbeJsonFailed {
+        /// Name of the offending probe.
+        name: String,
+        /// The `json:` program, as the manifest spells it.
+        program: String,
+        /// What it was run against.
+        origin: String,
+        /// What jaq objected to.
+        reason: String,
+    },
+
+    /// A `json:` selector yielded no value, or only `null`.
+    ///
+    /// The same refusal [`Error::ProbeEmpty`] makes for stdout, at the place
+    /// the selection happens: a probe tracking `null` reports the same digest
+    /// whatever the document does, so the rule is permanently fresh against an
+    /// input nobody is measuring. `false` is a value and passes — jq's `-e`
+    /// conflates the two only because a shell exit code cannot tell them
+    /// apart, and mmz is under no such constraint.
+    #[error(
+        "probe `{name}` selected nothing from {origin}; that digest would measure nothing, so the rule would be fresh forever — fix the selector, or set `allow_empty: true` if an absent value really is a valid input\n  json: {program}"
+    )]
+    ProbeJsonEmpty {
+        /// Name of the offending probe.
+        name: String,
+        /// The `json:` program, as the manifest spells it.
+        program: String,
+        /// What it was run against.
+        origin: String,
+    },
+
     /// A command rule has a blank `name`.
     #[error("command #{0} has an empty `name`; every command must declare a name")]
     EmptyCommandName(usize),

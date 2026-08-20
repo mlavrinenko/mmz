@@ -94,23 +94,42 @@ the `Justfile`. And some dependencies are not files at all: the toolchain
 version, a resolved dependency set, the output of a tool that reports its own
 configuration.
 
-A `probes:` entry closes both gaps. `run` is a command line, its stdout is
-hashed, and `inputs:` references the probe by name exactly as it references a
-scope:
+A `probes:` entry closes both gaps. The shape to reach for first reads a file
+and selects out of it with no process at all:
+
+```yaml
+probes:
+  nixpkgs-input:
+    file: flake.lock
+    json: '.nodes["nixpkgs"]["locked"]["narHash"]'
+
+commands:
+  - name: nix flake check
+    inputs: [nixpkgs-input]
+```
+
+A real `flake.lock` holds a hundred nodes, so a scope naming it makes every rule
+depend on every input. The probe above depends on one, and reaching it costs a
+file read: no shell, nothing on `PATH`, no process per rule on an
+`mmz --is-fresh` that gates the whole manifest at once. `json:` is jq — a
+compatibility choice rather than a power one, since probes written before this
+key existed already use `,` and `with_entries(select(…))`, and a manifest key
+must not change meaning in a later version.
+
+`run:` is the other source — a command line whose stdout is the bytes — and it
+may carry a `json:` too, selecting out of that stdout instead of a file:
 
 ```yaml
 probes:
   fmt-recipe:
-    run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
-
-commands:
-  - name: just fmt-check
-    inputs: [rust, fmt-recipe]
+    run: just --dump --dump-format json
+    json: '.recipes["fmt-check"]'
 ```
 
-Nothing else about the rule changes: the probe's digest joins the rest of its
-input digest, so `just fmt-check` re-runs when its own recipe body moves and
-ignores every other recipe in the same file.
+The two sources are mutually exclusive: a probe declaring both is a manifest
+error, not a precedence rule to memorise. A `file:` with no `json:` is refused
+too — hashing a whole file is what a scope is for, and a scope keeps the
+gitignore filter and reports which file moved.
 
 == Read this before reaching for one
 
@@ -118,44 +137,51 @@ ignores every other recipe in the same file.
   A wrong scope costs time. A wrong probe can lie.
 ]
 
-Over-declaring a scope buys an unnecessary re-run — harmless. A probe that prints
-the wrong bytes buys a wrongly _fresh_ rule, which is the failure `mmz` exists to
-prevent. So every way a probe can fail visibly is a hard stop:
+Over-declaring a scope buys an unnecessary re-run — harmless. A probe that
+reports the wrong bytes buys a wrongly _fresh_ rule, which is the failure `mmz`
+exists to prevent. So every way a probe can fail visibly is a hard stop: exit 6,
+nothing consumed, no record written.
 
-- A probe that exits non-zero is an error naming the probe, its exit code, and
-  its stderr. `mmz` exits 6 without consuming the output and without writing a
-  record — a failed command never reaches the hasher.
-- A probe that cannot be spawned is the same error.
-- Empty stdout is an error by default; `allow_empty: true` opts in. It is the
-  cheapest catch there is for a selector that matched nothing.
+- A probe that exits non-zero, or cannot be spawned at all, names the probe, its
+  exit code and its stderr.
+- A `file:` that is missing or unreadable names the probe and the path.
+- Bytes that are not exactly one JSON value are refused wherever they came from:
+  a tool that logged a line before its JSON is a state `mmz` will not hash.
+- Empty stdout is an error, and so is a `json:` selection that measured nothing.
+  `allow_empty: true` opts into either.
 
-Content correctness and determinism are #strong[yours, not mmz's]. A probe that
-prints valid but wrong output, or that varies run to run, is a manifest bug and
-`mmz` cannot see it. Pin the ordering, strip the timestamps, and assert the shape
-_inside_ the probe so a bad shape becomes a non-zero exit:
+That last one is load-bearing. `.a.b.c` against a document lacking them is not a
+failure in jq — it is a successful selection of `null`, and a probe tracking
+`null` reports one digest whatever the document does. The rule would read fresh
+forever against an input nobody is measuring, which is precisely what `jq -e`
+prevents in a shelled-out probe. `false` is a value and passes: jq conflates it
+with `null` only because a shell exit code cannot tell them apart.
 
-```yaml
-probes:
-  fmt-recipe:                                   # note the -S and -e
-    run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
-```
+== Key order is not an input
 
-`jq -e` exits non-zero when its selector yields `null` or `false`, turning a
-renamed recipe into a loud probe failure instead of a digest that quietly stops
-tracking anything. `jq -S` is the ordering half of the same discipline: it sorts
-object keys, so the digest tracks the selection's content rather than the key
-order the renderer happened to pick. An unsorted hash of a JSON object is a
-latent dependency on the tool that printed it — two `just` versions emit the
-same recipe with the keys in a different order, which without `-S` reads as a
-busted rule. `mmz` does not validate meaning, and will not learn to.
+`mmz` hashes its own rendering of the selected value — object keys sorted at
+every depth, array order preserved — never the bytes it read. Two tool versions
+that emit the same recipe with its keys in a different order produce one digest.
+
+The alternative is a convention: a probe piping through `jq` hashes whatever the
+renderer chose, so an author who forgets `-S` ships a rule that busts on a tool
+upgrade — which happened here. Content correctness is still
+#strong[yours, not mmz's] — a selector naming the wrong field is a manifest bug
+`mmz` cannot see — but key order has stopped being one of the ways to get it
+wrong.
 
 == Mechanics
 
 `run` is executed by `sh -c` from the project root — the directory holding
 `.mmz` — with stdin closed, so a probe waiting on input fails instead of hanging
-a gate, and with stderr captured for the failure message.
+a gate, and with stderr captured for the failure message. A `file` path resolves
+against that same root, the base scope globs use, and is read directly: the
+`gitignore` filter never applies, since a probe names one file explicitly.
 
 == Which environment a probe measures
+
+This section is about `run` alone. A `file` probe measures the repository and
+has no environment to get wrong, which is most of why it is the shape to prefer.
 
 `sh -c` is only the default. A `run` line resolves its commands through whatever
 `PATH` the caller had, which makes the caller's shell part of what the probe
@@ -172,16 +198,16 @@ probe_shell: ["direnv", "exec", ".", "sh", "-c"]
 
 probes:
   fmt-recipe:
-    run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
+    run: just --dump --dump-format json
+    json: '.recipes["fmt-check"]'
 ```
 
 The first element is the program and the rest are fixed arguments; the `run`
-line is appended as one final argument. Every probe in the manifest goes through
-it, the `run` lines are untouched, and `["nix", "develop", "--command", "sh",
-"-c"]` works the same way. It is root-manifest-only — an imported fragment
-setting it would leave undecidable which one governs a probe declared in a
-third file — and an empty list is a load error, since there would be nothing to
-spawn.
+line is appended as one final argument. Every `run` line in the manifest goes
+through it untouched, and `["nix", "develop", "--command", "sh", "-c"]` works
+the same way. It is root-manifest-only — an imported fragment setting it would
+leave undecidable which one governs a probe declared in a third file — and an
+empty list is a load error, since there would be nothing to spawn.
 
 #callout("note")[
   This pins the environment; it does not make mmz aware of it. A probe measured
@@ -190,9 +216,9 @@ spawn.
 ]
 
 A probe is resolved #strong[once per invocation] however many rules name it, so
-eighteen rules sharing one probe cost one process. That shape matters: a bare
-`mmz --is-fresh` gates every rule at once and runs in git hooks. A declared probe
-that no rule names is never run at all.
+eighteen rules sharing one probe cost one read or one process. That shape
+matters: a bare `mmz --is-fresh` gates every rule at once and runs in git hooks.
+A declared probe that no rule names is never resolved at all.
 
 A rule whose only input is a probe has inputs — it is memoized, not `no-inputs`.
 

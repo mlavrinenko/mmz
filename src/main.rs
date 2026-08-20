@@ -384,9 +384,16 @@ fn exit_for(err: &Error) -> u8 {
         | Error::DuplicateCommandAcrossFiles { .. }
         | Error::FragmentPolicyKey { .. }
         | Error::NullPolicyKey { .. }
+        | Error::ProbeSource { .. }
         | Error::EmptyProbeShell => 4,
         Error::MissingOutput { .. } => 5,
-        Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
+        Error::ProbeFailed { .. }
+        | Error::ProbeSpawn { .. }
+        | Error::ProbeEmpty { .. }
+        | Error::ProbeFileUnreadable { .. }
+        | Error::ProbeJsonInput { .. }
+        | Error::ProbeJsonFailed { .. }
+        | Error::ProbeJsonEmpty { .. } => 6,
         Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,

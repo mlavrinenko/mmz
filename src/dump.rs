@@ -119,12 +119,21 @@ struct ScopeEntry {
     source: String,
 }
 
-/// One merged probe: its `run` line and `allow_empty` flag, plus the file
-/// that declared it.
+/// One merged probe: whichever source it declared, its `json:` selector if it
+/// has one, its `allow_empty` flag, and the file that declared it.
+///
+/// `run` and `file` are skipped when absent rather than emitted as `null`,
+/// because exactly one of them is always set — a reader scanning the dump
+/// should see the source the probe has, not a null beside it.
 #[derive(Serialize)]
 struct ProbeEntry {
     name: String,
-    run: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    run: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    json: Option<String>,
     /// Always present, unlike the manifest's own `#[serde(default)]`
     /// spelling of this field: a boring, stable schema names every key
     /// regardless of whether the value happens to be the default.
@@ -214,6 +223,8 @@ fn collect(cwd: &Path) -> Result<Dump> {
         .map(|(name, probe)| ProbeEntry {
             name: name.clone(),
             run: probe.run.clone(),
+            file: probe.file.as_ref().map(|path| path.display().to_string()),
+            json: probe.json.clone(),
             allow_empty: probe.allow_empty,
             source: source_of(&provenance.probes, name, base),
         })
@@ -362,7 +373,15 @@ fn render_text(dump: &Dump) -> String {
         out.push_str("\nprobes:\n");
         for probe in &dump.probes {
             out.push_str(&format!("  {}:  # {}\n", probe.name, probe.source));
-            out.push_str(&format!("    run: {}\n", probe.run));
+            if let Some(run) = &probe.run {
+                out.push_str(&format!("    run: {run}\n"));
+            }
+            if let Some(file) = &probe.file {
+                out.push_str(&format!("    file: {file}\n"));
+            }
+            if let Some(json) = &probe.json {
+                out.push_str(&format!("    json: {json}\n"));
+            }
             out.push_str(&format!("    allow_empty: {}\n", probe.allow_empty));
         }
     }
