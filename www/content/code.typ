@@ -6,7 +6,7 @@
   route: "/code/",
   label: "Code inputs",
   title: "Code inputs: matching source with AST patterns",
-  summary: "The `ast:` selector — depending on a function, a type or an impl block instead of a whole file — what it hashes, and which grammars a build carries.",
+  summary: "The `ast:` selector — depending on a function, a type or an impl block instead of a whole file — what it hashes, how `capture:` narrows a match to the parts that matter, and which grammars a build carries.",
 )
 #metadata(meta) <page-meta>
 
@@ -49,14 +49,14 @@ function's body depends on that body.
 ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'   # signatures AND bodies
 ```
 
-There is no spelling that keeps the signature and drops the body, because the
-signature is not a node of its own once a body follows it. So `ast:` narrows a
-file to a set of constructs; narrowing a construct to part of itself is a
-question about the captured metavariables, and a separate one.
+There is no pattern that keeps the signature and drops the body, because the
+signature is not a node of its own once a body follows it. `capture:`, below, is
+the way out of that; everywhere a pattern can already stop at the boundary you
+care about, it is the shorter answer and the one to reach for.
 
-What it does buy over a scope, even so: everything the pattern did not match is
-free to move. Comments, imports, private items, other functions, the file
-growing a second module — none of it is an input.
+What a pattern buys over a scope either way: everything it did not match is free
+to move. Comments, imports, private items, other functions, the file growing a
+second module — none of it is an input.
 
 = What is hashed
 
@@ -82,6 +82,7 @@ records. So:
   [Changing whitespace _inside_ a string literal], [busts],
   [Reordering two matched declarations], [busts],
   [Editing a body the pattern spans], [busts],
+  [Editing a body the pattern spans but `capture:` does not name], [none],
 )
 
 This is the same line #link(u("/inputs/"))[`json:` draws] when it sorts object
@@ -105,6 +106,61 @@ prevent.
   matched text instead would be steady across grammar bumps and blind to
   reformatting — steadier, and wrong in the direction that matters.
 ]
+
+= Naming the parts that matter
+
+`capture:` narrows each match to the metavariables it names, written without the
+`$`:
+
+```yaml
+probes:
+  public-api:
+    file: src/lib.rs
+    ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'
+    capture: [NAME, ARGS, RET]
+```
+
+That is the input the page opened wanting: the signatures of the public
+functions, and not one token of what they do.
+
+The pattern and the list answer different questions, and reading them as one is
+the way to get this wrong:
+
+#table(
+  columns: 2,
+  table.header[The pattern decides][The list decides],
+  [Which constructs match at all], [Which parts of each are hashed],
+  [`$$$BODY` is why a function _with_ a body matches],
+  [leaving `BODY` out is
+    why that body is not an input],
+)
+
+So dropping `$$$BODY` from the pattern would not narrow the input — it would
+stop matching the functions you meant.
+
+A capture renders as `($NAME …)` around the rendering of every node it bound, so
+one match of the probe above hashes:
+
+```
+($ARGS (parameter (identifier "a") (: ":") (primitive_type "u8"))) ($NAME (identifier "one")) ($RET (primitive_type "u8"))
+```
+
+The list is sorted before hashing, because it is the _set_ of parts that matter:
+retyping `[RET, NAME, ARGS]` is not an edit, and cannot be, since only two
+spellings of one set ever normalise together. A multi capture that bound nothing
+renders as a bare `($ARGS)`, distinct from every count above it — so a function
+losing its last argument is still an edit.
+
+#callout("warn")[
+  A name the pattern does not define is a hard error, and this is the refusal
+  the key could not ship without. An undefined name binds nothing, so it would
+  render as an empty `($TYPO)` in every match and narrow the probe to whatever
+  was left — with every match still present, so `allow_empty: true` would find
+  nothing to complain about. The message names what the pattern _does_ capture.
+]
+
+An anonymous `$$$` or a `$_` binds nothing in ast-grep and cannot be named at
+all; give the pattern a `$$$ARGS` if you want that run to be an input.
 
 = Which languages a build can parse
 
@@ -156,9 +212,17 @@ matching nothing — each of these is exit 6, no record written:
 - A `lang:` this build has no grammar for, naming the feature flag that fixes
   it. A language mmz has no grammar for in any build is a different message,
   because it needs a different answer.
+- A `capture:` name the pattern does not define, naming what it does. Checked
+  from the compiled pattern rather than from a match, so a source with no
+  matches at all is still told about the list — the error you can act on.
 - A `run:` or an unrecognised extension with no `lang:` to say what to parse.
 - Bytes that are not UTF-8.
-- `json:` and `ast:` on one probe, or `lang:` without `ast:`.
+- `json:` and `ast:` on one probe, or `lang:` or `capture:` without `ast:`.
+
+Three more are refused at load (exit 4), because the manifest alone settles
+them: an empty `capture:` list, which would hash nothing once per match; a name
+that could never be a metavariable, such as `$NAME` copied straight out of the
+pattern; and the same name listed twice.
 
 A file that _parses_ into a tree holding error nodes is deliberately not
 refused: source using syntax newer than the bundled grammar is an ordinary

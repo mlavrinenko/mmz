@@ -231,3 +231,128 @@ fn dump_config_reports_the_selector_and_its_language() {
         .stdout(predicate::str::contains("ast: pub fn $NAME()"))
         .stdout(predicate::str::contains("lang: rust"));
 }
+
+/// The same rule under a `capture:` list: the pattern still spans the body,
+/// and the list is what keeps the body out of the input.
+const CAPTURED_API: &str = concat!(
+    "probes:\n  public-api:\n    file: lib.rs\n",
+    "    ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'\n",
+    "    capture: [NAME, ARGS, RET]\n",
+    "commands:\n  - name: sh\n    inputs: [public-api]\n",
+);
+
+/// The property the whole feature exists for, end to end: a rule that depends
+/// on the public API of a file and not on the bodies behind it — which the
+/// pattern alone could not express, because a Rust signature stops being a node
+/// of its own once a body follows it.
+#[test]
+fn a_captured_probe_survives_a_body_rewrite_and_busts_on_the_signature() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(
+        dir.path(),
+        CAPTURED_API,
+        "pub fn one(a: u8) -> u8 { a }\npub fn two() -> u8 { 2 }\n",
+    );
+    build(dir.path()).success();
+    assert_eq!(runs(dir.path()), 1, "the first run is a miss");
+
+    // Rewrite both bodies. The pattern matched them; the list did not name
+    // them; so nothing about this is an input.
+    fs::write(
+        dir.path().join("lib.rs"),
+        "pub fn one(a: u8) -> u8 { a.wrapping_add(0) }\npub fn two() -> u8 { 1 + 1 }\n",
+    )
+    .expect("rewrite source");
+    build(dir.path()).success();
+    assert_eq!(
+        runs(dir.path()),
+        1,
+        "a body the pattern spans but the list does not name is not an input"
+    );
+
+    // Add a parameter. That is a captured part.
+    fs::write(
+        dir.path().join("lib.rs"),
+        "pub fn one(a: u8, b: u8) -> u8 { a.wrapping_add(b) }\npub fn two() -> u8 { 1 + 1 }\n",
+    )
+    .expect("rewrite source");
+    build(dir.path()).success();
+    assert_eq!(
+        runs(dir.path()),
+        2,
+        "the signature moved, so the rule re-ran"
+    );
+}
+
+/// A typo in the list would otherwise render an empty capture in every match
+/// and narrow the probe silently, with every match still present for
+/// `allow_empty` to find nothing wrong with.
+#[test]
+fn a_capture_the_pattern_does_not_define_fails_before_the_hasher() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(
+        dir.path(),
+        concat!(
+            "probes:\n  public-api:\n    file: lib.rs\n",
+            "    ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'\n",
+            "    capture: [NAME, RETURNS]\n    allow_empty: true\n",
+            "commands:\n  - name: sh\n    inputs: [public-api]\n",
+        ),
+        "pub fn one(a: u8) -> u8 { a }\n",
+    );
+    build(dir.path())
+        .code(6)
+        .stderr(predicate::str::contains("public-api"))
+        .stderr(predicate::str::contains("RETURNS"))
+        .stderr(predicate::str::contains("`RET`"));
+    assert!(!recorded(dir.path()), "no record was written");
+    assert_eq!(runs(dir.path()), 0, "the command never ran");
+}
+
+/// Everything decidable from the manifest alone is decided at load (exit 4),
+/// so a list mmz could never read does not wait for the probe to be reached.
+#[test]
+fn the_capture_list_rules_are_refused_at_load() {
+    for (probe, expected) in [
+        (
+            "    ast: 'pub fn $NAME()'\n    capture: []\n",
+            "empty `capture:` list",
+        ),
+        (
+            "    ast: 'pub fn $NAME()'\n    capture: ['$NAME']\n",
+            "without the `$`",
+        ),
+        (
+            "    ast: 'pub fn $NAME()'\n    capture: [NAME, NAME]\n",
+            "twice",
+        ),
+        ("    json: '.a'\n    capture: [NAME]\n", "without `ast:`"),
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        write_project(
+            dir.path(),
+            &format!(
+                "probes:\n  api:\n    file: lib.rs\n{probe}commands:\n  - name: sh\n    inputs: [api]\n"
+            ),
+            "pub fn one() {}\n",
+        );
+        build(dir.path())
+            .code(4)
+            .stderr(predicate::str::contains(expected));
+    }
+}
+
+/// `--dump-config` is what a reader audits a composed manifest with, so a key
+/// it does not print is a key nobody can check without opening the fragment
+/// that set it.
+#[test]
+fn dump_config_reports_the_capture_list() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path(), CAPTURED_API, "pub fn one() -> u8 { 1 }\n");
+    mmz(dir.path())
+        .timeout(PATIENCE)
+        .arg("--dump-config")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("capture: [NAME, ARGS, RET]"));
+}

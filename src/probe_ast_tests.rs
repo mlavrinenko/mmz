@@ -1,10 +1,11 @@
-//! Unit tests for a probe's `ast:` and `lang:` keys, split from
+//! Unit tests for a probe's `ast:`, `capture:` and `lang:` keys, split from
 //! `probe_tests.rs` so neither file reaches the line cap.
 //!
 //! [`crate::ast`]'s own tests cover the rendering. What is tested here is the
 //! wiring: that a real probe over a real file on disk narrows to the slice its
-//! pattern names, that the shape rules refuse every key combination mmz cannot
-//! read, and that a pattern matching nothing stops before the hasher.
+//! pattern names — and, under `capture:`, to the parts of that slice the list
+//! names — that the shape rules refuse every key combination mmz cannot read,
+//! and that a pattern matching nothing stops before the hasher.
 
 use super::{Resolver, validate};
 use crate::manifest::Manifest;
@@ -173,4 +174,139 @@ fn an_unknown_language_is_refused_at_resolve_time() {
     let message = failure_of(&dir, &manifest).to_string();
     assert!(message.contains("cobol"), "names the language: {message}");
     assert!(message.contains("this build parses"), "{message}");
+}
+
+/// A project root holding `lib.rs`, plus a manifest whose one probe matches
+/// `pattern` over it under the given `capture:` list.
+fn captured_project(source: &str, pattern: &str, capture: &str) -> (tempfile::TempDir, Manifest) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::write(dir.path().join("lib.rs"), source).expect("write source");
+    let manifest = parse(&format!(
+        "probes:\n  api:\n    file: lib.rs\n    ast: '{pattern}'\n    capture: {capture}\ncommands:\n  - name: sh\n    inputs: [api]\n"
+    ));
+    (dir, manifest)
+}
+
+/// The task's motivating example: the pattern has to span the body to reach a
+/// function that has one, and `capture:` is what keeps that body out of the
+/// digest.
+const SIGNATURE: &str = "pub fn $NAME($$$ARGS) -> $RET { $$$BODY }";
+
+#[cfg(feature = "lang-rust")]
+#[test]
+fn a_captured_probe_depends_on_the_signature_and_not_the_body() {
+    let (before, manifest) = captured_project(
+        "pub fn one(a: u8) -> u8 { a }\n",
+        SIGNATURE,
+        "[NAME, ARGS, RET]",
+    );
+    let (after, _) = captured_project(
+        "pub fn one(a: u8) -> u8 { a + 0 }\n",
+        SIGNATURE,
+        "[NAME, ARGS, RET]",
+    );
+    assert_eq!(
+        digest_of(&before, &manifest),
+        digest_of(&after, &manifest),
+        "the body was matched but not captured"
+    );
+
+    let (renamed, _) = captured_project(
+        "pub fn renamed(a: u8) -> u8 { a }\n",
+        SIGNATURE,
+        "[NAME, ARGS, RET]",
+    );
+    assert_ne!(
+        digest_of(&before, &manifest),
+        digest_of(&renamed, &manifest),
+        "the signature is still the input"
+    );
+}
+
+/// Without `capture:` the same pattern depends on the body, which is the
+/// default this feature narrows rather than replaces.
+#[cfg(feature = "lang-rust")]
+#[test]
+fn the_default_is_still_the_whole_matched_node() {
+    let (before, manifest) = rust_project("pub fn one(a: u8) -> u8 { a }\n", SIGNATURE);
+    let (after, _) = rust_project("pub fn one(a: u8) -> u8 { a + 0 }\n", SIGNATURE);
+    assert_ne!(
+        digest_of(&before, &manifest),
+        digest_of(&after, &manifest),
+        "a match is a whole node unless `capture:` says otherwise"
+    );
+}
+
+/// Naming something the pattern does not define fails at the probe, naming the
+/// probe — an empty capture would otherwise narrow the digest silently.
+#[cfg(feature = "lang-rust")]
+#[test]
+fn a_capture_the_pattern_does_not_define_names_the_probe() {
+    let (dir, manifest) = captured_project("pub fn one() -> u8 { 1 }\n", SIGNATURE, "[NAME, TYPO]");
+    let message = failure_of(&dir, &manifest).to_string();
+    assert!(message.contains("api"), "names the probe: {message}");
+    assert!(message.contains("TYPO"), "names the miss: {message}");
+    assert!(
+        message.contains("`NAME`"),
+        "names what is defined: {message}"
+    );
+}
+
+/// `allow_empty:` waives an empty match set, never an undefined capture: the
+/// matches are all there, so there is no emptiness for it to be about.
+#[cfg(feature = "lang-rust")]
+#[test]
+fn allow_empty_does_not_waive_an_undefined_capture() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::write(dir.path().join("lib.rs"), "pub fn one() -> u8 { 1 }\n").expect("write source");
+    let manifest = parse(&format!(
+        "probes:\n  api:\n    file: lib.rs\n    ast: '{SIGNATURE}'\n    capture: [TYPO]\n    allow_empty: true\ncommands:\n  - name: sh\n    inputs: [api]\n"
+    ));
+    assert!(
+        failure_of(&dir, &manifest).to_string().contains("TYPO"),
+        "an undefined capture is not an emptiness `allow_empty` can opt into"
+    );
+}
+
+/// Everything decidable from the manifest alone is decided at load, so a bad
+/// list never waits for the probe to be reached.
+#[test]
+fn the_capture_list_rules_are_refused_at_load() {
+    for (body, expected) in [
+        (
+            "probes:\n  api:\n    file: lib.rs\n    json: '.a'\n    capture: [NAME]\n",
+            "without `ast:`",
+        ),
+        (
+            "probes:\n  api:\n    file: lib.rs\n    ast: 'pub fn $NAME()'\n    capture: []\n",
+            "empty `capture:` list",
+        ),
+        (
+            "probes:\n  api:\n    file: lib.rs\n    ast: 'pub fn $NAME()'\n    capture: ['$NAME']\n",
+            "without the `$`",
+        ),
+        (
+            "probes:\n  api:\n    file: lib.rs\n    ast: 'pub fn $NAME()'\n    capture: [name]\n",
+            "not a metavariable name",
+        ),
+        (
+            "probes:\n  api:\n    file: lib.rs\n    ast: 'pub fn $NAME()'\n    capture: [NAME, NAME]\n",
+            "twice",
+        ),
+    ] {
+        let message = shape_refusal(body);
+        assert!(message.contains(expected), "{expected}: {message}");
+    }
+}
+
+/// `$_X` is a *dropped* variable in ast-grep rather than a captured one, so it
+/// could only ever hash nothing — refused by the name rule at load rather than
+/// left to come back as "the pattern does not define it", which would send a
+/// reader to edit the pattern instead of the list.
+#[test]
+fn a_dropped_variable_is_refused_by_name() {
+    let message = shape_refusal(
+        "probes:\n  api:\n    file: lib.rs\n    ast: 'pub fn $NAME($_ARG)'\n    capture: [_ARG]\n",
+    );
+    assert!(message.contains("not a metavariable name"), "{message}");
 }

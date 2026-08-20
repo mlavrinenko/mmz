@@ -65,7 +65,8 @@ pub(super) fn hash_selection(
 }
 
 /// Parses the bytes as source and hashes the canonical rendering of every node
-/// `pattern` matched.
+/// `pattern` matched — or, when the probe declares `capture:`, of the parts of
+/// each match it named.
 ///
 /// Joined one per line, the same shape [`hash_selection`] uses, so the two
 /// selectors differ in what they select and in nothing else. Matches stay in
@@ -80,8 +81,8 @@ pub(super) fn hash_matches(
     let origin = probe.origin();
     let lang = ast::resolve_lang(probe.lang.as_deref(), probe.file.as_deref(), &origin)
         .map_err(|failure| ast_error(name, failure))?;
-    let matched =
-        ast::select(lang, pattern, bytes, &origin).map_err(|failure| ast_error(name, failure))?;
+    let matched = ast::select(lang, pattern, probe.capture.as_deref(), bytes, &origin)
+        .map_err(|failure| ast_error(name, failure))?;
     if !probe.allow_empty && matched.is_empty() {
         return Err(ast_error(
             name,

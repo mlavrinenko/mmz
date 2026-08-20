@@ -58,7 +58,7 @@ Broaden the scope when in doubt. `mmz` fails closed everywhere else: a missing o
 - [Quickstart](https://mlavrinenko.github.io/mmz/quickstart/) — Install mmz, scaffold a manifest, and watch a command skip itself.
 - [Concepts](https://mlavrinenko.github.io/mmz/concepts/) — The model behind mmz: rules, records, freshness, and the asymmetry that decides every design question.
 - [Inputs: scopes and probes](https://mlavrinenko.github.io/mmz/inputs/) — Named glob sets, the gitignore filter and how to opt one scope out of it, and probes for the inputs that are not files.
-- [Code inputs: matching source with AST patterns](https://mlavrinenko.github.io/mmz/code/) — The \`ast:\` selector — depending on a function, a type or an impl block instead of a whole file — what it hashes, and which grammars a build carries.
+- [Code inputs: matching source with AST patterns](https://mlavrinenko.github.io/mmz/code/) — The \`ast:\` selector — depending on a function, a type or an impl block instead of a whole file — what it hashes, how \`capture:\` narrows a match to the parts that matter, and which grammars a build carries.
 - [Matching and parametric rules](https://mlavrinenko.github.io/mmz/matching/) — How an invocation is matched to a rule, how the cache identity follows from that, and how one rule can fan over a scope's files.
 - [Declared outputs](https://mlavrinenko.github.io/mmz/outputs/) — A producer command's record can be undone without touching an input. Declaring what a run leaves behind is how mmz notices.
 - [Gating with tags](https://mlavrinenko.github.io/mmz/gating/) — Use --is-fresh to require that an expensive check already passed, and tags to decide which rules a gate is allowed to ask about.

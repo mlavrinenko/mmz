@@ -136,6 +136,11 @@ struct ProbeEntry {
     json: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     ast: Option<String>,
+    /// The `capture:` list as the manifest wrote it, order included — this is
+    /// an audit of the source, not of what the hasher does with it, and the
+    /// hasher's own sort is documented in [`crate::ast_render`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    capture: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     lang: Option<String>,
     /// Always present, unlike the manifest's own `#[serde(default)]`
@@ -230,6 +235,7 @@ fn collect(cwd: &Path) -> Result<Dump> {
             file: probe.file.as_ref().map(|path| path.display().to_string()),
             json: probe.json.clone(),
             ast: probe.ast.clone(),
+            capture: probe.capture.clone(),
             lang: probe.lang.clone(),
             allow_empty: probe.allow_empty,
             source: source_of(&provenance.probes, name, base),
@@ -375,28 +381,7 @@ fn render_text(dump: &Dump) -> String {
         }
     }
 
-    if !dump.probes.is_empty() {
-        out.push_str("\nprobes:\n");
-        for probe in &dump.probes {
-            out.push_str(&format!("  {}:  # {}\n", probe.name, probe.source));
-            if let Some(run) = &probe.run {
-                out.push_str(&format!("    run: {run}\n"));
-            }
-            if let Some(file) = &probe.file {
-                out.push_str(&format!("    file: {file}\n"));
-            }
-            if let Some(json) = &probe.json {
-                out.push_str(&format!("    json: {json}\n"));
-            }
-            if let Some(ast) = &probe.ast {
-                out.push_str(&format!("    ast: {ast}\n"));
-            }
-            if let Some(lang) = &probe.lang {
-                out.push_str(&format!("    lang: {lang}\n"));
-            }
-            out.push_str(&format!("    allow_empty: {}\n", probe.allow_empty));
-        }
-    }
+    render_probes(&dump.probes, &mut out);
 
     if !dump.commands.is_empty() {
         out.push_str("\ncommands:\n");
@@ -419,6 +404,41 @@ fn render_text(dump: &Dump) -> String {
     }
 
     out
+}
+
+/// The `probes:` block of the human form, split out of [`render_text`] so
+/// neither function outgrows the line cap as a probe's key set grows.
+///
+/// Every key a probe declared is echoed, `capture:` included: `--dump-config`
+/// is what a reader audits a composed manifest with, so a key it does not print
+/// is a key nobody can check without opening the fragment that set it.
+fn render_probes(probes: &[ProbeEntry], out: &mut String) {
+    if probes.is_empty() {
+        return;
+    }
+    out.push_str("\nprobes:\n");
+    for probe in probes {
+        out.push_str(&format!("  {}:  # {}\n", probe.name, probe.source));
+        if let Some(run) = &probe.run {
+            out.push_str(&format!("    run: {run}\n"));
+        }
+        if let Some(file) = &probe.file {
+            out.push_str(&format!("    file: {file}\n"));
+        }
+        if let Some(json) = &probe.json {
+            out.push_str(&format!("    json: {json}\n"));
+        }
+        if let Some(ast) = &probe.ast {
+            out.push_str(&format!("    ast: {ast}\n"));
+        }
+        if let Some(capture) = &probe.capture {
+            out.push_str(&format!("    capture: [{}]\n", capture.join(", ")));
+        }
+        if let Some(lang) = &probe.lang {
+            out.push_str(&format!("    lang: {lang}\n"));
+        }
+        out.push_str(&format!("    allow_empty: {}\n", probe.allow_empty));
+    }
 }
 
 /// `"  (default)"` when `key` is not in `declared` (the root manifest never

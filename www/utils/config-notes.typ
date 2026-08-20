@@ -98,6 +98,25 @@
     reformatting, and a digest that misses a real edit is the failure this tool
     exists to prevent.
   ],
+  "probes[].capture": [
+    What makes the motivating example reachable rather than nearly reachable. A
+    Rust signature stops being a node of its own once a body follows it, so the
+    only pattern that matches a real function spans the body too — and without
+    this key, "depends on the public API and not the bodies" had no spelling at
+    all.
+
+    Read the pattern and the list as two different questions. The pattern
+    decides _which constructs_ are matched, so a metavariable left out of the
+    list still earns its place there; the list decides _which parts of each_ are
+    hashed. Dropping `$$$BODY` from the pattern would not narrow the input, it
+    would stop matching functions that have one.
+
+    The cost is that a probe naming three captures is more to read than one
+    naming a pattern, and the win is confined to constructs whose grammar glues
+    a signature to a body. Where a pattern can already stop at the boundary you
+    care about, let it — the default is the whole matched node precisely because
+    that is the answer most of the time.
+  ],
   "probes[].lang": [
     A build-time fact, not just a manifest one. Grammars are large enough that
     shipping all of them would charge every user who never writes an `ast:`

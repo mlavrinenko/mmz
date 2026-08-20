@@ -18,25 +18,44 @@
 //! `src/types.rs` hashes the file, so a comment reflow re-runs the rule; the
 //! probe above moves only when a public struct definition does.
 //!
-//! # A match is a whole node
+//! # A match is a whole node, unless `capture:` says otherwise
 //!
-//! Which decides what a pattern costs: the input is every node the pattern
-//! matched, entire. `pub fn $N($$$A) -> $R { $$$B }` depends on the bodies as
-//! well as the signatures, and there is no spelling that keeps one and drops
-//! the other, because a signature stops being a node of its own once a body
-//! follows it. Narrowing a match to part of itself is a question about the
-//! captured metavariables, and a separate feature from this one.
+//! By default the input is every node the pattern matched, entire. That is the
+//! rule to hold on to, and on its own it puts one shape out of reach:
+//! `pub fn $N($$$A) -> $R { $$$B }` depends on the bodies as well as the
+//! signatures, and no pattern keeps one and drops the other, because a Rust
+//! signature stops being a node of its own once a body follows it.
 //!
-//! What it does buy over a scope regardless: everything the pattern did not
-//! match is free to move — comments, imports, private items, a whole second
-//! module — and none of it is an input.
+//! `capture:` answers that by naming which of the pattern's metavariables are
+//! the input:
+//!
+//! ```yaml
+//! probes:
+//!   public-api:
+//!     file: src/lib.rs
+//!     ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'
+//!     capture: [NAME, ARGS, RET]
+//! ```
+//!
+//! The pattern still decides *which* constructs match — a function without a
+//! body is not one of them — and the capture list decides which parts of each
+//! are hashed. So `$$$BODY` is what makes the pattern reach a function with a
+//! body, and leaving it out of the list is what stops that body being an input.
+//! Naming a capture the pattern does not define is a hard error, for the reason
+//! every other refusal here is one: it would otherwise hash the empty string
+//! once per match and report the same digest whatever the file said.
+//!
+//! What both spellings buy over a scope: everything the pattern did not match
+//! is free to move — comments, imports, private items, a whole second module —
+//! and none of it is an input.
 //!
 //! # What is hashed
 //!
 //! One canonical rendering per match, joined one per line — the same shape
 //! [`crate::probe`] joins `json:` outputs in. See [`crate::ast_render`] for what
 //! a rendering keeps (every token, exactly) and what it drops (the whitespace
-//! between them), and for the grammar-version cost that choice carries.
+//! between them), for how a capture set renders, and for the grammar-version
+//! cost the choice carries.
 //!
 //! Matches stay in the order the tree walk found them, which is document order,
 //! pre-order, and deterministic for a given grammar. They are deliberately not
@@ -167,6 +186,33 @@ pub enum AstFailure {
         /// What the probe reads.
         origin: String,
     },
+
+    /// `capture:` named a metavariable the pattern does not define.
+    ///
+    /// The third spelling of this feature's one recurring refusal, and the one
+    /// it was hardest to avoid needing: an undefined name binds no node, so it
+    /// would render as an empty `($NAME)` in every match and contribute the
+    /// same bytes whatever the source said. A typo'd list would then narrow the
+    /// probe silently — and unlike an empty match set, `allow_empty: true`
+    /// could not even be blamed for it, because the matches are all there.
+    ///
+    /// Raised from the compiled pattern rather than from a match, so it fires
+    /// on a source with no matches too, and names what the pattern *does*
+    /// define so the fix does not need a trip to the grammar. An anonymous
+    /// `$$$` or a `$_` is deliberately absent from that list: ast-grep drops
+    /// both rather than binding them, so neither is nameable at all.
+    #[error(
+        "`capture:` names `{name}`, which `{pattern}` does not define (it defines {defined}); an anonymous `$$$` or a `$_` binds nothing and cannot be named — fix the name, or give the pattern a `${name}` to capture"
+    )]
+    CaptureUndefined {
+        /// The name as the manifest's `capture:` list wrote it.
+        name: String,
+        /// The pattern as the manifest wrote it.
+        pattern: String,
+        /// Every metavariable the pattern captures, sorted, or a phrase saying
+        /// there are none.
+        defined: String,
+    },
 }
 
 /// The grammar to parse `origin`'s bytes with: `declared` when the manifest set
@@ -212,6 +258,12 @@ pub(crate) fn resolve_lang(
 /// Matches `pattern` over `input` parsed as `lang`, returning one canonical
 /// rendering per match in document order.
 ///
+/// `captures` is the manifest's `capture:` list, or `None` for the default,
+/// which renders each match whole. Named, each match renders as only the
+/// metavariables listed — sorted and deduplicated here, once, rather than per
+/// match, so the digest depends on the *set* a manifest named and not on the
+/// order it typed them in.
+///
 /// The result is a list rather than one blob for the reason [`crate::json`]
 /// returns one: "how many nodes did this match" is the question
 /// [`crate::probe`] has to answer to refuse a pattern that matched nothing, and
@@ -219,11 +271,13 @@ pub(crate) fn resolve_lang(
 ///
 /// # Errors
 ///
-/// Returns [`AstFailure::NotText`], [`AstFailure::Pattern`] or
-/// [`AstFailure::Unparsable`]. Emptiness is not decided here.
-pub(crate) fn select(
+/// Returns [`AstFailure::NotText`], [`AstFailure::Pattern`],
+/// [`AstFailure::CaptureUndefined`] or [`AstFailure::Unparsable`]. Emptiness is
+/// not decided here.
+pub(crate) fn select<'n>(
     lang: SupportLang,
     pattern: &str,
+    captures: Option<&'n [String]>,
     input: &[u8],
     origin: &str,
 ) -> Result<Vec<Vec<u8>>, AstFailure> {
@@ -231,6 +285,30 @@ pub(crate) fn select(
         origin: origin.to_owned(),
         lang: format!("{lang:?}"),
     })?;
+    let compiled = compile(lang, pattern)?;
+    let names: Option<Vec<&'n str>> = captures
+        .map(|listed| ordered_captures(&compiled, listed, pattern))
+        .transpose()?;
+    let doc = StrDoc::try_new(source, lang).map_err(|reason| AstFailure::Unparsable {
+        origin: origin.to_owned(),
+        lang: format!("{lang:?}"),
+        reason,
+    })?;
+    let root: AstGrep<Doc> = AstGrep::doc(doc);
+    Ok(root
+        .root()
+        .find_all(&compiled)
+        .map(|found| match &names {
+            Some(names) => ast_render::render_captures(found.get_env(), names),
+            None => ast_render::render(&found),
+        })
+        .collect())
+}
+
+/// Compiles `pattern` for `lang`, refusing one the grammar could only recover
+/// into an error node. Split from [`select`] so the two refusals a pattern
+/// itself can earn read as one step.
+fn compile(lang: SupportLang, pattern: &str) -> Result<Pattern, AstFailure> {
     let compiled = Pattern::try_new(pattern, lang).map_err(|err| AstFailure::Pattern {
         pattern: pattern.to_owned(),
         lang: format!("{lang:?}"),
@@ -245,17 +323,53 @@ pub(crate) fn select(
                 .to_owned(),
         });
     }
-    let doc = StrDoc::try_new(source, lang).map_err(|reason| AstFailure::Unparsable {
-        origin: origin.to_owned(),
-        lang: format!("{lang:?}"),
-        reason,
-    })?;
-    let root: AstGrep<Doc> = AstGrep::doc(doc);
-    Ok(root
-        .root()
-        .find_all(&compiled)
-        .map(|found| ast_render::render(&found))
-        .collect())
+    Ok(compiled)
+}
+
+/// `listed` sorted, deduplicated, and checked against what `compiled` actually
+/// captures.
+///
+/// The names returned are the manifest's own strings rather than the pattern's,
+/// so nothing here borrows from the compiled pattern and the caller is free to
+/// hand it straight to `find_all`.
+///
+/// [`crate::probe_shape`] has already refused a duplicate at load, so the dedup
+/// is belt and braces rather than the rule: it exists so the rendering cannot
+/// double a capture even if that check is ever relaxed.
+fn ordered_captures<'n>(
+    compiled: &Pattern,
+    listed: &'n [String],
+    pattern: &str,
+) -> Result<Vec<&'n str>, AstFailure> {
+    let defined = compiled.defined_vars();
+    if let Some(unknown) = listed.iter().find(|name| !defined.contains(name.as_str())) {
+        let mut known: Vec<&str> = defined.into_iter().collect();
+        known.sort_unstable();
+        return Err(AstFailure::CaptureUndefined {
+            name: unknown.clone(),
+            pattern: pattern.to_owned(),
+            defined: describe(&known),
+        });
+    }
+    let mut names: Vec<&str> = listed.iter().map(String::as_str).collect();
+    names.sort_unstable();
+    names.dedup();
+    Ok(names)
+}
+
+/// The `defined` half of [`AstFailure::CaptureUndefined`]'s message: the
+/// pattern's captures backquoted and joined, or a phrase for a pattern that
+/// captures nothing — which reads as a sentence where an empty list would trail
+/// off into blank space.
+fn describe(known: &[&str]) -> String {
+    if known.is_empty() {
+        return "no metavariables at all".to_owned();
+    }
+    known
+        .iter()
+        .map(|name| format!("`{name}`"))
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 #[cfg(test)]

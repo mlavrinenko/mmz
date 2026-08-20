@@ -22,8 +22,22 @@ mod rust {
     /// Renders every match of `pattern` over `source`, joined the way
     /// `probe_digest` joins them — so these compare exactly what a digest would.
     fn rendered(pattern: &str, source: &str) -> String {
-        let matched = select(SupportLang::Rust, pattern, source.as_bytes(), "the fixture")
-            .expect("the fixture matches");
+        captured(pattern, None, source)
+    }
+
+    /// The same, under a `capture:` list. Takes the names as the manifest would
+    /// write them, so a test reads as the YAML it stands for.
+    pub(super) fn captured(pattern: &str, capture: Option<&[&str]>, source: &str) -> String {
+        let names: Option<Vec<String>> =
+            capture.map(|listed| listed.iter().map(|name| (*name).to_owned()).collect());
+        let matched = select(
+            SupportLang::Rust,
+            pattern,
+            names.as_deref(),
+            source.as_bytes(),
+            "the fixture",
+        )
+        .expect("the fixture matches");
         matched
             .iter()
             .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
@@ -101,6 +115,7 @@ mod rust {
         let matched = select(
             SupportLang::Rust,
             "pub fn $N() {}",
+            None,
             b"fn private() {}",
             "the fixture",
         )
@@ -118,6 +133,7 @@ mod rust {
         let failed = select(
             SupportLang::Rust,
             "pub fn $N(",
+            None,
             b"pub fn f() {}",
             "the fixture",
         )
@@ -127,7 +143,7 @@ mod rust {
 
     #[test]
     fn an_empty_pattern_is_refused() {
-        let failed = select(SupportLang::Rust, "", b"fn f() {}", "the fixture")
+        let failed = select(SupportLang::Rust, "", None, b"fn f() {}", "the fixture")
             .expect_err("an empty pattern is refused");
         assert!(matches!(failed, AstFailure::Pattern { .. }), "{failed:?}");
     }
@@ -138,7 +154,7 @@ mod rust {
     /// invent refusals for inputs that are merely wider than they need to be.
     #[test]
     fn a_bare_metavariable_matches_everything() {
-        let matched = select(SupportLang::Rust, "$A", b"fn f() {}", "the fixture")
+        let matched = select(SupportLang::Rust, "$A", None, b"fn f() {}", "the fixture")
             .expect("a lone metavariable is legal");
         assert!(matched.len() > 1, "it swept the tree: {}", matched.len());
     }
@@ -148,6 +164,7 @@ mod rust {
         let failed = select(
             SupportLang::Rust,
             "pub fn $N() {}",
+            None,
             &[0xff, 0xfe],
             "the fixture",
         )
@@ -163,6 +180,7 @@ mod rust {
         let matched = select(
             SupportLang::Rust,
             "pub fn $N() {}",
+            None,
             b"pub fn foo() {}\npub fn unfinished(",
             "the fixture",
         )
@@ -243,4 +261,200 @@ fn a_language_mmz_has_never_had_is_unsupported() {
         matches!(failed, AstFailure::LanguageUnsupported { .. }),
         "{failed:?}"
     );
+}
+
+/// The `capture:` list, which is what makes "the public API but not the
+/// bodies" expressible: the pattern still has to span the body to match a
+/// function that has one, and the list is what keeps that body out of the
+/// digest.
+#[cfg(feature = "lang-rust")]
+mod captures {
+    use ast_grep_language::SupportLang;
+
+    use super::super::{AstFailure, select};
+    use super::rust::captured;
+
+    /// The task's motivating example, spelled as the manifest would.
+    const SIGNATURE: &str = "pub fn $NAME($$$ARGS) -> $RET { $$$BODY }";
+    const SIGNATURE_PARTS: [&str; 3] = ["NAME", "ARGS", "RET"];
+
+    fn names(listed: &[&str]) -> Vec<String> {
+        listed.iter().map(|name| (*name).to_owned()).collect()
+    }
+
+    /// The headline. `$$$BODY` is in the pattern because a Rust signature stops
+    /// being a node of its own once a body follows it — so the only way to
+    /// reach the function at all is to span the body, and the only way to drop
+    /// the body from the input is to leave it out of `capture:`.
+    #[test]
+    fn a_body_the_pattern_spans_is_not_an_input_when_it_is_not_captured() {
+        let before = captured(
+            SIGNATURE,
+            Some(&SIGNATURE_PARTS),
+            "pub fn one(a: u8) -> u8 { a }",
+        );
+        let after = captured(
+            SIGNATURE,
+            Some(&SIGNATURE_PARTS),
+            "pub fn one(a: u8) -> u8 { a + 0 }",
+        );
+        assert_eq!(before, after, "the body was matched but not captured");
+    }
+
+    /// The other half, without which the first would be a probe that measures
+    /// nothing: every captured part is still an input.
+    #[test]
+    fn each_captured_part_is_still_an_input() {
+        let base = captured(
+            SIGNATURE,
+            Some(&SIGNATURE_PARTS),
+            "pub fn one(a: u8) -> u8 { a }",
+        );
+        for changed in [
+            "pub fn renamed(a: u8) -> u8 { a }",
+            "pub fn one(a: u16) -> u8 { a as u8 }",
+            "pub fn one(a: u8, b: u8) -> u8 { a }",
+            "pub fn one(a: u8) -> u16 { a.into() }",
+        ] {
+            assert_ne!(
+                base,
+                captured(SIGNATURE, Some(&SIGNATURE_PARTS), changed),
+                "`{changed}` moved a captured part"
+            );
+        }
+    }
+
+    /// A capture list is the *set* of parts that matter, so the order it was
+    /// typed in is presentation — the same call `json:` makes on object keys.
+    /// Sorting cannot hide an edit here, because only two spellings of one set
+    /// normalise together.
+    #[test]
+    fn the_order_of_the_capture_list_is_not_an_input() {
+        let source = "pub fn one(a: u8) -> u8 { a }";
+        let listed = captured(SIGNATURE, Some(&SIGNATURE_PARTS), source);
+        let shuffled = captured(SIGNATURE, Some(&["RET", "NAME", "ARGS"]), source);
+        assert_eq!(listed, shuffled);
+    }
+
+    /// Dropping a name from the list is an edit to what is measured, which is
+    /// what stops the sort above from being a narrowing.
+    #[test]
+    fn dropping_a_name_from_the_list_changes_the_digest() {
+        let source = "pub fn one(a: u8) -> u8 { a }";
+        assert_ne!(
+            captured(SIGNATURE, Some(&SIGNATURE_PARTS), source),
+            captured(SIGNATURE, Some(&["NAME", "ARGS"]), source),
+        );
+    }
+
+    /// A multi capture that bound nothing renders as a bare `($ARGS)`, distinct
+    /// from every count above it — so emptying an argument list stays an edit
+    /// rather than collapsing into "no arguments were ever there".
+    #[test]
+    fn a_multi_capture_that_bound_nothing_is_distinct() {
+        let empty = captured(SIGNATURE, Some(&["ARGS"]), "pub fn one() -> u8 { 1 }");
+        let one = captured(SIGNATURE, Some(&["ARGS"]), "pub fn one(a: u8) -> u8 { a }");
+        assert_eq!(empty, "($ARGS)", "the rendering names the empty capture");
+        assert_ne!(empty, one);
+    }
+
+    /// Still document order, still one line per match: `capture:` narrows what
+    /// each match contributes and changes nothing about which matched.
+    #[test]
+    fn matches_stay_one_per_line_in_document_order() {
+        let one = captured(
+            SIGNATURE,
+            Some(&["NAME"]),
+            "pub fn a() -> u8 { 1 }\npub fn b() -> u8 { 2 }",
+        );
+        let other = captured(
+            SIGNATURE,
+            Some(&["NAME"]),
+            "pub fn b() -> u8 { 2 }\npub fn a() -> u8 { 1 }",
+        );
+        assert_eq!(one.lines().count(), 2, "both functions matched");
+        assert_ne!(one, other, "reordering the file is still an edit");
+    }
+
+    /// The refusal this feature could not ship without: an undefined name binds
+    /// no node, so it would render as an empty `($TYPO)` in every match and
+    /// narrow the probe silently — and `allow_empty` could not even be blamed,
+    /// because the matches are all there.
+    #[test]
+    fn a_name_the_pattern_does_not_define_is_refused() {
+        let failed = select(
+            SupportLang::Rust,
+            SIGNATURE,
+            Some(&names(&["NAME", "TYPO"])),
+            b"pub fn one(a: u8) -> u8 { a }",
+            "the fixture",
+        )
+        .expect_err("an undefined capture is refused");
+        let AstFailure::CaptureUndefined { .. } = failed else {
+            panic!("expected an undefined-capture failure, got {failed:?}");
+        };
+        let message = failed.to_string();
+        assert!(message.contains("TYPO"), "names the miss: {message}");
+        for defined in SIGNATURE_PARTS {
+            assert!(
+                message.contains(defined),
+                "names what the pattern does define: {message}"
+            );
+        }
+    }
+
+    /// It is raised from the compiled pattern, so a source with no matches at
+    /// all still gets told about the list rather than about the emptiness —
+    /// which is the error a reader can act on.
+    #[test]
+    fn an_undefined_name_is_refused_even_when_nothing_matched() {
+        let failed = select(
+            SupportLang::Rust,
+            SIGNATURE,
+            Some(&names(&["TYPO"])),
+            b"fn private() {}",
+            "the fixture",
+        )
+        .expect_err("the list is checked before the source is");
+        assert!(
+            matches!(failed, AstFailure::CaptureUndefined { .. }),
+            "{failed:?}"
+        );
+    }
+
+    /// An anonymous `$$$` binds nothing in ast-grep, so it is not nameable at
+    /// all — and the answer a reader gets is the list of what is, rather than
+    /// silence.
+    #[test]
+    fn an_anonymous_multi_capture_is_not_nameable() {
+        let failed = select(
+            SupportLang::Rust,
+            "pub fn $NAME($$$) -> $RET { $$$ }",
+            Some(&names(&["ARGS"])),
+            b"pub fn one(a: u8) -> u8 { a }",
+            "the fixture",
+        )
+        .expect_err("`$$$` captures nothing");
+        let message = failed.to_string();
+        assert!(message.contains("NAME"), "names what is defined: {message}");
+        assert!(message.contains("RET"), "names what is defined: {message}");
+    }
+
+    /// A pattern with no metavariables at all says so in words rather than
+    /// trailing off into an empty list.
+    #[test]
+    fn a_pattern_that_captures_nothing_says_so() {
+        let failed = select(
+            SupportLang::Rust,
+            "pub fn one() {}",
+            Some(&names(&["NAME"])),
+            b"pub fn one() {}",
+            "the fixture",
+        )
+        .expect_err("there is nothing to capture");
+        assert!(
+            failed.to_string().contains("no metavariables at all"),
+            "{failed}"
+        );
+    }
 }

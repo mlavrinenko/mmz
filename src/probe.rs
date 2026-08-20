@@ -55,7 +55,9 @@
 //! That reaches an input the other keys cannot spell. A scope naming
 //! `src/types.rs` hashes the file, so a reworded comment re-runs the rule; the
 //! probe above moves only when a public struct definition does. A match is a
-//! whole node, so what a pattern spans is what the rule depends on. See
+//! whole node by default, so what a pattern spans is what the rule depends on
+//! — and `capture:` narrows that to the metavariables it names, which is the
+//! only way to keep a signature and drop the body a grammar glued to it. See
 //! [`crate::ast`] for what it hashes and [`crate::ast_lang`] for which
 //! languages a build carries.
 //!
@@ -184,6 +186,13 @@ pub struct Probe {
     /// [`Probe::json`] — one probe, one selector. See [`crate::ast`].
     #[serde(default)]
     pub ast: Option<String>,
+    /// Which of [`Probe::ast`]'s metavariables are the input, narrowing a
+    /// match from the whole node it spans to the parts the pattern named.
+    /// Absent means the whole node, which is the default and the rule to hold
+    /// on to; a name the pattern does not define is a hard error. See
+    /// [`crate::ast`].
+    #[serde(default)]
+    pub capture: Option<Vec<String>>,
     /// Which language [`Probe::ast`] parses the bytes as. Optional beside a
     /// `file:` whose extension mmz recognises, required beside a `run:` (a
     /// command line implies no language), and meaningless without `ast:`,

@@ -19,7 +19,8 @@ fn every_entry_really_parses() {
         // panics here instead of in front of a user. `$A` matches every node,
         // so a grammar that parsed the empty source into a root and nothing
         // else answers with exactly one match.
-        if let Ok(matched) = crate::ast::select(entry.grammar, "$A", b"", "the empty source") {
+        if let Ok(matched) = crate::ast::select(entry.grammar, "$A", None, b"", "the empty source")
+        {
             assert!(
                 matched.len() <= 1,
                 "`{}` found {} nodes in an empty source",

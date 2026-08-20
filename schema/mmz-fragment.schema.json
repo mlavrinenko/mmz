@@ -57,7 +57,7 @@
           }
         ],
         "not": { "required": ["json", "ast"] },
-        "dependentRequired": { "lang": ["ast"] },
+        "dependentRequired": { "lang": ["ast"], "capture": ["ast"] },
         "properties": {
           "run": {
             "type": "string",
@@ -73,8 +73,16 @@
           },
           "ast": {
             "type": "string",
-            "description": "An ast-grep pattern matching over the probe's bytes parsed as source code, run in-process by a bundled tree-sitter grammar — nothing on PATH, no regex pretending to be a parser. Mutually exclusive with `json`. mmz hashes its own canonical rendering of every matched node — every token exactly, the whitespace between them dropped — so reformatting a signature is not an edit to it, while renaming one is. Matches join one per line in document order, which is kept rather than sorted: order that comes from the document is content. A pattern the grammar can only recover into an error node is refused rather than left to match nothing, and a pattern that matched no node at all is a hard error for the same reason an empty json selection is. Which languages a build can parse is a compile-time choice — see `lang`.",
+            "description": "An ast-grep pattern matching over the probe's bytes parsed as source code, run in-process by a bundled tree-sitter grammar — nothing on PATH, no regex pretending to be a parser. Mutually exclusive with `json`. mmz hashes its own canonical rendering of every matched node — every token exactly, the whitespace between them dropped — so reformatting a signature is not an edit to it, while renaming one is. A match is a whole node unless `capture` narrows it to the metavariables the pattern named. Matches join one per line in document order, which is kept rather than sorted: order that comes from the document is content. A pattern the grammar can only recover into an error node is refused rather than left to match nothing, and a pattern that matched no node at all is a hard error for the same reason an empty json selection is. Which languages a build can parse is a compile-time choice — see `lang`.",
             "examples": ["pub struct $NAME { $$$FIELDS }"]
+          },
+          "capture": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+            "minItems": 1,
+            "uniqueItems": true,
+            "description": "Which of `ast`'s metavariables are the input, written without the `$` — `[NAME, ARGS]` for a pattern spelling `$NAME` and `$$$ARGS`. Absent means the whole matched node, which is the default; the list narrows each match to the parts it names, and is the only way to keep a construct's signature and drop a body the grammar glued to it. The pattern still decides which constructs match, so a metavariable left out of the list is still what makes the pattern reach them. Each capture renders as `($NAME …)` wrapping the rendering of every node bound to it, and the list is sorted before hashing — it is the set of parts that matter, so retyping it in another order is not an edit. A name the pattern does not define is a hard error naming what it does define: an undefined name binds nothing and would contribute the same bytes whatever the source said, and `allow_empty` cannot be blamed for it because the matches are all there. An anonymous `$$$` or a `$_` binds nothing in ast-grep and cannot be named at all.",
+            "examples": [["NAME", "ARGS", "RET"]]
           },
           "lang": {
             "type": "string",

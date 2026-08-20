@@ -48,6 +48,7 @@ mod tests {
             "json",
             "allow_empty",
             "ast",
+            "capture",
             "lang",
             "probe_shell",
             "match",

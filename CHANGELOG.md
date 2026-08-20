@@ -119,8 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   order a document chose is content, and sorting it would hide a real edit.
 
   A match is a whole node, so a pattern spanning a function's body depends on
-  that body. Narrowing a match to part of itself is a question about the
-  captured metavariables and is filed separately.
+  that body. `capture:` below narrows that.
 
   Grammars are not small: all twenty-seven ast-grep ships weigh about 40 MB
   linked against an mmz binary of 3.5 MB, so each is a cargo feature and a
@@ -130,6 +129,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because it needs a different answer. mmz never falls back to parsing an
   unknown file as something plausible, and a pattern the grammar could only
   recover into an error node is refused rather than left to match nothing.
+
+- `capture:` on an `ast:` probe, naming which of the pattern's metavariables
+  are the input:
+
+  ```yaml
+  probes:
+    public-api:
+      file: src/lib.rs
+      ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'
+      capture: [NAME, ARGS, RET]
+  ```
+
+  Without it, "this gate depends on the public API of `lib.rs`, not on its
+  bodies" had no spelling: a Rust signature stops being a node of its own once
+  a body follows it, so the only pattern that reaches a real function spans the
+  body too, and a match is a whole node.
+
+  The pattern and the list answer different questions, which is the one way to
+  get this wrong. The pattern decides which constructs match — `$$$BODY` is why
+  a function *with* a body matches at all — and the list decides which parts of
+  each are hashed. Dropping `$$$BODY` from the pattern would not narrow the
+  input; it would stop matching the functions you meant.
+
+  A capture renders as `($NAME …)` around the rendering of every node it bound,
+  and the list is sorted before hashing: it is the *set* of parts that matter,
+  so retyping it in another order is not an edit. That sort cannot hide one,
+  unlike sorting match order would — only two spellings of one set ever
+  normalise together. A multi capture that bound nothing renders as a bare
+  `($ARGS)`, distinct from every count above it.
+
+  A name the pattern does not define is a hard error naming what it does
+  define, and this is the refusal the key could not ship without: an undefined
+  name binds nothing, so it would render empty in every match and narrow the
+  probe silently — with every match still present, so `allow_empty: true` would
+  find nothing to complain about. An anonymous `$$$` or a `$_` binds nothing in
+  ast-grep and cannot be named at all. Three more refusals land at load, where
+  the manifest alone settles them: an empty list, a name that could never be a
+  metavariable (`$NAME` copied straight out of the pattern), and a duplicate.
+
+  The default is unchanged and is still the answer most of the time. Where a
+  pattern can stop at the boundary you care about, let it; this is for the
+  constructs whose grammar will not let it.
 
 - `file:` and `json:` on a probe, so a rule can depend on one field of a JSON
   file with no subprocess at all:

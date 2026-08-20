@@ -1,4 +1,5 @@
-//! Canonical rendering of a matched node: what an `ast:` probe actually hashes.
+//! Canonical rendering of a matched node — or, under `capture:`, of the parts
+//! of it the pattern named: what an `ast:` probe actually hashes.
 //!
 //! # Why a rendering and not the matched text
 //!
@@ -35,6 +36,7 @@
 //! across reformatting, which trades a false stale for a *missed* one.
 
 use ast_grep_core::Node;
+use ast_grep_core::meta_var::MetaVarEnv;
 use ast_grep_core::tree_sitter::StrDoc;
 use ast_grep_language::SupportLang;
 
@@ -61,13 +63,21 @@ enum Step<'r> {
 /// aborts the process instead of failing the probe.
 pub(crate) fn render(node: &Node<'_, Doc>) -> Vec<u8> {
     let mut out = String::new();
+    render_into(&mut out, node);
+    out.into_bytes()
+}
+
+/// [`render`]'s walk, writing into a buffer a caller may already be building.
+/// [`render_captures`] needs exactly that, and going through `Vec<u8>` to get
+/// there would re-validate bytes this module only ever wrote as UTF-8.
+fn render_into(out: &mut String, node: &Node<'_, Doc>) {
     let mut stack = vec![Step::Open(node.clone())];
     while let Some(step) = stack.pop() {
         let Step::Open(node) = step else {
             out.push(')');
             continue;
         };
-        separate(&mut out);
+        separate(out);
         out.push('(');
         out.push_str(&node.kind());
         if node.is_leaf() {
@@ -85,7 +95,6 @@ pub(crate) fn render(node: &Node<'_, Doc>) -> Vec<u8> {
             stack.push(Step::Open(child));
         }
     }
-    out.into_bytes()
 }
 
 /// Puts a space before a node unless it opens the rendering or its parent, so
@@ -93,5 +102,56 @@ pub(crate) fn render(node: &Node<'_, Doc>) -> Vec<u8> {
 fn separate(out: &mut String) {
     if !out.is_empty() && !out.ends_with('(') {
         out.push(' ');
+    }
+}
+
+/// One match's *captures* as canonical bytes: the shape a probe hashes when it
+/// declares `capture:`.
+///
+/// Each named metavariable renders as `($NAME …)` wrapping the rendering of
+/// every node bound to it, so the reading is the same s-expression as
+/// [`render`] with the pattern's own names standing where the matched node
+/// would have. The `$` is not decoration — it is what keeps a capture wrapper
+/// from ever reading as a node of some grammar whose kinds happen to be
+/// uppercase.
+///
+/// `names` arrives sorted and deduplicated (see [`crate::ast::select`]), which
+/// is what makes reordering a `capture:` list not an edit to the input: the
+/// list is the *set* of parts that matter, and the order it was typed in is the
+/// author's presentation rather than anything the document said. That is the
+/// same call [`crate::json`] makes on object keys, and the reason it is safe
+/// here and not for match order is that no two capture sets differing in
+/// content can normalise together — only two spellings of one set can.
+///
+/// A single capture (`$NAME`) binds one node, a multi capture (`$$$ARGS`) binds
+/// a run of them, and one that bound none renders as a bare `($ARGS)` — which
+/// is distinct from every count above it, so "the argument list emptied" stays
+/// an edit. A name the pattern uses twice binds once: ast-grep keys its env by
+/// name and requires the two occurrences to have matched identical nodes, so
+/// there is nothing for a second mention to add.
+pub(crate) fn render_captures(env: &MetaVarEnv<'_, Doc>, names: &[&str]) -> Vec<u8> {
+    let mut out = String::new();
+    for name in names {
+        separate(&mut out);
+        out.push_str("($");
+        out.push_str(name);
+        for node in bound(env, name) {
+            render_into(&mut out, &node);
+        }
+        out.push(')');
+    }
+    out.into_bytes()
+}
+
+/// The nodes `name` is bound to in this match: one for a single capture, a run
+/// for a multi capture, none for a multi capture that matched nothing.
+///
+/// The two are asked for in that order rather than distinguished up front
+/// because ast-grep stores them in separate maps and a name is only ever in
+/// one: a pattern cannot spell `$NAME` and `$$$NAME` as the same variable.
+fn bound<'t>(env: &MetaVarEnv<'t, Doc>, name: &str) -> Vec<Node<'t, Doc>> {
+    match env.get_match(name) {
+        Some(node) => vec![node.clone()],
+        None => env.get_multiple_matches(name),
     }
 }
