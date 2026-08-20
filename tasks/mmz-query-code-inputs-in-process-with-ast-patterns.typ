@@ -12,7 +12,11 @@
     )[the
       known limit of what shipped],
   ),
-  status: wip(2026, 8, 21),
+  status: done(
+    2026,
+    8,
+    21,
+  )[Shipped as \`ast:\` + \`lang:\`, +1.71 MiB (the jq engine was +1.41 MiB). Grammar cost was measured per language rather than estimated — all 27 come to 40 MB linked, so each is a cargo feature and the default is \`lang-rust\` alone. Verified end to end: a Rust probe stays fresh across comment, import and private-body edits and busts on a signature change; a non-default grammar (\`--features lang-python\`) behaves the same; a grammar-less build refuses loudly instead of aborting on ast-grep's \`unimplemented!()\`. Two open questions were answered against the code rather than as designed — a bare metavariable is legal (over-declaration is the safe direction), and a malformed pattern error-recovers rather than failing, so \`Pattern::has\_error\` is what makes it refuse. Match order is kept, not normalised: sorting would hide a real edit. The whole-node limit the task's own example implies is filed separately.],
 )
 
 == Summary
