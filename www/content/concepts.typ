@@ -61,6 +61,17 @@ The state on disk is the only state.
 - The cost is per-invocation resolution, not a background process.
 - Nothing to invalidate, because nothing was cached but the answer.
 
+The manifest is re-read the same way, which answers a question the record's
+shape otherwise invites. A record stores an input digest, never the declaration
+that was in force when it was written — so an edited rule whose inputs did not
+move might seem to inherit a verdict measured under the old declaration. It does
+not, because nothing about a rule is read out of its record: `outputs` are
+stat-ed against the manifest in front of you, `match` is applied when the
+invocation is matched, `tags` filter at the moment a gate runs. Declare an
+artifact today and a record written yesterday is void until that artifact is
+there. Only the digest and the exit status come from the record, and those are
+what a record is for.
+
 = The governing asymmetry
 
 #callout("warn")[
