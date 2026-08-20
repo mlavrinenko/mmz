@@ -29,6 +29,13 @@ scopes:
   # cargo-machete reads the Cargo manifests, not the sources, so a source-only
   # edit must not bust it.
   manifests: ["Cargo.toml", "Cargo.lock"]
+  # The dev shell's own pins. Overlaps `rust` on purpose — a scope may be named
+  # by more than one rule, and two scopes may share a file. This one exists for
+  # a rule that reads none of `rust`'s sources but still runs a tool the dev
+  # shell selects: naming `rust` for that would drag in every source file a
+  # tool like cargo-machete never opens, which is the asymmetry this project
+  # over-declares on, not under it.
+  toolchain: ["rust-toolchain.toml", "flake.lock"]
 
 probes:
   # One probe per gate recipe: `just --dump` renders the recipe's body,
@@ -87,6 +94,10 @@ commands:
     inputs: [rust, fixture, recipe-test]
     tags: [gate]
 
+  # cargo-machete itself comes from the dev shell (flake.nix), not from
+  # anything `manifests` names — so a `nix flake update` that changes which
+  # cargo-machete runs must bust this too, or the recorded pass outlives the
+  # binary that produced it.
   - name: just machete
-    inputs: [manifests, recipe-machete]
+    inputs: [manifests, toolchain, recipe-machete]
     tags: [gate]
