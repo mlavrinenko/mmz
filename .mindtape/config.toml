@@ -112,3 +112,14 @@ when = 'into("done") || into("cancelled") || into("failed")'
 actions = [
   { run = "target/debug/mmz --is-fresh --tag gate", gate = true, message = "checks have not passed against this worktree — run `just check`, then flip again (`--force` waives it)" },
 ]
+
+# Handle width. A handle's ordinal is the task's position in the default view,
+# recomputed on every command, so a flip that re-sorts the list renumbers it
+# under anyone still holding one — the check characters are all that stands
+# between a stale handle and a flip landing on a neighbour. This backlog is
+# driven by agents, which flip a task twice in a row as a matter of course (the
+# transition graph above makes `proposed` → `done` two moves), so the guard is
+# worth a second character: one letter lets a wrong handle through about once in
+# 26. A handle of any other length is refused rather than prefix-matched.
+[handle]
+check-len = 2
