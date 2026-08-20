@@ -47,6 +47,8 @@ mod tests {
             "file",
             "json",
             "allow_empty",
+            "ast",
+            "lang",
             "probe_shell",
             "match",
             "exact",

@@ -95,6 +95,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ast:` and `lang:` on a probe, so a rule can depend on a *structural* slice of
+  a source file — one function, one type, one impl block — by parsing it in
+  process and matching an [ast-grep](https://ast-grep.github.io/) pattern:
+
+  ```yaml
+  probes:
+    wire-types:
+      file: src/types.rs
+      ast: 'pub struct $NAME { $$$FIELDS }'
+  ```
+
+  Nothing is spawned, nothing has to be on `PATH`, and no regex is asked to
+  pretend it is a parser. Everything the pattern did not match — comments,
+  imports, private items — is free to move without re-running the rule, which
+  is the input a scope naming the file cannot express.
+
+  What is hashed is mmz's own rendering of the matched *tree*, not its text:
+  every token exactly, the whitespace between them dropped. Reflowing a
+  signature is not an edit to it; renaming one is, and so is `a + b` becoming
+  `a - b`, because operators are nodes too. Matches join in document order,
+  which is kept rather than sorted for the reason `json:` keeps array order —
+  order a document chose is content, and sorting it would hide a real edit.
+
+  A match is a whole node, so a pattern spanning a function's body depends on
+  that body. Narrowing a match to part of itself is a question about the
+  captured metavariables and is filed separately.
+
+  Grammars are not small: all twenty-seven ast-grep ships weigh about 40 MB
+  linked against an mmz binary of 3.5 MB, so each is a cargo feature and a
+  stock build carries `lang-rust` alone (`--features lang-all` for the lot).
+  Naming a language this build lacks is a hard error that quotes the flag to
+  rebuild with; naming one mmz has no grammar for at all is a different error,
+  because it needs a different answer. mmz never falls back to parsing an
+  unknown file as something plausible, and a pattern the grammar could only
+  recover into an error node is refused rather than left to match nothing.
+
 - `file:` and `json:` on a probe, so a rule can depend on one field of a JSON
   file with no subprocess at all:
 

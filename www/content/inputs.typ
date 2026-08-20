@@ -127,9 +127,14 @@ probes:
 ```
 
 The two sources are mutually exclusive: a probe declaring both is a manifest
-error, not a precedence rule to memorise. A `file:` with no `json:` is refused
+error, not a precedence rule to memorise. A `file:` with no selector is refused
 too — hashing a whole file is what a scope is for, and a scope keeps the
 gitignore filter and reports which file moved.
+
+`json:` is one of two selectors. The other, `ast:`, narrows _source code_ to a
+structural slice — one function, one type, one impl block — so a rule can depend
+on the public API of a file rather than on its comments. It has its own page:
+#link(u("/code/"))[Code inputs]. A probe takes one selector or the other.
 
 == Read this before reaching for one
 

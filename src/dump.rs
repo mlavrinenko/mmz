@@ -119,8 +119,8 @@ struct ScopeEntry {
     source: String,
 }
 
-/// One merged probe: whichever source it declared, its `json:` selector if it
-/// has one, its `allow_empty` flag, and the file that declared it.
+/// One merged probe: whichever source it declared, whichever selector it
+/// narrows with, its `allow_empty` flag, and the file that declared it.
 ///
 /// `run` and `file` are skipped when absent rather than emitted as `null`,
 /// because exactly one of them is always set — a reader scanning the dump
@@ -134,6 +134,10 @@ struct ProbeEntry {
     file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     json: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ast: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lang: Option<String>,
     /// Always present, unlike the manifest's own `#[serde(default)]`
     /// spelling of this field: a boring, stable schema names every key
     /// regardless of whether the value happens to be the default.
@@ -225,6 +229,8 @@ fn collect(cwd: &Path) -> Result<Dump> {
             run: probe.run.clone(),
             file: probe.file.as_ref().map(|path| path.display().to_string()),
             json: probe.json.clone(),
+            ast: probe.ast.clone(),
+            lang: probe.lang.clone(),
             allow_empty: probe.allow_empty,
             source: source_of(&provenance.probes, name, base),
         })
@@ -381,6 +387,12 @@ fn render_text(dump: &Dump) -> String {
             }
             if let Some(json) = &probe.json {
                 out.push_str(&format!("    json: {json}\n"));
+            }
+            if let Some(ast) = &probe.ast {
+                out.push_str(&format!("    ast: {ast}\n"));
+            }
+            if let Some(lang) = &probe.lang {
+                out.push_str(&format!("    lang: {lang}\n"));
             }
             out.push_str(&format!("    allow_empty: {}\n", probe.allow_empty));
         }

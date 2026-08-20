@@ -393,7 +393,8 @@ fn exit_for(err: &Error) -> u8 {
         | Error::ProbeFileUnreadable { .. }
         | Error::ProbeJsonInput { .. }
         | Error::ProbeJsonFailed { .. }
-        | Error::ProbeJsonEmpty { .. } => 6,
+        | Error::ProbeJsonEmpty { .. }
+        | Error::ProbeAst { .. } => 6,
         Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,

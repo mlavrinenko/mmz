@@ -35,9 +35,34 @@
 //! ```
 //!
 //! The two sources are mutually exclusive, and a probe must declare one. A
-//! `file:` without a `json:` is refused too: hashing a whole file is what a
+//! `file:` with no selector is refused too: hashing a whole file is what a
 //! scope is for, and a second spelling of it here would quietly skip the
 //! gitignore filter and the per-file digest a scope gives for free.
+//!
+//! # Two selectors, and why a probe takes one
+//!
+//! `json:` narrows a document to a value. `ast:` narrows *source code* to a
+//! structural slice — a function, a type, an impl block — by parsing it and
+//! matching an ast-grep pattern, again with nothing spawned:
+//!
+//! ```yaml
+//! probes:
+//!   wire-types:
+//!     file: src/types.rs
+//!     ast: 'pub struct $NAME { $$$FIELDS }'
+//! ```
+//!
+//! That reaches an input the other keys cannot spell. A scope naming
+//! `src/types.rs` hashes the file, so a reworded comment re-runs the rule; the
+//! probe above moves only when a public struct definition does. A match is a
+//! whole node, so what a pattern spans is what the rule depends on. See
+//! [`crate::ast`] for what it hashes and [`crate::ast_lang`] for which
+//! languages a build carries.
+//!
+//! The two are mutually exclusive. Chaining them would need a rule for how a
+//! matched node becomes a JSON document, which is a data model mmz would be
+//! inventing, and precedence between them is how a manifest comes to mean
+//! something its author cannot see by reading it.
 //!
 //! # Why the selection is hashed, not the bytes
 //!
@@ -75,11 +100,19 @@
 //!   input nobody is measuring. `false` is a value and passes; jq's `-e`
 //!   conflates it with `null` only because a shell exit code cannot tell them
 //!   apart.
-//! - `allow_empty: true` opts into exactly that, on both sources: with `json:`
-//!   it accepts a selection that yielded nothing or only `null`, and without it
-//!   it accepts whitespace-only stdout. One key, one meaning — "empty really is
-//!   a valid input here" — so a reader who knows it from `run:` already knows
-//!   what it does beside `json:`.
+//! - **An `ast:` pattern that matched no node is a hard error**, for exactly
+//!   the reason above: a probe measuring nothing reports one digest whatever
+//!   the file does. A pattern that does not compile for its language, bytes
+//!   that are not UTF-8, and a `lang:` this build has no grammar for are each a
+//!   hard error too — and the last of those names the cargo feature that fixes
+//!   it, because it is the only failure here whose answer is a build rather
+//!   than an edit. mmz never falls back to matching nothing.
+//! - `allow_empty: true` opts into exactly that, on every source and selector:
+//!   with `json:` it accepts a selection that yielded nothing or only `null`,
+//!   with `ast:` a pattern that matched no node, and with neither it accepts
+//!   whitespace-only stdout. One key, one meaning — "empty really is a valid
+//!   input here" — so a reader who knows it from `run:` already knows what it
+//!   does beside a selector.
 //! - Content correctness is the consumer's. A probe that prints valid but wrong
 //!   output, or that is not deterministic, is the manifest author's bug: pin the
 //!   ordering, strip the timestamps, assert the shape in the probe itself
@@ -104,8 +137,6 @@ use std::process::{Command as Process, Output, Stdio};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
-use crate::hashing;
-use crate::json;
 use crate::manifest::{Command, Manifest, Scope};
 
 /// The shell a probe's `run` line is handed to when the manifest does not set
@@ -147,6 +178,18 @@ pub struct Probe {
     /// digest. See [`crate::json`].
     #[serde(default)]
     pub json: Option<String>,
+    /// An ast-grep pattern matching over those bytes parsed as source code.
+    /// Every match is rendered canonically and hashed, so the whitespace
+    /// between tokens never reaches the digest. Mutually exclusive with
+    /// [`Probe::json`] — one probe, one selector. See [`crate::ast`].
+    #[serde(default)]
+    pub ast: Option<String>,
+    /// Which language [`Probe::ast`] parses the bytes as. Optional beside a
+    /// `file:` whose extension mmz recognises, required beside a `run:` (a
+    /// command line implies no language), and meaningless without `ast:`,
+    /// which is a load error rather than a key that quietly does nothing.
+    #[serde(default)]
+    pub lang: Option<String>,
     /// When true, a selection that yielded nothing — or, without `json`,
     /// stdout that is empty or only whitespace — is a valid input rather than
     /// an error. Default false; see the module docs for why.
@@ -163,11 +206,17 @@ enum Source<'a> {
     File(&'a Path),
 }
 
-/// Which combinations of `run:`, `file:` and `json:` are legal, and what each
-/// illegal one says — split out to `probe_shape.rs` once this file reached its
-/// line cap. Still `impl Probe`, so no call site knows the split happened.
+/// Which combinations of `run:`, `file:`, `json:`, `ast:` and `lang:` are
+/// legal, and what each illegal one says — split out to `probe_shape.rs` once
+/// this file reached its line cap. Still `impl Probe`, so no call site knows
+/// the split happened.
 #[path = "probe_shape.rs"]
 mod shape;
+
+/// What the bytes become before they are hashed — raw, a `json:` selection or
+/// an `ast:` match set — split out to `probe_digest.rs` for the same reason.
+#[path = "probe_digest.rs"]
+mod digest_of;
 
 /// Rejects a probe that shares a name with a scope, or whose source keys do
 /// not describe one readable thing.
@@ -293,15 +342,22 @@ impl<'a> Resolver<'a> {
 /// that would not read, a document that would not parse, and a selector that
 /// matched nothing all stop here rather than contributing bytes to an input
 /// digest.
+///
+/// The selectors are checked in a fixed order only because the code has to pick
+/// one; [`Probe::check_shape`] has already refused a probe declaring both, so
+/// the order is never a precedence rule anyone can observe.
 fn digest(name: &str, probe: &Probe, base: &Path, shell: &[String]) -> Result<String> {
     let bytes = match probe.source(name)? {
         Source::Run(run) => stdout_of(name, run, base, shell)?,
         Source::File(path) => read_file(name, path, base)?,
     };
-    let Some(program) = &probe.json else {
-        return hash_raw(name, probe, &bytes);
-    };
-    hash_selection(name, probe, program, &bytes)
+    if let Some(program) = &probe.json {
+        return digest_of::hash_selection(name, probe, program, &bytes);
+    }
+    if let Some(pattern) = &probe.ast {
+        return digest_of::hash_matches(name, probe, pattern, &bytes);
+    }
+    digest_of::hash_raw(name, probe, &bytes)
 }
 
 /// Runs the probe's `run` line and returns its stdout, refusing a non-zero
@@ -327,64 +383,6 @@ fn read_file(name: &str, path: &Path, base: &Path) -> Result<Vec<u8>> {
         path: path.to_path_buf(),
         source,
     })
-}
-
-/// Hashes the bytes as they came, for a probe with no `json:`. Only a `run:`
-/// probe reaches this, so the empty-output message can quote its command line.
-fn hash_raw(name: &str, probe: &Probe, bytes: &[u8]) -> Result<String> {
-    if !probe.allow_empty && bytes.iter().all(u8::is_ascii_whitespace) {
-        return Err(Error::ProbeEmpty {
-            name: name.to_owned(),
-            run: probe.run.clone().unwrap_or_default(),
-        });
-    }
-    Ok(hashing::hash_bytes(bytes))
-}
-
-/// Selects out of the bytes with `program` and hashes the canonical rendering
-/// of every value it produced.
-///
-/// The outputs are joined one per line, the shape `jq -c` itself prints, so a
-/// two-output selector (`.a, .b`) has a stable digest and one that grew a
-/// second output has a different one. Ordering is jq's own evaluation order,
-/// which is deterministic.
-fn hash_selection(name: &str, probe: &Probe, program: &str, bytes: &[u8]) -> Result<String> {
-    let selected = crate::json::select(program, bytes).map_err(|failure| match failure {
-        json::Failure::Input(reason) => Error::ProbeJsonInput {
-            name: name.to_owned(),
-            origin: probe.origin(),
-            reason,
-        },
-        json::Failure::Program(reason) | json::Failure::Run(reason) => Error::ProbeJsonFailed {
-            name: name.to_owned(),
-            program: program.to_owned(),
-            origin: probe.origin(),
-            reason,
-        },
-    })?;
-    if !probe.allow_empty && selected_nothing(&selected) {
-        return Err(Error::ProbeJsonEmpty {
-            name: name.to_owned(),
-            program: program.to_owned(),
-            origin: probe.origin(),
-        });
-    }
-    let mut joined = Vec::new();
-    for value in &selected {
-        joined.extend_from_slice(value);
-        joined.push(b'\n');
-    }
-    Ok(hashing::hash_bytes(&joined))
-}
-
-/// Whether a selection measured nothing: no outputs at all, or the single
-/// output `null`. See the module docs for why `false` is not in this list.
-fn selected_nothing(selected: &[Vec<u8>]) -> bool {
-    match selected {
-        [] => true,
-        [only] => only.as_slice() == b"null",
-        _ => false,
-    }
 }
 
 /// Spawns the probe under `shell` from the project root, with stdin closed and
@@ -433,3 +431,7 @@ mod tests;
 #[cfg(test)]
 #[path = "probe_json_tests.rs"]
 mod json_tests;
+
+#[cfg(test)]
+#[path = "probe_ast_tests.rs"]
+mod ast_tests;

@@ -7,8 +7,12 @@
   links: (
     related("mmz-query-json-inputs-in-process-instead-of-shelling-out.typ")[the
       same argument for JSON; deliberately a separate feature],
+    related(
+      "mmz-an-ast-probe-hashes-the-whole-matched-node-not-its-captures.typ",
+    )[the
+      known limit of what shipped],
   ),
-  status: proposed(2026, 8, 20),
+  status: wip(2026, 8, 21),
 )
 
 == Summary

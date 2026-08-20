@@ -83,6 +83,33 @@
     forgetting `-S` makes a tool upgrade look like a busted rule; here mmz owns
     the rendering and there is nothing to forget.
   ],
+  "probes[].ast": [
+    For the inputs that are code rather than data. "This gate depends on the
+    public API of `lib.rs`, not on its comments" has no other spelling: the
+    closest a scope gets is hashing the whole file, which is the
+    over-declaration probes exist to escape.
+
+    Reach for it only when the file has no structured view already. A tool that
+    can print its own configuration as JSON is a `json:` probe, and that is the
+    cheaper, steadier answer — a rendering names node _kinds_, so a grammar
+    bump can move a digest that no edit moved. That is a false stale, which
+    settles after one re-run; the trade is deliberate, because hashing the
+    matched text instead would be steady across grammar bumps and blind to
+    reformatting, and a digest that misses a real edit is the failure this tool
+    exists to prevent.
+  ],
+  "probes[].lang": [
+    A build-time fact, not just a manifest one. Grammars are large enough that
+    shipping all of them would charge every user who never writes an `ast:`
+    probe about 40 MB, so a stock `cargo install mmz` parses Rust and each other
+    language is a `--features lang-<name>` flag away.
+
+    That makes a manifest's portability worth a thought: a probe naming a
+    language your colleague's mmz was not built with fails for them. It fails
+    _loudly_, naming the flag, which is the same bargain a `run:` line already
+    makes with the tools it calls — but unlike a missing tool, the fix is a
+    rebuild rather than an install.
+  ],
   "probes[].allow_empty": [
     Opt in only when empty output is genuinely a valid state. The default exists
     because an empty result is almost always a selector that matched nothing,

@@ -464,6 +464,18 @@ pub enum Error {
         /// The root manifest that set it.
         path: PathBuf,
     },
+
+    /// A probe's `ast:` key could not produce a digest. The detail — and which
+    /// refusal it is — lives with the matcher in [`crate::ast::AstFailure`],
+    /// because one of those cases is answered by a cargo feature rather than a
+    /// manifest edit and would not survive being flattened into a string here.
+    #[error("probe `{name}` {source}")]
+    ProbeAst {
+        /// Name of the offending probe.
+        name: String,
+        /// What the matcher refused, and the edit or flag that fixes it.
+        source: Box<crate::ast::AstFailure>,
+    },
 }
 
 /// Convenience alias for fallible operations in this crate.

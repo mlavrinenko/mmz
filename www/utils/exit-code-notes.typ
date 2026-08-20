@@ -71,8 +71,12 @@
       unreadable comes with the path; and a `json:` selector reports bytes that
       were not one JSON value, a program that would not compile or that raised,
       or — the case worth the code on its own — a selection that measured
-      nothing. None of them reach the hasher, so no digest is ever computed from
-      partial output.
+      nothing. An `ast:` pattern lands here the same way: one that matched no
+      node, one the grammar could only recover into an error node, bytes that
+      are not UTF-8, or a `lang:` this build has no grammar for — which is the
+      one failure under this code whose fix is a rebuild, so the message names
+      the cargo feature. None of them reach the hasher, so no digest is ever
+      computed from partial output.
     ],
   ),
   "7": (
