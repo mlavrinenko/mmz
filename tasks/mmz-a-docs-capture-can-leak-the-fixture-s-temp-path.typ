@@ -8,7 +8,7 @@
     related("mmz-an-empty-tag-selection-passes-the-gate.typ")[a capture added
       there leaked one until it was caught by hand],
   ),
-  status: proposed(2026, 8, 20),
+  status: done(2026, 8, 20),
 )
 
 == Summary
