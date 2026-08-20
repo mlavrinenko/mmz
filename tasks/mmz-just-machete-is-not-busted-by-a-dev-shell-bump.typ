@@ -10,7 +10,11 @@
     related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[the general
       form of this gap, which would subsume it],
   ),
-  status: wip(2026, 8, 20),
+  status: done(
+    2026,
+    8,
+    20,
+  )[Fixed with a dedicated toolchain scope rather than by widening manifests; the general property is now enforced for every gate rule by tests/gate\_inputs\_close\_over\_flake\_lock.rs, which the orchestrator mutation-checked independently of the implementing agent.],
 )
 
 == Summary

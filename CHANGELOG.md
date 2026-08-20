@@ -9,7 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `just machete` now busts when the dev shell moves. It was the one gate rule
+  naming no toolchain pin — `[manifests, recipe-machete]`, where `manifests` is
+  the two Cargo files — while `cargo-machete` itself comes from the dev shell.
+  A `nix flake update` that changed which binary runs left its recorded pass
+  looking fresh, which is the dangerous direction: a wrongly-*fresh* gate is a
+  green build that proved nothing.
+
+  It takes a new `toolchain` scope (`rust-toolchain.toml`, `flake.lock`) rather
+  than having `flake.lock` folded into `manifests`, whose name means the Cargo
+  manifests, or naming `rust`, which would drag in every source file
+  `cargo-machete` never opens and destroy the property that made the original
+  declaration right — a source-only edit still must not bust it.
+
+  `tests/gate_inputs_close_over_flake_lock.rs` now asserts the general property
+  for every `gate`-tagged rule, resolving each rule's `inputs` through the
+  declared scopes via `mmz --dump-config=json` rather than re-parsing the
+  fragments. `docs/contributing/gates.md` has claimed this under "Getting the
+  scopes right" since it was written and nothing enforced it; `just machete` was
+  the sole rule failing it.
+
 - The gate probes in this repo's own manifest now sort their JSON
+
   (`jq -S`). `just --dump --dump-format json` renders the same recipe with its
   object keys in different orders across `just` versions, so hashing the
   unsorted selection made every gate read stale whenever the `just` resolving
