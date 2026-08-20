@@ -2,11 +2,13 @@
 
 #show: task.with(
   title: "mmz: query JSON inputs in-process instead of shelling out",
-  priority: framework("ice", confidence: 0.7, ease: 4.0, impact: 6.0),
+  priority: framework("ice", confidence: 0.7, ease: 4.0, impact: 7.0),
   tags: ("config", "efficiency"),
   links: (
     related("mmz-query-code-inputs-in-process-with-ast-patterns.typ")[the same
       argument for code-shaped files; deliberately a separate feature],
+    related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[what this
+      makes cheap enough to be worth doing],
     related("mmz-the-close-gate-depends-on-which-just-is-on-path.typ")[where
       the cost of shelling out first showed up],
   ),
@@ -15,10 +17,48 @@
 
 == Summary
 
-Every probe in this repo pipes through `jq`, so resolving the gate set spawns
-one `jq` per probe on top of one `just`. A probe that wants part of a JSON
-document should be able to say so declaratively and have mmz do the selection
-in-process.
+A scope names whole files, so a rule that depends on one field of a JSON file
+hashes all of it. The only way to narrow that today is a probe, and a probe is a
+subprocess — so reaching one field of a file already on disk costs a shell, a
+`cat` or a `jq`, and a dependency on both being present.
+
+A probe should be able to read a file and select out of it with no process at
+all:
+
+```yaml
+probes:
+  ejectest-version:
+    file: flake.lock
+    json: '.nodes["ejectest"]["locked"]["narHash"]'
+```
+
+That is the primary shape. No `run:`, no shell, nothing on PATH — mmz opens the
+file, parses it, selects, and hashes the result.
+
+== Why this is the case that matters
+
+*It is the only fully in-process one.* Everything else a probe does today
+involves spawning something. This does not, so it has no ambient-tool
+dependency, no shell quoting to get wrong, and no per-probe process cost on an
+operation (`mmz --is-fresh`) whose whole value is being cheap enough to run
+routinely.
+
+*It reaches inputs that are otherwise inexpressible.* `flake.lock` in this repo
+has over a hundred nodes. The `rust` scope hashes the whole file, so bumping
+`nixpkgs-lib` busts clippy and the full suite. `.nodes["qahq"]["locked"]["narHash"]`
+busts only when the input that actually supplies linecop, outdatty and ejectest
+moves. That is not a smaller version of the same dependency — it is the
+dependency the rule actually has, and there is currently no way to write it.
+
+*It is the enabling half of declaring tools.* Per-tool version tracking is filed
+separately and its main objection is cost: eleven more probes is eleven more
+processes. Sourced from the lockfile instead of from `--version`, they are free.
+
+== Combining with `run:`
+
+`run:` plus `json:` should work too — select out of a command's stdout rather
+than out of a file, which is what every recipe probe in this repo does today
+through `jq`:
 
 ```yaml
 probes:
@@ -27,43 +67,30 @@ probes:
     json: '.recipes["clippy"]'
 ```
 
-== Why
+That halves the spawns rather than removing them, and it is the weaker of the
+two cases. It earns its place by removing `jq` from the ambient-tool surface and
+by making canonical hashing structural — mmz would hash a parsed value rather
+than a formatter's bytes, so key order stops mattering by construction instead
+of by every author remembering `jq -S`. The scan in
+`tests/gate_probe_normalisation.rs` exists precisely because that is currently a
+convention someone can forget; this retires it.
 
-*Spawning is the cost and the risk.* A process per probe is paid on every
-`mmz --is-fresh`, which is the operation the whole design leans on being
-cheap enough to run routinely. It is also a risk surface: `jq` has to be on
-PATH, the filter has to survive a shell round-trip intact, and every quoting
-subtlety in the `run:` line is one more way a probe can be wrong in a way mmz
-cannot see.
-
-*It shrinks the ambient-tool surface.* Right now a recipe probe depends on two
-external binaries. In-process selection removes one of them outright — not by
-pinning it, by not needing it.
-
-*It makes canonical hashing structural.* mmz would hash a parsed and
-re-serialized value rather than whatever bytes a formatter emitted, so key
-order stops mattering by construction instead of by every author remembering
-`jq -S`. The scan in `tests/gate_probe_normalisation.rs` exists precisely
-because that is currently a convention someone can forget; this would retire
-it.
-
-== What it does not fix
-
-`run:` still shells out, so this halves the spawns rather than eliminating
-them. The `just --dump` half is the environment question, answered by
-`probe_shell`, not by this.
+`file:` and `run:` are mutually exclusive. A probe declaring both is a manifest
+error, not a precedence rule to memorise.
 
 == Open
 
 - *Which query language.* `jaq` (jaq-core 3.1.0, June 2026, MIT, actively
-  maintained) is the obvious embed and is a jq *clone* — near-compatible, not
+  maintained) is the obvious embed, and is a jq *clone* — near-compatible, not
   identical, which is a new correctness surface in a tool whose thesis is not
   lying. Its embedding API moved 2.x to 3.0 in March 2026. A narrower
-  pointer-style selector needs no dependency at all (`serde_json` is already
-  direct) and covers every probe in this repo, at the cost of not being jq.
-  Decide deliberately; the cheap option is not obviously the weaker one here.
-- Whether the input is `run:`'s stdout or a file read directly. A file would
-  eliminate the spawn entirely for probes that only read the repo.
-- `format:`/`json:`/`select:` naming, and how it interacts with `allow_empty`
-  and with a selector matching nothing — which must stay a hard error, for the
-  reason `jq -e` is load-bearing today.
+  pointer-style selector needs no new dependency at all (`serde_json` is already
+  direct) and covers every probe in this repo and the lockfile case above. The
+  cheap option is not obviously the weaker one; decide deliberately.
+- A selector matching nothing must stay a hard error, for the reason `jq -e` is
+  load-bearing today: a probe that silently tracks `null` is permanently fresh
+  against a digest that measures nothing.
+- Whether `file:` accepts more than one path, and whether it participates in the
+  gitignore filter the way a scope does.
+- Key naming (`json:` vs `select:`), and how it reads beside the `ast:` form the
+  sibling task proposes.

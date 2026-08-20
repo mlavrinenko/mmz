@@ -9,6 +9,8 @@
       environment question this is the input-side answer to],
     related("mmz-just-machete-is-not-busted-by-a-dev-shell-bump.typ")[the one
       rule where the gap is already concrete],
+    related("mmz-query-json-inputs-in-process-instead-of-shelling-out.typ")[what
+      makes the lockfile half of this cost nothing],
   ),
   status: proposed(2026, 8, 20),
 )
@@ -41,6 +43,12 @@ directions:
   unrelated input moved", and it is byte-identical whether or not the caller is
   inside the dev shell.
 
+The third point needs one correction, because it changes what the fix should
+be. `flake.lock` carries no *versions*, but it does carry a per-input identity:
+each node has a `locked.narHash` and a `locked.rev`. This repo's lockfile has
+over a hundred nodes, and hashing the file conflates every one of them —
+`nixpkgs-lib` moving busts clippy exactly as `qahq` moving does.
+
 == The shape
 
 Declare each tool as a probe and name it per command, the way a scope is
@@ -68,6 +76,36 @@ If this lands, `flake.lock` should come *out* of `rust` rather than sit
 alongside it. Two mechanisms for one property is how the `machete` gap stayed
 invisible.
 
+== Two sources, and they are not interchangeable
+
+Where a tool comes from decides which probe is honest for it.
+
+*A tool that is its own flake input* — linecop, outdatty and ejectest through
+`qahq`, and tola — is pinned exactly by its node:
+
+```yaml
+probes:
+  qahq-tools:
+    file: flake.lock
+    json: '.nodes["qahq"]["locked"]["narHash"]'
+```
+
+That busts when and only when the input supplying those binaries moves. It is
+strictly more precise than `--version` (a rebuild at the same version still
+changes the hash, which is the safe direction) and it costs no process at all
+once file-sourced JSON probes exist.
+
+*A tool that comes out of nixpkgs* — `just`, `jq`, `cargo-machete` — is not
+pinned by any node of its own. `.nodes["nixpkgs"]["locked"]["narHash"]` moves on
+every nixpkgs bump whether or not that tool changed, so for these the lockfile
+is no better than it is today. `just --version` is the honest probe, and it is
+the one that costs a process.
+
+So this is not one mechanism. It is lockfile nodes where the tool is an input,
+`--version` where it is not, and the manifest should say which is which — a
+comment beside each probe naming why it takes the form it does, since the two
+look identical in `inputs:` and are not.
+
 == Open
 
 - Some version strings are noisier than what they guard: `cargo --version`
@@ -76,8 +114,9 @@ invisible.
 - A recipe's transitive tools stop at the boundary declared. `just docs::check`
   runs tola, which runs typst; declaring tola and stopping is defensible, and
   it is still a boundary that can be drawn wrong.
-- Eleven more probes is eleven more processes per `mmz --is-fresh`. Worth
-  sequencing after in-process querying if that lands, or measuring first.
+- Eleven more processes per `mmz --is-fresh` is the cost of the `--version`
+  half, and it does not apply to the lockfile half at all once file-sourced
+  JSON probes land. Sequence after that task rather than measuring first.
 
 == Regression test
 
