@@ -124,6 +124,13 @@
     "on_hit": {
       "type": "string",
       "description": "Message printed to stderr when a command is skipped (a cache hit). Macros: {cache:<field>} substitutes a field from the matched rule's cache record (e.g. command, ran_at, input_digest). An empty string prints nothing; a command's own on_hit overrides this."
+    },
+    "probe_shell": {
+      "type": "array",
+      "default": ["sh", "-c"],
+      "minItems": 1,
+      "description": "The argv every probe's run line is executed by, with the line appended as one final argument. Defaults to [\"sh\", \"-c\"]. Pin it to run probes under the project's own tooling instead of whatever PATH the caller had — e.g. [\"direnv\", \"exec\", \".\", \"sh\", \"-c\"] or [\"nix\", \"develop\", \"--command\", \"sh\", \"-c\"]. The run lines themselves are unchanged; only the process interpreting them differs.",
+      "items": { "type": "string" }
     }
   }
 }

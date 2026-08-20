@@ -383,7 +383,8 @@ fn exit_for(err: &Error) -> u8 {
         | Error::DuplicateProbe { .. }
         | Error::DuplicateCommandAcrossFiles { .. }
         | Error::FragmentPolicyKey { .. }
-        | Error::NullPolicyKey { .. } => 4,
+        | Error::NullPolicyKey { .. }
+        | Error::EmptyProbeShell => 4,
         Error::MissingOutput { .. } => 5,
         Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
         Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,

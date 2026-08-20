@@ -3,7 +3,7 @@ algorithm: blake3
 groups:
   cli-prose:
     source:
-      src/main.rs: ae701f45d700f9d708a0df259336210a2f7f96ef41b4ed7bdfc2b5ec44f2bf44
+      src/main.rs: 6a2815ba6e1a9eb24a7091b61b45f7bd0b598e1eef9b77a2fb71955586c519d3
     dependents:
       www/utils/cli-notes.typ: 88ac2d4826dce301e37edec465769683303fd0710e06bd9ad687b21b96362da6
       www/utils/exit-code-notes.typ: 6d4e9d89c1ade9ec93555f4d7d2ed2324774fdbeff65d6ccb3047d2588c212d4
@@ -36,16 +36,16 @@ groups:
       www/utils/gate-notes.typ: b947b1a5c297b1df2003f800adbfc5356d2336c0a0d08d5c11e0507f45b4bf2b
   manifest-prose:
     source:
-      schema/mmz.schema.json: ec7a187d324a5f2d6c164b3a9835165348a6c8427b5516bc1b1ed9b31dfdc566
+      schema/mmz.schema.json: 2b26d429a268ae168bb7031ed0725e36354a6f8fa2e9d94473d608bd808f8c38
     dependents:
-      www/utils/config-notes.typ: f583de7ced91b8f86a1c67f77926d536fdd2ad8d4a08c420df8890e63a252494
+      www/utils/config-notes.typ: 095bf2f9704837c746f1329e5cb8a5abfe9bf61b99f07ad7326cd9b9035c28e0
   manifest-schema:
     source:
-      src/manifest.rs: 647742a184f85a60ba9016c99de1b76e0447ddf9faef3b63c64f2c532607daa6
-      src/probe.rs: 45e7409c5df3fc28cab15853cc7f3d89e7375167c4871e3b8eb4bf1924801549
+      src/manifest.rs: 48373d5500b0779f814f4e371101d17a764d172e36430f5e026e4c4ecb21aaf4
+      src/probe.rs: d801073b09535cccf6b37926ecee9da9c823b5b52c4ecb332ec352cdcdd5a8d6
     dependents:
-      schema/mmz.schema.json: ec7a187d324a5f2d6c164b3a9835165348a6c8427b5516bc1b1ed9b31dfdc566
-      src/schema.rs: ab0e907d9108618f1dba682fb54ae525553f0a8e1259e563f6778271988827b7
+      schema/mmz.schema.json: 2b26d429a268ae168bb7031ed0725e36354a6f8fa2e9d94473d608bd808f8c38
+      src/schema.rs: 9bd6da39abd1173a2cdb57f48d0d6ab2e3c38188d6d14a6099f5f03d5a1ebaf0
   release-notes:
     source:
       Cargo.toml: 018d4e86c4095f3071a97011b8f51a054466a6eff55481c3f18c97a3d1077e08

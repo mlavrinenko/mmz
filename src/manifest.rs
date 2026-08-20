@@ -31,6 +31,16 @@ pub(crate) fn default_cache_dir() -> String {
     ".mmz/cache".to_owned()
 }
 
+/// Default for [`Manifest::probe_shell`] — `sh -c`, the shell every probe ran
+/// under before the key existed. `pub(crate)` so [`crate::compose`] can apply
+/// the same default when a root manifest omits the key.
+pub(crate) fn default_probe_shell() -> Vec<String> {
+    crate::probe::DEFAULT_SHELL
+        .iter()
+        .map(|part| (*part).to_owned())
+        .collect()
+}
+
 /// Trims each declared tag and drops the ones left blank, so a stray
 /// whitespace-only entry can never silently fail to match `--tag`. Case is
 /// left untouched — tags compare exactly.
@@ -236,6 +246,22 @@ pub struct Manifest {
     #[serde(default = "StrictPolicy::all")]
     pub strict: StrictPolicy,
 
+    /// The argv a probe's `run` line is executed by, with the line appended as
+    /// one final argument. Defaults to `["sh", "-c"]`, which is what every
+    /// probe ran under before the key existed.
+    ///
+    /// A probe measures whatever the ambient `PATH` resolves, so a manifest
+    /// whose probes read project tooling can pin the environment they are
+    /// measured in — `["direnv", "exec", ".", "sh", "-c"]`, or
+    /// `["nix", "develop", "--command", "sh", "-c"]` — instead of inheriting
+    /// whichever shell the caller happened to be in. The `run:` lines are
+    /// untouched by this: only the process interpreting them changes.
+    ///
+    /// Must name at least a program; an empty list is a load error, since
+    /// there would be nothing to spawn. See [`crate::probe`].
+    #[serde(default = "default_probe_shell")]
+    pub probe_shell: Vec<String>,
+
     /// Message printed to stderr when a command is skipped (a cache hit).
     /// `{cache:<field>}` macros substitute a field from the matched rule's
     /// cache record (e.g. `command`, `ran_at`, `input_digest`). An empty string
@@ -315,7 +341,7 @@ impl Manifest {
     /// [`Error::UnknownInput`], [`Error::DuplicateTag`], or
     /// [`Error::InvalidOutput`].
     pub fn validate(&self) -> Result<()> {
-        crate::probe::validate(&self.probes, &self.scopes)?;
+        crate::probe::validate(&self.probes, &self.scopes, &self.probe_shell)?;
         let mut seen: Vec<&str> = Vec::new();
         for (index, command) in self.commands.iter().enumerate() {
             if command.name.trim().is_empty() {

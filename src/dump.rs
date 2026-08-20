@@ -5,8 +5,9 @@
 //! [`crate::compose`]), the merged model itself hides the import graph that
 //! produced it — a scope, probe or command reads the same whether it came
 //! from the root manifest or the third fragment three imports deep, and the
-//! four keys that govern the whole run (`gitignore`, `cache_dir`, `strict`,
-//! `on_hit`) are invisible once they have fallen back to their defaults.
+//! five keys that govern the whole run (`gitignore`, `cache_dir`, `strict`,
+//! `on_hit`, `probe_shell`) are invisible once they have fallen back to
+//! their defaults.
 //! This module answers two questions composition raises and `--status` does
 //! not: a person asking "which file made this rule skip?", "why did this
 //! pass straight through instead of erroring?" (`strict`), "why is nothing
@@ -61,7 +62,7 @@ struct Dump {
     /// Every file that contributed to the merge, in load order (see
     /// [`Provenance::sources`]), numbered from 1 in the human form.
     sources: Vec<String>,
-    /// The four manifest-wide keys, resolved to their effective values.
+    /// The five manifest-wide keys, resolved to their effective values.
     /// Manifest-wide context rather than an entry, so it sits ahead of the
     /// three entry sections rather than among them.
     policy: Policy,
@@ -70,7 +71,7 @@ struct Dump {
     commands: Vec<CommandEntry>,
 }
 
-/// The four manifest-wide policy keys, resolved to their effective
+/// The five manifest-wide policy keys, resolved to their effective
 /// values — defaulted ones included, because "what is mmz actually using"
 /// is the question this section answers, and an absent key does not answer
 /// it. [`crate::compose::check_no_policy_keys`] rejects every one of these
@@ -90,7 +91,10 @@ struct Policy {
     /// this field answers "what does mmz use", and "the key is missing"
     /// does not distinguish "unset" from "a consumer that forgot to check".
     on_hit: Option<String>,
-    /// Which of the four keys above the root manifest wrote explicitly
+    /// The argv a probe's `run` line is executed by, resolved to its
+    /// effective value — `["sh", "-c"]` unless the root pinned one.
+    probe_shell: Vec<String>,
+    /// Which of the five keys above the root manifest wrote explicitly
     /// rather than leaving to its default. Read only by the human form's
     /// trailing `(default)` marker — omitted from JSON on purpose: a
     /// defaulted value and a written one are indistinguishable once
@@ -246,7 +250,7 @@ fn collect(cwd: &Path) -> Result<Dump> {
     })
 }
 
-/// Builds the [`Policy`] section: the manifest's four policy fields, already
+/// Builds the [`Policy`] section: the manifest's five policy fields, already
 /// resolved to their effective values by [`Manifest::locate`], paired with
 /// which of them the root actually wrote (see
 /// [`crate::compose::declared_policy_keys`]). Split out of [`collect`] to
@@ -267,6 +271,7 @@ fn collect_policy(manifest: &Manifest, root_path: &Path, base: &Path) -> Result<
         .map(|(_, label)| label)
         .collect(),
         on_hit: manifest.on_hit.clone(),
+        probe_shell: manifest.probe_shell.clone(),
         declared,
     })
 }
@@ -289,7 +294,7 @@ fn source_of(
 }
 
 /// Renders the human `mmz --dump-config` output: the source list numbered in
-/// load order; then `policy:`, always printed (it is four keys, never
+/// load order; then `policy:`, always printed (it is five keys, never
 /// empty), naming the root manifest once on its header line rather than per
 /// key — every key in it can only come from the root, so a `# <source>` on
 /// each one would imply a choice that does not exist — and marking a
@@ -302,37 +307,45 @@ fn source_of(
 /// omitted entirely rather than printed with an empty body, matching how
 /// `--status`'s own conditional columns only appear when there is something
 /// to show.
+/// Renders the `policy:` block of the human form: every one of the five keys,
+/// each marked `(default)` when the root left it unwritten. Split out of
+/// [`render_text`] to keep that function under clippy's line-count lint — the
+/// same seam [`collect_policy`] takes on the building side, so the section has
+/// one function per side rather than being inlined into a longer whole.
+fn render_policy(policy: &Policy) -> String {
+    let on_hit = policy
+        .on_hit
+        .as_deref()
+        .map_or_else(|| "(none)".to_owned(), |value| format!("{value:?}"));
+    let probe_shell = policy
+        .probe_shell
+        .iter()
+        .map(|part| format!("{part:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut out = format!("\npolicy:  # {}\n", policy.source);
+    for (key, value) in [
+        ("gitignore", policy.gitignore.to_string()),
+        ("cache_dir", policy.cache_dir.clone()),
+        ("strict", format!("[{}]", policy.strict.join(", "))),
+        ("on_hit", on_hit),
+        ("probe_shell", format!("[{probe_shell}]")),
+    ] {
+        out.push_str(&format!(
+            "  {key}: {value}{}\n",
+            default_marker(key, &policy.declared)
+        ));
+    }
+    out
+}
+
 fn render_text(dump: &Dump) -> String {
     let mut out = String::from("sources:\n");
     for (index, source) in dump.sources.iter().enumerate() {
         out.push_str(&format!("  {}  {source}\n", index + 1));
     }
 
-    out.push_str(&format!("\npolicy:  # {}\n", dump.policy.source));
-    out.push_str(&format!(
-        "  gitignore: {}{}\n",
-        dump.policy.gitignore,
-        default_marker("gitignore", &dump.policy.declared)
-    ));
-    out.push_str(&format!(
-        "  cache_dir: {}{}\n",
-        dump.policy.cache_dir,
-        default_marker("cache_dir", &dump.policy.declared)
-    ));
-    out.push_str(&format!(
-        "  strict: [{}]{}\n",
-        dump.policy.strict.join(", "),
-        default_marker("strict", &dump.policy.declared)
-    ));
-    let on_hit_display = dump
-        .policy
-        .on_hit
-        .as_deref()
-        .map_or_else(|| "(none)".to_owned(), |value| format!("{value:?}"));
-    out.push_str(&format!(
-        "  on_hit: {on_hit_display}{}\n",
-        default_marker("on_hit", &dump.policy.declared)
-    ));
+    out.push_str(&render_policy(&dump.policy));
 
     if !dump.scopes.is_empty() {
         out.push_str("\nscopes:\n");

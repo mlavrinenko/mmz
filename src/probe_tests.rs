@@ -181,7 +181,8 @@ fn a_scope_name_in_inputs_is_not_a_probe() {
 #[test]
 fn a_probe_shadowing_a_scope_is_rejected() {
     let manifest = parse("scopes:\n  rust: [\"*.rs\"]\nprobes:\n  rust:\n    run: printf x\n");
-    let err = validate(&manifest.probes, &manifest.scopes).expect_err("collision refused");
+    let err = validate(&manifest.probes, &manifest.scopes, &manifest.probe_shell)
+        .expect_err("collision refused");
     let message = err.to_string();
     assert!(message.contains("`rust`"), "names the clash: {message}");
     assert!(
@@ -190,7 +191,7 @@ fn a_probe_shadowing_a_scope_is_rejected() {
     );
 
     let clean = parse("scopes:\n  rust: [\"*.rs\"]\nprobes:\n  tool:\n    run: printf x\n");
-    validate(&clean.probes, &clean.scopes).expect("distinct names are fine");
+    validate(&clean.probes, &clean.scopes, &clean.probe_shell).expect("distinct names are fine");
 }
 
 #[test]

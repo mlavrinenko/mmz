@@ -49,7 +49,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A documentation site under `www/`, built from Typst sources with
+- `probe_shell`, a root-manifest key naming the argv every probe's `run` line
+  is executed by, with the line appended as one final argument. It defaults to
+  `["sh", "-c"]`, which is what every probe ran under before, so nothing
+  changes for a manifest that omits it.
+
+  A probe resolves its commands through whatever `PATH` the caller had, which
+  quietly makes the caller's shell part of what the probe reports — and a probe
+  is supposed to report the project. The same probe run inside a project shell
+  and outside it can disagree about a tool's version, and the disagreement
+  surfaces as an unexplained stale rule rather than as an error, because a
+  digest that moved is indistinguishable from one that should have.
+  `["direnv", "exec", ".", "sh", "-c"]` or
+  `["nix", "develop", "--command", "sh", "-c"]` pins the answer.
+
+  Root-manifest-only, like `cache_dir`, `gitignore`, `strict` and `on_hit`: a
+  fragment setting it would leave undecidable which one governs a probe
+  declared in a third file. An empty list is a load error (exit 4), since there
+  would be nothing to spawn, and it is caught at load rather than in the spawn
+  path. `mmz --dump-config` reports it alongside the other four, marked
+  `(default)` when unwritten.
+
+  This pins the environment; it does not make mmz aware of it. A probe measured
+  under the wrong shell is still one mmz will trust. What the key buys is that
+  there need no longer be a wrong shell to be measured under.
+
+- A documentation site under `www/`,
+ built from Typst sources with
   [tola](https://github.com/tola-rs/tola-ssg) and searchable via Pagefind,
   replacing the single hand-written `index.html` that restated the README from
   memory. Twelve pages, and the reference ones are generated rather than

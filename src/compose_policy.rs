@@ -1,9 +1,9 @@
-//! The four root-manifest-only keys (`cache_dir`, `gitignore`, `strict`,
-//! `on_hit`): the single list naming them, the check that rejects them
-//! outside the root, and the query `mmz --dump-config` uses to say whether
-//! one was written or left to its default. Split out of `compose.rs` once
+//! The five root-manifest-only keys (`cache_dir`, `gitignore`, `strict`,
+//! `on_hit`, `probe_shell`): the single list naming them, the check that
+//! rejects them outside the root, and the query `mmz --dump-config` uses to
+//! say whether one was written or left to its default. Split out of `compose.rs` once
 //! that file reached its own line cap — a cohesive seam, since every item
-//! here is about the same four names, not a slice taken for size alone.
+//! here is about the same five names, not a slice taken for size alone.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -12,7 +12,98 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::provenance::Provenance;
 
+use crate::manifest::{StrictPolicy, default_cache_dir, default_gitignore, default_probe_shell};
+
 use super::{Document, POLICY_KEYS, parse_text};
+
+/// The five policy values a root manifest resolves to, handed back to
+/// [`super::load`] in one piece so the merge does not carry five separate
+/// bindings through a function already at its line cap.
+pub(super) struct Resolved {
+    pub gitignore: bool,
+    pub cache_dir: String,
+    pub strict: StrictPolicy,
+    pub on_hit: Option<String>,
+    pub probe_shell: Vec<String>,
+}
+
+/// Resolves every root-only policy key on `document`, applying each default
+/// and rejecting an explicit `null` (see [`require_or_default`]).
+///
+/// # Errors
+///
+/// Returns [`Error::NullPolicyKey`] naming the first key written as an
+/// explicit `null`, and `path` rendered against `root` as [`super::load`]
+/// renders one.
+pub(super) fn resolve(document: &Document, path: &Path, root: &Path) -> Result<Resolved> {
+    Ok(Resolved {
+        gitignore: require_or_default(
+            document.gitignore,
+            "gitignore",
+            path,
+            root,
+            default_gitignore,
+        )?,
+        cache_dir: require_or_default(
+            document.cache_dir.clone(),
+            "cache_dir",
+            path,
+            root,
+            default_cache_dir,
+        )?,
+        strict: require_or_default(
+            document.strict.clone(),
+            "strict",
+            path,
+            root,
+            StrictPolicy::all,
+        )?,
+        // Unlike the other four, an explicit `on_hit: null` in the root has
+        // always been legal — `Manifest::on_hit` is `Option<String>` — so it
+        // collapses to `None` exactly like an absent key, not an error.
+        on_hit: document.on_hit.clone().flatten(),
+        probe_shell: require_or_default(
+            document.probe_shell.clone(),
+            "probe_shell",
+            path,
+            root,
+            default_probe_shell,
+        )?,
+    })
+}
+
+/// Resolves one root-only policy field's double-`Option` into the value
+/// [`crate::manifest::Manifest`] wants: an absent key (`None`) uses `default`, a present value
+/// (`Some(Some(value))`) is used as written, and a present-but-explicit
+/// `null` (`Some(None)`) is [`Error::NullPolicyKey`] rather than being allowed
+/// to fall through to `default` silently. Before composition existed these
+/// fields were plain, non-nullable types, so `null` was already a hard parse
+/// error; the shared per-file [`Document`] has to accept `null` so a
+/// *fragment* setting one is still caught by [`Error::FragmentPolicyKey`],
+/// which means the root's own explicit `null` has to be checked here instead
+/// — an author who wrote `gitignore:` meaning `false` must not silently
+/// resolve to `true` with no diagnostic.
+///
+/// # Errors
+///
+/// Returns [`Error::NullPolicyKey`] naming `key` and `path` (rendered against
+/// `root`, see [`load`]) when `value` is `Some(None)`.
+fn require_or_default<T>(
+    value: Option<Option<T>>,
+    key: &str,
+    path: &Path,
+    root: &Path,
+    default: impl FnOnce() -> T,
+) -> Result<T> {
+    match value {
+        None => Ok(default()),
+        Some(None) => Err(Error::NullPolicyKey {
+            key: key.to_owned(),
+            path: Provenance::shorten(path, root),
+        }),
+        Some(Some(resolved)) => Ok(resolved),
+    }
+}
 
 /// Rejects a fragment that sets a root-only policy key, naming the first one
 /// found and the fragment that set it. `Option::is_some` on the outer
@@ -32,12 +123,13 @@ use super::{Document, POLICY_KEYS, parse_text};
 /// type private to `compose` — appear in the signature without a
 /// private-interface leak.
 pub(super) fn check_no_policy_keys(document: &Document, path: &Path, root: &Path) -> Result<()> {
-    let [cache_dir, gitignore, strict, on_hit] = POLICY_KEYS;
+    let [cache_dir, gitignore, strict, on_hit, probe_shell] = POLICY_KEYS;
     let present = [
         (cache_dir, document.cache_dir.is_some()),
         (gitignore, document.gitignore.is_some()),
         (strict, document.strict.is_some()),
         (on_hit, document.on_hit.is_some()),
+        (probe_shell, document.probe_shell.is_some()),
     ];
     if let Some((key, _)) = present.into_iter().find(|(_, set)| *set) {
         return Err(Error::FragmentPolicyKey {
@@ -71,12 +163,13 @@ pub(super) fn check_no_policy_keys(document: &Document, path: &Path, root: &Path
 pub(crate) fn declared_policy_keys(path: &Path, root: &Path) -> Result<BTreeSet<&'static str>> {
     let text = fs::read_to_string(path)?;
     let document = parse_text(&text, path, root)?;
-    let [cache_dir, gitignore, strict, on_hit] = POLICY_KEYS;
+    let [cache_dir, gitignore, strict, on_hit, probe_shell] = POLICY_KEYS;
     Ok([
         (cache_dir, document.cache_dir.is_some()),
         (gitignore, document.gitignore.is_some()),
         (strict, document.strict.is_some()),
         (on_hit, document.on_hit.is_some()),
+        (probe_shell, document.probe_shell.is_some()),
     ]
     .into_iter()
     .filter(|(_, set)| *set)

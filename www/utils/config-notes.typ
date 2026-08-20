@@ -114,4 +114,11 @@
     trusts. `{cache:<field>}` pulls a field straight from the record that caused
     the hit, so the note can name what it is standing on.
   ],
+  probe_shell: [
+    A probe resolves its commands through whatever `PATH` the caller had, so the
+    same probe can report two answers on one worktree — a project shell and a
+    bare login shell disagreeing about a tool version is enough. Pinning the
+    argv makes a probe measure the project's tooling instead of the operator's.
+    Root-only, and it changes nothing about the `run:` lines themselves.
+  ],
 )

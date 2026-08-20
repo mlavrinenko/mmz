@@ -84,6 +84,13 @@ pub enum Error {
         name: String,
     },
 
+    /// `probe_shell` was set to an empty list, so there is no program to run a
+    /// probe under.
+    #[error(
+        "`probe_shell` is empty; it must name at least the program a probe's `run` line is passed to (the default is [\"sh\", \"-c\"])"
+    )]
+    EmptyProbeShell,
+
     /// A probe command exited non-zero, so its stdout is not a usable input.
     #[error(
         "probe `{name}` failed (exit {code}); mmz consumed no output and wrote no cache record\n  command: {run}\n  stderr: {stderr}"

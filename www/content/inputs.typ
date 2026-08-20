@@ -155,6 +155,40 @@ busted rule. `mmz` does not validate meaning, and will not learn to.
 `.mmz` — with stdin closed, so a probe waiting on input fails instead of hanging
 a gate, and with stderr captured for the failure message.
 
+== Which environment a probe measures
+
+`sh -c` is only the default. A `run` line resolves its commands through whatever
+`PATH` the caller had, which makes the caller's shell part of what the probe
+reports — and a probe is supposed to report the project. The same probe run
+inside a project shell and outside it can disagree about a tool's version, and
+the disagreement surfaces as an unexplained stale rule rather than as an error,
+because a digest that moved is indistinguishable from a digest that should have.
+
+`probe_shell` pins the argv the line is handed to, so the answer stops depending
+on where mmz was invoked from:
+
+```yaml
+probe_shell: ["direnv", "exec", ".", "sh", "-c"]
+
+probes:
+  fmt-recipe:
+    run: just --dump --dump-format json | jq -S -e -c '.recipes["fmt-check"]'
+```
+
+The first element is the program and the rest are fixed arguments; the `run`
+line is appended as one final argument. Every probe in the manifest goes through
+it, the `run` lines are untouched, and `["nix", "develop", "--command", "sh",
+"-c"]` works the same way. It is root-manifest-only — an imported fragment
+setting it would leave undecidable which one governs a probe declared in a
+third file — and an empty list is a load error, since there would be nothing to
+spawn.
+
+#callout("note")[
+  This pins the environment; it does not make mmz aware of it. A probe measured
+  under the wrong shell is still a probe mmz will trust. What the key buys is
+  that there is no longer a wrong shell to be measured under.
+]
+
 A probe is resolved #strong[once per invocation] however many rules name it, so
 eighteen rules sharing one probe cost one process. That shape matters: a bare
 `mmz --is-fresh` gates every rule at once and runs in git hooks. A declared probe

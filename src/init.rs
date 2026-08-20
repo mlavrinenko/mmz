@@ -50,6 +50,8 @@ commands:
 # nothing; content correctness stays yours, so assert the shape in the probe
 # (`jq -e`) and a bad shape becomes a non-zero exit. Sort what you select
 # (`jq -S`) so the digest tracks content, not the key order the tool printed.
+# A probe resolves through the caller's PATH; set top-level `probe_shell` (e.g.
+# [\"direnv\", \"exec\", \".\", \"sh\", \"-c\"]) to pin the one it is measured in.
 #   probes:
 #     fmt-recipe:
 #       run: just --dump --dump-format json | jq -S -e -c '.recipes[\"fmt-check\"]'

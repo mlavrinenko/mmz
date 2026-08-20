@@ -32,6 +32,14 @@
 //!   (`jq -S -e`, a schema check) so a bad shape becomes a non-zero exit and hits
 //!   the rule above. mmz does not validate meaning, and should not learn to.
 //!
+//! - The environment is the manifest's too. A `run` line resolves through
+//!   whatever `PATH` the caller had, so the same probe measured under two
+//!   shells can disagree without the project changing at all. `probe_shell`
+//!   pins the argv the line is handed to — `["direnv", "exec", ".", "sh",
+//!   "-c"]` and the like — so a probe reading project tooling measures the
+//!   project's tooling rather than the operator's. mmz cannot detect the
+//!   mismatch, which is why the key exists to prevent it.
+//!
 //! A wrong scope costs time; a wrong probe can lie. That asymmetry is why every
 //! case above fails closed.
 
@@ -45,9 +53,11 @@ use crate::error::{Error, Result};
 use crate::hashing;
 use crate::manifest::{Command, Manifest, Scope};
 
-/// The shell a probe's `run` line is handed to, so a pipeline, a quoted
-/// argument, or a redirect all work as written.
-const SHELL: &str = "sh";
+/// The shell a probe's `run` line is handed to when the manifest does not set
+/// `probe_shell`, so a pipeline, a quoted argument, or a redirect all work as
+/// written. Lives in [`crate::manifest::default_probe_shell`]; named here only
+/// so the module that spawns it says which default it spawns.
+pub(crate) const DEFAULT_SHELL: [&str; 2] = ["sh", "-c"];
 
 /// Longest stderr excerpt carried in a failure message, in bytes. A runaway
 /// probe should not bury its own first line under a megabyte of noise.
@@ -79,7 +89,14 @@ pub struct Probe {
 /// # Errors
 ///
 /// Returns [`Error::NameCollision`] naming the doubly-claimed name.
-pub fn validate(probes: &BTreeMap<String, Probe>, scopes: &BTreeMap<String, Scope>) -> Result<()> {
+pub fn validate(
+    probes: &BTreeMap<String, Probe>,
+    scopes: &BTreeMap<String, Scope>,
+    shell: &[String],
+) -> Result<()> {
+    if shell.is_empty() {
+        return Err(Error::EmptyProbeShell);
+    }
     match probes.keys().find(|name| scopes.contains_key(*name)) {
         Some(name) => Err(Error::NameCollision { name: name.clone() }),
         None => Ok(()),
@@ -160,7 +177,7 @@ impl<'a> Resolver<'a> {
         if let Some(known) = self.seen.get(name) {
             return Ok(known.clone());
         }
-        let fresh = digest(name, probe, self.base)?;
+        let fresh = digest(name, probe, self.base, &self.manifest.probe_shell)?;
         self.seen.insert(name.to_owned(), fresh.clone());
         Ok(fresh)
     }
@@ -178,8 +195,8 @@ impl<'a> Resolver<'a> {
 ///
 /// Every failure path returns before the hash, so a command that failed, could
 /// not start, or printed nothing never contributes bytes to an input digest.
-fn digest(name: &str, probe: &Probe, base: &Path) -> Result<String> {
-    let output = capture(name, probe, base)?;
+fn digest(name: &str, probe: &Probe, base: &Path, shell: &[String]) -> Result<String> {
+    let output = capture(name, probe, base, shell)?;
     if !output.status.success() {
         return Err(Error::ProbeFailed {
             name: name.to_owned(),
@@ -197,11 +214,19 @@ fn digest(name: &str, probe: &Probe, base: &Path) -> Result<String> {
     Ok(hashing::hash_bytes(&output.stdout))
 }
 
-/// Spawns the probe under [`SHELL`] from the project root, with stdin closed and
+/// Spawns the probe under `shell` from the project root, with stdin closed and
 /// both output streams captured.
-fn capture(name: &str, probe: &Probe, base: &Path) -> Result<Output> {
-    Process::new(SHELL)
-        .arg("-c")
+///
+/// `shell` is the manifest's `probe_shell` (default [`DEFAULT_SHELL`]): its
+/// first element is the program, the rest are fixed arguments, and the probe's
+/// `run` line is appended as one final argument. [`validate`] has already
+/// refused an empty list, so the indexing below cannot panic.
+fn capture(name: &str, probe: &Probe, base: &Path, shell: &[String]) -> Result<Output> {
+    let (program, leading) = shell
+        .split_first()
+        .expect("probe_shell is non-empty; validate rejects an empty list at load");
+    Process::new(program)
+        .args(leading)
         .arg(&probe.run)
         .current_dir(base)
         .stdin(Stdio::null())
