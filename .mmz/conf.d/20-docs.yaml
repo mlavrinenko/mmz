@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../../schema/mmz-fragment.schema.json
+#
+# The docs gates: docs::check, docs::md-check, check-doc-coverage,
+# check-doc-facts. Imported by ../config.yaml's `conf.d/` entry.
+#
+# docs-src and fixture are declared here rather than in 10-rust.yaml or
+# 30-repo.yaml, even though just fmt-check (10-rust.yaml) and just
+# check-file-size / just outdatty-check (30-repo.yaml) read docs-src too, and
+# just test (10-rust.yaml) reads fixture too. This is the fragment whose own
+# rules exist BECAUSE of the docs pipeline and the fixture, so the scopes live
+# beside the rules that are most about them; the other fragments reference
+# them by name instead of redeclaring them.
+
+scopes:
+  # The docs pipeline: the site's sources and generators, the Markdown sources,
+  # and the fixture every transcript is captured from.
+  docs-src: ["www/**/*.typ", "www/**/*.sh", "www/**/*.jq", "www/tola.toml"]
+  docs-assets: ["www/assets/**"]
+  docs-md-src: ["docs/src/**/*.typ", "docs/generate-md.sh"]
+  # The committed outputs of the Markdown render. They are inputs to the
+  # freshness check, which compares them against a fresh render.
+  docs-md-out: ["README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/contributing/*.md"]
+  fixture: ["examples/demo/**"]
+
+probes:
+  # See ../conf.d/10-rust.yaml for why every recipe probe below carries `jq -e`.
+  recipe-check-doc-coverage:
+    run: just --dump --dump-format json | jq -e -c '.recipes["check-doc-coverage"]'
+  recipe-check-doc-facts:
+    run: just --dump --dump-format json | jq -e -c '.recipes["check-doc-facts"]'
+  # The docs module's recipes, reached through `.modules` — a module recipe is
+  # not in the top-level `.recipes` map.
+  recipe-docs-check:
+    run: just --dump --dump-format json | jq -e -c '.modules.docs.recipes["check"], .modules.docs.recipes["gen"]'
+  recipe-docs-md-check:
+    run: just --dump --dump-format json | jq -e -c '.modules.docs.recipes["md-check"], .modules.docs.recipes["gen"]'
+
+commands:
+  # The doc gates read the binary's own help text and schema, so the Rust
+  # sources are inputs to both. `rust` is declared in ../conf.d/10-rust.yaml;
+  # gate-scripts in ../conf.d/30-repo.yaml.
+  - name: just check-doc-coverage
+    inputs: [rust, docs-src, gate-scripts, recipe-check-doc-coverage]
+    tags: [gate]
+
+  - name: just check-doc-facts
+    inputs: [rust, docs-src, gate-scripts, fixture, recipe-check-doc-facts]
+    tags: [gate]
+
+  # The docs build compiles every page and runs the real binary against the
+  # fixture, so it depends on the binary, the fixture, and the site sources.
+  - name: just docs::check
+    inputs: [rust, docs-src, docs-assets, fixture, recipe-docs-check]
+    tags: [gate]
+
+  - name: just docs::md-check
+    inputs:
+      [rust, docs-src, docs-md-src, docs-md-out, fixture, gate-scripts, recipe-docs-md-check]
+    tags: [gate]

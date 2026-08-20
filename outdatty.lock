@@ -28,8 +28,10 @@ groups:
       .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a
       Justfile: 8d5ab5434bbee2082a8dc5eb6b7380530385f87274117cf3ce0dc20b30a8fd0d
     dependents:
-      .mmz/config.yaml: 63848546bed1994bc78b6f77e4c0754fa05fa76a9ce0240d9f3f305f3071e8bd
-      docs/src/contributing/gates.typ: 502c19f500dcec25c2f125086dc423394a7f23337e2042409c3ce077c644151c
+      .mmz/conf.d/10-rust.yaml: 98181cea959d234bca0130a7636a4283f3b79347c33e7372ecb11efb24bfc70e
+      .mmz/conf.d/20-docs.yaml: 0f4b6f9539b9c674a3034f991e6511e279c819382c451323423cf37a3175038a
+      .mmz/conf.d/30-repo.yaml: c3f68eb56c1ea38f6364c2b6357a782d8b4ab264634665717586f39a4e3e5d67
+      docs/src/contributing/gates.typ: 8b6f97fd455c7c9120a2c7cee10c8897fa7b3ece0d9c4488cc8e8b5a7e20ecb5
       www/utils/gate-notes.typ: b947b1a5c297b1df2003f800adbfc5356d2336c0a0d08d5c11e0507f45b4bf2b
   manifest-prose:
     source:

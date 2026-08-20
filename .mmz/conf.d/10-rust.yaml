@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=../../schema/mmz-fragment.schema.json
+#
+# The Rust gates: fmt-check, clippy, test, machete. Imported by
+# ../config.yaml's `conf.d/` entry.
+#
+# `rust` is declared here rather than in 20-docs.yaml or 30-repo.yaml, even
+# though check-doc-coverage, check-doc-facts, docs::check, docs::md-check,
+# check-file-size and outdatty-check (all in the other two fragments) read it
+# too. Every rule in THIS file needs it, it is the scope those gates cross a
+# fragment boundary to reach rather than the other way round, and a scope may
+# only be declared in one file — the others reference it by name.
+
+scopes:
+  # Everything the Rust gates read: sources, the manifest and lockfile, and the
+  # toolchain pins. flake.lock is in there because the dev shell is what
+  # actually selects rustc — a toolchain bump that did not bust the clippy cache
+  # would mean shipping against lints nobody ran.
+  rust:
+    [
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      "flake.lock",
+    ]
+  clippy-config: ["clippy.toml"]
+  rustfmt-config: ["rustfmt.toml"]
+  # cargo-machete reads the Cargo manifests, not the sources, so a source-only
+  # edit must not bust it.
+  manifests: ["Cargo.toml", "Cargo.lock"]
+
+probes:
+  # One probe per gate recipe: `just --dump` renders the recipe's body,
+  # attributes and parameters as JSON, and hashing THAT scopes the dependency to
+  # the one recipe instead of to the whole Justfile.
+  #
+  # `-e` is load-bearing on every one of these. Without it, a renamed recipe
+  # would make the selector yield `null`, jq would exit 0, and the rule would go
+  # permanently fresh against a digest that tracks nothing — the exact silent
+  # failure this tool exists to prevent. With it, a rename is a loud probe
+  # failure naming the probe (exit 6).
+  #
+  # This note applies to every recipe probe in every fragment under conf.d/,
+  # not just the ones below — it lives here, in the first fragment
+  # ../config.yaml imports, instead of being repeated three times.
+  recipe-fmt-check:
+    run: just --dump --dump-format json | jq -e -c '.recipes["fmt-check"]'
+  recipe-clippy:
+    run: just --dump --dump-format json | jq -e -c '.recipes["clippy"]'
+  recipe-test:
+    run: just --dump --dump-format json | jq -e -c '.recipes["test"]'
+  recipe-machete:
+    run: just --dump --dump-format json | jq -e -c '.recipes["machete"]'
+  # The formatter's own path lists live in Justfile variables rather than in a
+  # recipe body, so fmt-check depends on them separately.
+  fmt-paths:
+    run: just --dump --dump-format json | jq -e -c '.assignments | with_entries(select(.key | test("_FMT_PATHS$")))'
+
+commands:
+  # `just fmt-check` formats Rust, Typst and the Justfiles, so every file any of
+  # those three touch is an input — which is why the docs sources are in here
+  # alongside the Rust. docs-src and docs-md-src are declared in
+  # ../conf.d/20-docs.yaml; referenced here by name.
+  - name: just fmt-check
+    inputs:
+      [rust, rustfmt-config, docs-src, docs-md-src, fmt-paths, recipe-fmt-check]
+    tags: [gate]
+
+  - name: just clippy
+    inputs: [rust, clippy-config, recipe-clippy]
+    tags: [gate]
+
+  # fixture is declared in ../conf.d/20-docs.yaml — the fixture is a docs-pipeline
+  # concern first, and `just test` happens to exercise it too.
+  - name: just test
+    inputs: [rust, fixture, recipe-test]
+    tags: [gate]
+
+  - name: just machete
+    inputs: [manifests, recipe-machete]
+    tags: [gate]
