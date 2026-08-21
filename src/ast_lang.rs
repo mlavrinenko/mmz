@@ -291,6 +291,18 @@ pub(crate) fn available() -> String {
     names.join(", ")
 }
 
+/// How many languages this build parses — the count `mmz --version` reports,
+/// so two binaries carrying one version number can be told apart without
+/// having to provoke an error to find out which is which.
+///
+/// Counts [`TABLE`] entries rather than grammar crates. `typescript` and `tsx`
+/// are one crate and two names a manifest may write, and the number worth
+/// printing beside a version is the one a reader compares against their own
+/// `lang:`.
+pub(crate) fn count() -> usize {
+    TABLE.len()
+}
+
 /// Whether `name` is a language mmz has a feature for, enabled here or not.
 /// What separates "rebuild with this flag" from "no such language".
 pub(crate) fn is_known(name: &str) -> bool {

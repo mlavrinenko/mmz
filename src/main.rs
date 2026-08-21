@@ -28,7 +28,7 @@ Usage:
     mmz --schema=fragment             print the JSON Schema for an imported fragment
     mmz --dump-config                 print the merged manifest and where each entry came from
     mmz --dump-config=json            the same as JSON
-    mmz --version                     print version
+    mmz --version                     print version and how many languages it parses
     mmz --help                        print this help
     mmz -- <command> [args]           run a command whose name begins with a dash
 
@@ -85,7 +85,14 @@ fn run_cli(args: &[String]) -> ExitCode {
 /// start of a wrapped command rather than an mmz action.
 fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
     match first {
-        "--version" | "-V" => Some(meta(rest, &format!("mmz {VERSION}\n"))),
+        // The grammar count rides along because which grammars a build carries
+        // is a compile-time choice, so one version number describes more than
+        // one binary — and the release ships two of them. Without it, "mmz
+        // 0.8.0 cannot parse Python" names a version that is true of both.
+        "--version" | "-V" => Some(meta(
+            rest,
+            &format!("mmz {VERSION} ({})\n", mmz::ast::language_summary()),
+        )),
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
         schema if schema == "--schema" || schema.starts_with("--schema=") => {
             Some(run_schema(schema, rest))

@@ -137,6 +137,23 @@
       disk.
     ],
   ),
-  "--version": (summary: [Print the version.]),
+  "--version": (
+    summary: [Print the version, and how many languages this build can parse.],
+    detail: [
+      The count is there because a version number does not identify a binary on
+      its own: which grammars mmz carries is a compile-time choice, so the
+      release publishes two builds under one version — `mmz`, parsing Rust
+      alone, and `mmz-full`, parsing all of them. `(1 ast lang)` and
+      `(28 ast langs)` are what tells them apart.
+
+      A count rather than the list, because twenty-eight names would bury the
+      version. _Which_ languages is answered where the answer is actionable: a
+      `lang:` this build lacks fails naming every language it does carry, and
+      the feature flag that would add the one you asked for.
+
+      Twenty-eight against twenty-seven grammar crates — `typescript` and `tsx`
+      are two names a manifest may write and one crate on disk.
+    ],
+  ),
   "--help": (summary: [Print the usage text, including the exit-code table.]),
 )

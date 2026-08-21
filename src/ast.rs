@@ -255,6 +255,23 @@ pub(crate) fn resolve_lang(
     })
 }
 
+/// How many languages this build can parse, phrased for `mmz --version`.
+///
+/// A count rather than the list, because the list runs to twenty-eight names
+/// and the line it sits on exists to say which build this is, not to enumerate
+/// it. Which languages *specifically* stays where the answer is actionable
+/// rather than decorative: the error for a `lang:` this build lacks names all
+/// of them, beside the flag that would add the one you asked for.
+///
+/// The pluralisation lives here rather than at the call site because it is the
+/// only branch, and `src/main.rs` is excluded from coverage.
+#[must_use]
+pub fn language_summary() -> String {
+    let count = ast_lang::count();
+    let noun = if count == 1 { "lang" } else { "langs" };
+    format!("{count} ast {noun}")
+}
+
 /// Matches `pattern` over `input` parsed as `lang`, returning one canonical
 /// rendering per match in document order.
 ///
