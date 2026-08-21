@@ -4,7 +4,17 @@
   title: "mmz: an i/o error while hashing an input names no path",
   priority: framework("ice", confidence: 0.9, ease: 7.0, impact: 6.0),
   tags: ("cli", "cache"),
-  status: proposed(2026, 8, 21),
+  status: done(
+    2026,
+    8,
+    21,
+  )[0.8.1: hashing errors carry the path (Error::InputVanished / InputUnreadable, rendered through Provenance::shorten) and exit 8 rather than 70. Regression tests: src/hashing.rs resolves a scope, deletes an input, hashes; tests/cli\_unreadable\_inputs.rs drives the binary. Audit findings filed as the linked task; the two variants tripped src/error.rs's size cap, also linked.],
+  links: related(
+    "mmz-an-i-o-failure-outside-hashing-still-names-no-path.typ",
+  )[the same shape at four sites this fix left alone]
+    + related(
+      "mmz-the-error-enum-cannot-take-a-new-variant-under-the-size-cap.typ",
+    )[the size cap this fix's two variants tripped],
 )
 
 == Summary
