@@ -1,57 +1,66 @@
 version: 1
 algorithm: blake3
 groups:
+  binary-size:
+    source:
+      Cargo.lock: d4aaa139c1a43022a7efca6f5d400ff0ecfd7063ae4aa3fe905163eecbdb51a5
+      Cargo.toml: 5243c107ca4f05ae7756bd45725d88799aabcf139bd667c54f42e888f7ecb9ed
+    dependents:
+      www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
     source:
-      src/main.rs: abc7b2361c01b072281fb3f374c0fa79428c8167849d69209de99719daeb6443
+      src/main.rs: 6ff38766cc0fae0c7f472bbe2e7afcf6a01cd7c6ef0dd4d6a3fca3ce1d2c124d
     dependents:
-      www/utils/cli-notes.typ: 224327d2a51a2401ebe603be6b96c77219ca044830ea441dd63def99480ba3fe
-      www/utils/exit-code-notes.typ: a0e743dd0383f787b6a6860e324be6ba6f133fca44c5d4143515c43055641078
+      www/utils/cli-notes.typ: 1fbbf8328d34278a312c5e7acad8d9eb2e994b1fdd974e8fb4947813ea17783e
+      www/utils/exit-code-notes.typ: f07969ae6ecd851de6a2c87bd325b2a43d3456829d7e7609f56a8489b0bec9e2
   dev-shell:
     source:
-      flake.nix: 12eb0e164a691a845b04ebcce3a2f7dcd07733673d2276aeb29a012f376600fd
+      flake.nix: cc4c2a0b5bccfa3567cd80db4f0f266f2b277ee17b756b73c8fc66777da7764b
     dependents:
-      docs/src/contributing.typ: 88ac45a01f8e5c8c3fb10eacbb1c30a3a7873b5c2fa2e42d18e933a1a2cbb366
+      docs/src/contributing.typ: 7c61eb29d3da37da33fd5dc2c69312446a59260eb692de8caeca72bd1c4ea845
   docs-pipeline:
     source:
+      .just/scripts/check-capture-paths.sh: ef7de8ddaddbe3de6b805649ea1d29c512e7785e05fb93032133b52d4821dbee
       .just/scripts/check-doc-coverage.sh: 0a8722c438087bccb932b18b446c4e48c6ae38d0a28c28f3bd7307772b2495ea
       .just/scripts/check-doc-facts.sh: ce7b870531a41f876062f95f94cdc52a094b66f49bb39d94b62f7cb090e4eac3
       .just/scripts/docs-md-check.sh: 946444f2048c19a8075205ceae282048176d97d7ec51fb4cbc5a4746af0b6d08
       docs/generate-md.sh: fcebb5efa2271a4137c1bc30087fd2d2cc853a2e74569297511898557245ec87
-      www/generate-facts.sh: 9b3e9b05c9162b026de18e81505ad8383a1a7fa581d86349b8e426b000c676a5
+      www/generate-facts.sh: 23925bcd590a5368d2c57aa9bb7b12c6ddd50c59761941fc4b0ebd2409e6d2fe
       www/generate-site-pages.sh: 7200a107f5b83e68573e1e4b3ac623d51e34ec7a5e171dc3877794aba55f80db
-      www/generate.sh: 7d0656e1e2bc4368bee73aadbf0769408a0ea65244bc2005e2e397affd7f95e1
+      www/generate.sh: 07abbbac4ae2b709867d41471a018361cdda5c61176468bce87f09e34a37f36f
+      www/measure-sizes.sh: 0aa069471002f805c819e6bba6013ac8d08e726705a65f20608079afc1ff62d6
     dependents:
-      docs/src/contributing/generated-docs.typ: dff4ffafa11c1cdf47654a3b765b49f4424444131c0aadee1abba4385b6611dc
+      docs/src/contributing/generated-docs.typ: 7410b62a9b7cddf294771cccbff4043dfc36b4ccc8a2c17c66b484fdd62e0df6
   gates:
     source:
       .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a
-      Justfile: 8d5ab5434bbee2082a8dc5eb6b7380530385f87274117cf3ce0dc20b30a8fd0d
+      Justfile: 747edfaf94d50dd448d1096d50ebf76c3861c7bde22fb995345ef8cda8b9e620
     dependents:
-      .mmz/conf.d/10-rust.yaml: 98181cea959d234bca0130a7636a4283f3b79347c33e7372ecb11efb24bfc70e
-      .mmz/conf.d/20-docs.yaml: 0f4b6f9539b9c674a3034f991e6511e279c819382c451323423cf37a3175038a
-      .mmz/conf.d/30-repo.yaml: c3f68eb56c1ea38f6364c2b6357a782d8b4ab264634665717586f39a4e3e5d67
-      docs/src/contributing/gates.typ: 8b6f97fd455c7c9120a2c7cee10c8897fa7b3ece0d9c4488cc8e8b5a7e20ecb5
+      .mmz/conf.d/10-rust.yaml: ce20bfa2f797b8a8d3d4c471e1dd0ea4ad3897fb2f31e676d1a090f53824d41e
+      .mmz/conf.d/20-docs.yaml: 398c05e57b2c48e5085242abb8b4ea730d46958542410479b9da021447820d53
+      .mmz/conf.d/30-repo.yaml: 68fbe9ff8720f28e8ec0b2f40e70e1e29d057f3a7c06d57e93399b4e04af2497
+      docs/src/contributing/gates.typ: c2d0c51183be8aa88875663410403f0df56f0c858de924d2d5b32b052202c3e7
       www/utils/gate-notes.typ: b947b1a5c297b1df2003f800adbfc5356d2336c0a0d08d5c11e0507f45b4bf2b
   manifest-prose:
     source:
-      schema/mmz.schema.json: ec7a187d324a5f2d6c164b3a9835165348a6c8427b5516bc1b1ed9b31dfdc566
+      schema/mmz.schema.json: 496d4ac14442cc79ee6b7ec0d648224efcec0e06586941b83a0db13a0b415114
     dependents:
-      www/utils/config-notes.typ: f583de7ced91b8f86a1c67f77926d536fdd2ad8d4a08c420df8890e63a252494
+      www/utils/config-notes.typ: 6cbb7940e010f1b69cf793d65d062442aa8d7f170bc626e3e888f4afccb41ecd
   manifest-schema:
     source:
-      src/manifest.rs: 647742a184f85a60ba9016c99de1b76e0447ddf9faef3b63c64f2c532607daa6
-      src/probe.rs: 6fcfeebe8469d289900b8d9115b072208fb5ce4f42aa89d65b425c7f4277b468
+      src/manifest.rs: 33465376ae9420756c7a4cbc6bdace6d17c0a67901234e9cb1c6eb43764346cf
+      src/manifest_strict.rs: f7e7daeb89762e4fffa246dee8cf378dae1155d1a9f8b549a8c023f3d012be76
+      src/probe.rs: 5322f311a5691a215faa593f8a08062f29bb23d4c207c769afb38e0c4e5de1f5
     dependents:
-      schema/mmz.schema.json: ec7a187d324a5f2d6c164b3a9835165348a6c8427b5516bc1b1ed9b31dfdc566
-      src/schema.rs: ab0e907d9108618f1dba682fb54ae525553f0a8e1259e563f6778271988827b7
+      schema/mmz.schema.json: 496d4ac14442cc79ee6b7ec0d648224efcec0e06586941b83a0db13a0b415114
+      src/schema.rs: f5418a403e8d03cc7fe963a882922610717b88d68fc95930e8e8d1f8447d739a
   release-notes:
     source:
-      Cargo.toml: 018d4e86c4095f3071a97011b8f51a054466a6eff55481c3f18c97a3d1077e08
+      Cargo.toml: 5243c107ca4f05ae7756bd45725d88799aabcf139bd667c54f42e888f7ecb9ed
     dependents:
-      CHANGELOG.md: 32aab4a4568d7ad058995105b080ef156418858c06c41610a804d602f1f0fa1f
+      CHANGELOG.md: 5afde3669dc0e18aceec29ce3fcb76be6ad30492e1d1e6c3431065153b8d15e8
   status-schema:
     source:
-      src/status.rs: 51a57e2d54354094a08e8a7678515abf3eb60b73f5e23a25fa5c3f8db45ea05e
+      src/status.rs: 29ace444f9fe4445081e29860ff0c427c3c6b41e6f8440d41ffe53053b0e778c
     dependents:
       schema/status.schema.json: 8c56f88f66dc54ede3060ee81d2309a7b57f0b9a5e504c99736a4b02c694adb0

@@ -14,6 +14,10 @@
 // rendered from the schema. What belongs here is what the schema cannot say:
 // when to reach for the key, what it costs, and which failure it prevents.
 
+// The one number in this file, read rather than typed: what every grammar costs
+// together. See www/utils/sizes.typ for the chain behind it.
+#import "sizes.typ" as sizes
+
 #let config-notes = (
   imports: [
     What lets a generated fragment and a hand-written manifest coexist instead
@@ -46,16 +50,97 @@
     How a rule depends on something that is not a whole file. Read the trade
     before reaching for one — a wrong scope costs time, a wrong probe can lie —
     and note that mmz validates a probe's exit status, never its meaning.
+
+    Reach for `file:` + `json:` first. It is the only shape that costs nothing:
+    no process, no ambient tool, no shell quoting. `run:` is for what genuinely
+    is not on disk.
   ],
   "probes[].run": [
     Executed by `sh -c` from the project root with stdin closed, so a probe
     waiting on input fails instead of hanging a gate. Resolved once per mmz
     invocation however many rules name it.
+
+    A `run:` line is a dependency on the ambient environment — the tools it
+    calls must be installed, and must answer the same way here as on a
+    colleague's machine. That is the cost `file:` does not have.
+  ],
+  "probes[].file": [
+    Sourced from the repository rather than from a process, which is what makes
+    per-input tracking cheap enough to be routine: eleven lockfile-sourced
+    probes are eleven file reads, where eleven `--version` calls are eleven
+    spawns on every `mmz --is-fresh`.
+
+    The path is not filtered by `gitignore`, unlike a scope's globs — a probe
+    names one file explicitly, and a rule pinned to a generated lockfile is a
+    thing people legitimately want. Naming a file that is not there is an
+    error, not an empty input.
+  ],
+  "probes[].json": [
+    jq, not a narrower path syntax, and deliberately: a manifest key's meaning
+    must not change under a reader in a later version, and the probes in this
+    repo already use `,` and `with_entries(select(…))`. A spelling that could
+    not express what people already write would have had to grow into jq
+    anyway.
+
+    What it buys beyond narrowing is that key order stops being an input
+    _structurally_. Piping through `jq` hashes some renderer's bytes, so
+    forgetting `-S` makes a tool upgrade look like a busted rule; here mmz owns
+    the rendering and there is nothing to forget.
+  ],
+  "probes[].ast": [
+    For the inputs that are code rather than data. "This gate depends on the
+    public API of `lib.rs`, not on its comments" has no other spelling: the
+    closest a scope gets is hashing the whole file, which is the
+    over-declaration probes exist to escape.
+
+    Reach for it only when the file has no structured view already. A tool that
+    can print its own configuration as JSON is a `json:` probe, and that is the
+    cheaper, steadier answer — a rendering names node _kinds_, so a grammar
+    bump can move a digest that no edit moved. That is a false stale, which
+    settles after one re-run; the trade is deliberate, because hashing the
+    matched text instead would be steady across grammar bumps and blind to
+    reformatting, and a digest that misses a real edit is the failure this tool
+    exists to prevent.
+  ],
+  "probes[].capture": [
+    What makes the motivating example reachable rather than nearly reachable. A
+    Rust signature stops being a node of its own once a body follows it, so the
+    only pattern that matches a real function spans the body too — and without
+    this key, "depends on the public API and not the bodies" had no spelling at
+    all.
+
+    Read the pattern and the list as two different questions. The pattern
+    decides _which constructs_ are matched, so a metavariable left out of the
+    list still earns its place there; the list decides _which parts of each_ are
+    hashed. Dropping `$$$BODY` from the pattern would not narrow the input, it
+    would stop matching functions that have one.
+
+    The cost is that a probe naming three captures is more to read than one
+    naming a pattern, and the win is confined to constructs whose grammar glues
+    a signature to a body. Where a pattern can already stop at the boundary you
+    care about, let it — the default is the whole matched node precisely because
+    that is the answer most of the time.
+  ],
+  "probes[].lang": [
+    A build-time fact, not just a manifest one. Grammars are large enough that
+    shipping all of them would charge every user who never writes an `ast:`
+    probe #sizes.all-grammars.text, so a stock `cargo install mmz` parses Rust and
+    each other language is a `--features lang-<name>` flag away.
+
+    That makes a manifest's portability worth a thought: a probe naming a
+    language your colleague's mmz was not built with fails for them. It fails
+    _loudly_, naming the flag, which is the same bargain a `run:` line already
+    makes with the tools it calls — but unlike a missing tool, the fix is a
+    rebuild rather than an install.
   ],
   "probes[].allow_empty": [
     Opt in only when empty output is genuinely a valid state. The default exists
-    because empty stdout is almost always a selector that matched nothing, and
-    that is the cheapest bug in this whole surface to catch.
+    because an empty result is almost always a selector that matched nothing,
+    and that is the cheapest bug in this whole surface to catch.
+
+    With `json:` it also accepts a lone `null`, which is the form "matched
+    nothing" actually takes in jq — `.a.b` on a document without them is a
+    successful selection of nothing at all.
   ],
   commands: [
     Ordered rules; the first token-prefix match wins, so specific rules go before
@@ -113,5 +198,12 @@
     A skip is invisible unless something says so, and a silent gate is one nobody
     trusts. `{cache:<field>}` pulls a field straight from the record that caused
     the hit, so the note can name what it is standing on.
+  ],
+  probe_shell: [
+    A probe resolves its commands through whatever `PATH` the caller had, so the
+    same probe can report two answers on one worktree — a project shell and a
+    bare login shell disagreeing about a tool version is enough. Pinning the
+    argv makes a probe measure the project's tooling instead of the operator's.
+    Root-only, and it changes nothing about the `run:` lines themselves.
   ],
 )

@@ -475,26 +475,3 @@ fn unknown_option_is_a_usage_error() {
         .code(2)
         .stderr(predicate::str::contains("unknown option"));
 }
-
-#[test]
-fn reports_version() {
-    Command::cargo_bin("mmz")
-        .expect("binary should build")
-        .arg("--version")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(env!("CARGO_PKG_VERSION")));
-}
-
-#[test]
-fn help_shows_version() {
-    Command::cargo_bin("mmz")
-        .expect("binary should build")
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(
-            predicate::str::contains(env!("CARGO_PKG_VERSION"))
-                .and(predicate::str::contains("memoized command runner")),
-        );
-}

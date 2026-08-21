@@ -62,6 +62,7 @@
     items: (
       "/concepts/",
       "/inputs/",
+      "/code/",
       "/matching/",
       "/outputs/",
       "/gating/",

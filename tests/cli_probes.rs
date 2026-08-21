@@ -300,3 +300,81 @@ fn a_rule_whose_only_input_is_a_probe_is_memoized() {
     build(dir.path()).success();
     assert_eq!(run_len(dir.path(), "runs.log"), 2, "and it busts on change");
 }
+
+#[test]
+fn probe_shell_pins_the_argv_a_run_line_is_handed_to() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    // `env -i` clears the environment, so a probe reading $MARKER sees the
+    // value this shell sets and not the caller's — proof the wrapper really
+    // interposed rather than the line running under a plain `sh -c`.
+    write_project(
+        dir.path(),
+        concat!(
+            "probe_shell: [\"env\", \"MARKER=pinned\", \"sh\", \"-c\"]\n",
+            "probes:\n  tool:\n    run: printf '%s' \"$MARKER\"\n",
+            "commands:\n  - name: sh\n    inputs: [tool]\n",
+        ),
+    );
+
+    mmz(dir.path())
+        .timeout(PATIENCE)
+        .arg("--dump-config")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "probe_shell: [\"env\", \"MARKER=pinned\", \"sh\", \"-c\"]",
+        ));
+
+    // The probe resolves at all, which it could not if `env` had swallowed the
+    // run line or the wrapper had been dropped.
+    build(dir.path()).success();
+    assert_eq!(run_len(dir.path(), "runs.log"), 1);
+    build(dir.path()).success();
+    assert_eq!(
+        run_len(dir.path(), "runs.log"),
+        1,
+        "the pinned shell is stable, so the digest is too"
+    );
+}
+
+#[test]
+fn a_probe_shell_that_names_no_program_is_refused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(
+        dir.path(),
+        concat!(
+            "probe_shell: []\n",
+            "probes:\n  tool:\n    run: echo hi\n",
+            "commands:\n  - name: sh\n    inputs: [tool]\n",
+        ),
+    );
+
+    // Exit 4, the manifest-error code: an empty list is caught at load, before
+    // any probe is spawned, rather than panicking in the spawn path.
+    build(dir.path())
+        .code(4)
+        .stderr(predicate::str::contains("`probe_shell` is empty"));
+}
+
+#[test]
+fn probe_shell_is_rejected_in_an_imported_fragment() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(
+        dir.path(),
+        concat!(
+            "imports: [fragment.yaml]\n",
+            "commands:\n  - name: sh\n    inputs: [src]\n",
+        ),
+    );
+    fs::write(
+        dir.path().join(".mmz/fragment.yaml"),
+        "probe_shell: [\"sh\", \"-c\"]\nscopes:\n  src: [\"a.txt\"]\n",
+    )
+    .expect("write fragment");
+
+    // Root-only, like the other four policy keys: a fragment setting it would
+    // leave which one governs a probe declared elsewhere undecidable.
+    build(dir.path())
+        .code(4)
+        .stderr(predicate::str::contains("probe_shell"));
+}

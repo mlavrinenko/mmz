@@ -28,7 +28,7 @@ Usage:
     mmz --schema=fragment             print the JSON Schema for an imported fragment
     mmz --dump-config                 print the merged manifest and where each entry came from
     mmz --dump-config=json            the same as JSON
-    mmz --version                     print version
+    mmz --version                     print version and how many languages it parses
     mmz --help                        print this help
     mmz -- <command> [args]           run a command whose name begins with a dash
 
@@ -39,6 +39,8 @@ has no inputs; relax the last two per project with the `strict` list.
 `--tag`/`-t <tag>` (repeatable) narrows --is-fresh/--status to rules carrying
 every listed tag (AND, not OR); untagged rules never match. Combining --tag
 with a targeted command is a usage error — a command already resolves to one rule.
+A --is-fresh whose selection holds no rule is refused (exit 7) rather than passing
+on the strength of having checked nothing; --status reports it and exits 0.
 
 Environment:
     MMZ_NOW    pin \"now\" to a Unix epoch in seconds, so a record's ran_at and
@@ -46,12 +48,13 @@ Environment:
                refused, never ignored. Unset, mmz reads the system clock.
 
 Exit codes:
-    0    fresh, skipped, or succeeded        5    declared output missing after a
-    1    --is-fresh: not fresh                    successful run (nothing recorded)
-    2    usage error                         6    a probe failed, could not run, or
-    3    strict refusal (no rule / inputs)        printed nothing (nothing recorded)
+    0    fresh, skipped, or succeeded        6    a probe failed, could not run, or
+    1    --is-fresh: not fresh                    printed nothing (nothing recorded)
+    2    usage error                         7    --is-fresh: nothing to gate (the
+    3    strict refusal (no rule / inputs)        selection holds no rule)
     4    manifest missing or invalid         70   internal error
-                                             127  command could not be spawned
+    5    declared output missing after a     127  command could not be spawned
+         successful run (nothing recorded)
     otherwise the wrapped command's own exit code"
 );
 
@@ -82,7 +85,14 @@ fn run_cli(args: &[String]) -> ExitCode {
 /// start of a wrapped command rather than an mmz action.
 fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
     match first {
-        "--version" | "-V" => Some(meta(rest, &format!("mmz {VERSION}\n"))),
+        // The grammar count rides along because which grammars a build carries
+        // is a compile-time choice, so one version number describes more than
+        // one binary — and the release ships two of them. Without it, "mmz
+        // 0.8.0 cannot parse Python" names a version that is true of both.
+        "--version" | "-V" => Some(meta(
+            rest,
+            &format!("mmz {VERSION} ({})\n", mmz::ast::language_summary()),
+        )),
         "--help" | "-h" => Some(meta(rest, &format!("{USAGE}\n"))),
         schema if schema == "--schema" || schema.starts_with("--schema=") => {
             Some(run_schema(schema, rest))
@@ -380,9 +390,19 @@ fn exit_for(err: &Error) -> u8 {
         | Error::DuplicateProbe { .. }
         | Error::DuplicateCommandAcrossFiles { .. }
         | Error::FragmentPolicyKey { .. }
-        | Error::NullPolicyKey { .. } => 4,
+        | Error::NullPolicyKey { .. }
+        | Error::ProbeSource { .. }
+        | Error::EmptyProbeShell => 4,
         Error::MissingOutput { .. } => 5,
-        Error::ProbeFailed { .. } | Error::ProbeSpawn { .. } | Error::ProbeEmpty { .. } => 6,
+        Error::ProbeFailed { .. }
+        | Error::ProbeSpawn { .. }
+        | Error::ProbeEmpty { .. }
+        | Error::ProbeFileUnreadable { .. }
+        | Error::ProbeJsonInput { .. }
+        | Error::ProbeJsonFailed { .. }
+        | Error::ProbeJsonEmpty { .. }
+        | Error::ProbeAst { .. } => 6,
+        Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,
     }

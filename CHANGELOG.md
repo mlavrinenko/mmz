@@ -7,8 +7,156 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Releases now publish two binaries per target. `mmz-<target>` is unchanged —
+  default features, the Rust grammar alone, and byte-for-byte what
+  `cargo install mmz` builds. `mmz-full-<target>` is `--features lang-all`:
+  every grammar, about eight times the size, and the only build for which a
+  manifest naming a language can never be answered with "rebuild it yourself".
+
+  The people who download a prebuilt binary are the people who did not want to
+  build one, so shipping only the first left exactly them stuck — a
+  `lang: python` probe failed with an error whose fix was a Rust toolchain.
+
+  Two flavours, not three. A curated middle tier was considered and dropped:
+  `default` fails predictably and `full` never fails, but a "popular" set fails
+  for _some_ of your colleagues and not others, which is the trap the docs
+  already warn about wearing a release asset's name. It is also a taste
+  judgement that drifts, and a subset anyone actually wants is one
+  `cargo install --features` away. `nix build …#full` is the Nix spelling.
+
+- `mmz --version` now reports how many languages the build can parse —
+  `mmz 0.7.0 (1 ast lang)`, `mmz 0.7.0 (28 ast langs)`. Which grammars a binary
+  carries is a compile-time choice, so one version number describes more than
+  one binary, and as of this release it describes two published ones. Without
+  the count, "mmz 0.7.0 cannot parse Python" names a version that is true of
+  both, and the list was reachable only by provoking the error that prints it.
+
+  A count rather than the twenty-eight names, which would bury the version.
+  Twenty-eight against twenty-seven grammar crates: `typescript` and `tsx` are
+  two names a manifest may write and one crate on disk.
+
+- `just test-lang-all` runs the suite with every grammar compiled in, on its own
+  CI job. `just check` runs on default features, so `ast_lang_tests.rs`'s claim
+  that every table entry really parses covered one language out of twenty-eight
+  — and a binary whose selling point is the other twenty-seven cannot be the
+  first thing to run them. Deliberately not a `check` arm: twenty-seven C
+  compiles do not belong in front of the recipe people run in a loop.
+
+  It found its first bug immediately: `a_language_this_build_lacks_names_the_feature_to_rebuild_with`
+  hard-coded `kotlin` as the absent grammar, and under `lang-all` asserted a
+  refusal that correctly did not happen. It is now gated on the absence of the
+  grammar it names.
+
+- `just measure-sizes` measures what each grammar costs a linked binary and
+  writes `www/sizes.yaml`, which every binary-size figure in the docs is now
+  read from. Thirty release builds — the grammar-free baseline, `default`,
+  `lang-all`, and each grammar as its own delta against the baseline — so it is
+  a recipe you run on purpose, not a gate.
+
+  `www/generate-facts.sh` republishes the measurement, cross-checking its
+  grammar set against the crate's own `lang-` features: a grammar added without
+  a re-measure fails the docs build naming it, rather than rendering a table
+  that quietly omits a language mmz can parse. `outdatty`'s `binary-size` group
+  asks for the re-run when `Cargo.toml` or `Cargo.lock` moves under a recorded
+  measurement — a review, not a rebuild, because whether a dependency bump moved
+  the number enough to matter is a judgement.
+
+### Changed
+
+- Release assets are archives rather than raw binaries: `.tar.gz` per unix
+  target, `.zip` for Windows, each holding the binary under its plain name plus
+  `LICENSE-MIT`, with a `SHA256SUMS` over the set. A tree-sitter parse table is
+  a large array of small integers, and the `full` flavour compresses eight to
+  one: 45.4 MB becomes 5.7 MB, across five targets. The default flavour, mostly
+  code rather than tables, manages 5.5 MB to 2.0 MB.
+
+  **This renames every asset**, which is why it did not ship with the flavour
+  split. Nothing is pinned to the old names: every asset of every release from
+  v0.1.1 to v0.7.0 sits at 0-1 downloads, there is no install script, and the
+  docs link the releases page rather than any file. Releases up to v0.7.0 keep
+  their raw binaries; a script pinned to `releases/latest/download/mmz-<target>`
+  wants `mmz-<target>.tar.gz` from here on.
+
+- The binary sizes the docs quote are measured rather than typed. The claim that
+  a grammar is not small carried four hand-written figures, and the first had
+  already rotted: no build had produced the 3.5 MB binary the page claimed since
+  the jq and ast-grep engines landed. `Cargo.toml`, `src/ast_lang.rs` and both
+  JSON Schemas now make the argument without quoting a number, because none of
+  them can read one.
+
 ### Fixed
 
+- Each gate now declares the tools it runs, by flake input rather than by the
+  whole lockfile. `flake.lock` sat in the `rust` scope as a blanket stand-in,
+  which was wrong in both directions: too coarse, since bumping a transitive
+  input like `nixpkgs-lib` re-ran clippy and the full suite, and absent from
+  `just machete` entirely until the fix below.
+
+  Three probes replace it, one per flake input the dev shell draws binaries
+  from — `qahq-tools`, `tola-tools`, `nixpkgs-tools` — each reading one node's
+  `narHash` out of `flake.lock` with no subprocess. The blast radius of a
+  `nix flake update` drops accordingly: bumping `tola` re-runs one gate,
+  `qahq` two, where every one of them previously re-ran nine.
+
+  The two spellings are not the same mechanism and look identical from
+  `inputs:`. A tool that is its own flake input is pinned exactly. A tool out of
+  nixpkgs has no node of its own, so `nixpkgs-tools` is a proxy that over-busts
+  — still strictly finer than the whole file, because it does not move when
+  qahq or tola do. The manifest says which is which where a reader meets it.
+
+  `tests/gate_inputs_pin_the_toolchain.rs` (renamed from
+  `gate_inputs_close_over_flake_lock.rs`) now resolves probes as well as scopes,
+  and deliberately does not accept `rust-toolchain.toml` as satisfying it: nine
+  of ten gates name `rust`, so accepting it would pass almost everything for
+  free. Nothing here installs a compiler from that file — the dev shell does.
+
+- `just machete` now busts when the dev shell moves.
+ It was the one gate rule
+  naming no toolchain pin — `[manifests, recipe-machete]`, where `manifests` is
+  the two Cargo files — while `cargo-machete` itself comes from the dev shell.
+  A `nix flake update` that changed which binary runs left its recorded pass
+  looking fresh, which is the dangerous direction: a wrongly-*fresh* gate is a
+  green build that proved nothing.
+
+  It takes a new `toolchain` scope (`rust-toolchain.toml`, `flake.lock`) rather
+  than having `flake.lock` folded into `manifests`, whose name means the Cargo
+  manifests, or naming `rust`, which would drag in every source file
+  `cargo-machete` never opens and destroy the property that made the original
+  declaration right — a source-only edit still must not bust it.
+
+  `tests/gate_inputs_close_over_flake_lock.rs` now asserts the general property
+  for every `gate`-tagged rule, resolving each rule's `inputs` through the
+  declared scopes via `mmz --dump-config=json` rather than re-parsing the
+  fragments. `docs/contributing/gates.md` has claimed this under "Getting the
+  scopes right" since it was written and nothing enforced it; `just machete` was
+  the sole rule failing it.
+
+- The gate probes in this repo's own manifest now sort their JSON
+
+  (`jq -S`). `just --dump --dump-format json` renders the same recipe with its
+  object keys in different orders across `just` versions, so hashing the
+  unsorted selection made every gate read stale whenever the `just` resolving
+  on PATH was not the dev shell's — a `mt done` outside `nix develop` reported
+  ten stale gates against a worktree whose checks had just passed. This removes
+  the accidental version dependency; the deliberate one, a probe measuring
+  whatever tool PATH offers rather than the declared toolchain, is unchanged
+  and tracked separately.
+- `mmz --is-fresh` no longer exits 0 over a selection that holds no rule. A
+  `--tag` no rule carries — a typo, a rename, a rule that quietly lost its
+  `tags:` entry — used to be indistinguishable from a passing build, which is
+  the false green the tool exists to refuse. It is now an error (exit 7,
+  never relaxable) naming the tags it filtered on and listing the ones the
+  manifest declares. Two more ways to gate nothing are refused with it: a
+  manifest that declares no `commands:` at all, and a selected rule that fans
+  over a scope resolving to no files. The code is distinct from `1` so a hook
+  branching on `$?` can tell a stale build from a gate pointed at nothing.
+- `mmz --status --tag <tag>` no longer answers a filter that kept no rule with
+  "no rules defined in …" — a sentence written for a manifest with no
+  `commands:` at all, and untrue of one whose rules simply do not carry that
+  tag. It still exits 0, because a report asserts nothing, and now names which
+  emptiness it is along with the tags the manifest declares.
 - The project root a manifest is anchored to is now canonicalized, so it agrees
   with the canonical paths provenance records. A root reached through a symlink
   — a library caller passing `mmz::run(&argv, path)` its own path, never having
@@ -26,7 +174,170 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A documentation site under `www/`, built from Typst sources with
+- `ast:` and `lang:` on a probe, so a rule can depend on a *structural* slice of
+  a source file — one function, one type, one impl block — by parsing it in
+  process and matching an [ast-grep](https://ast-grep.github.io/) pattern:
+
+  ```yaml
+  probes:
+    wire-types:
+      file: src/types.rs
+      ast: 'pub struct $NAME { $$$FIELDS }'
+  ```
+
+  Nothing is spawned, nothing has to be on `PATH`, and no regex is asked to
+  pretend it is a parser. Everything the pattern did not match — comments,
+  imports, private items — is free to move without re-running the rule, which
+  is the input a scope naming the file cannot express.
+
+  What is hashed is mmz's own rendering of the matched *tree*, not its text:
+  every token exactly, the whitespace between them dropped. Reflowing a
+  signature is not an edit to it; renaming one is, and so is `a + b` becoming
+  `a - b`, because operators are nodes too. Matches join in document order,
+  which is kept rather than sorted for the reason `json:` keeps array order —
+  order a document chose is content, and sorting it would hide a real edit.
+
+  A match is a whole node, so a pattern spanning a function's body depends on
+  that body. `capture:` below narrows that.
+
+  Grammars are not small: all twenty-seven ast-grep ships weigh about 40 MB
+  linked against an mmz binary of 3.5 MB, so each is a cargo feature and a
+  stock build carries `lang-rust` alone (`--features lang-all` for the lot).
+  Naming a language this build lacks is a hard error that quotes the flag to
+  rebuild with; naming one mmz has no grammar for at all is a different error,
+  because it needs a different answer. mmz never falls back to parsing an
+  unknown file as something plausible, and a pattern the grammar could only
+  recover into an error node is refused rather than left to match nothing.
+
+- `capture:` on an `ast:` probe, naming which of the pattern's metavariables
+  are the input:
+
+  ```yaml
+  probes:
+    public-api:
+      file: src/lib.rs
+      ast: 'pub fn $NAME($$$ARGS) -> $RET { $$$BODY }'
+      capture: [NAME, ARGS, RET]
+  ```
+
+  Without it, "this gate depends on the public API of `lib.rs`, not on its
+  bodies" had no spelling: a Rust signature stops being a node of its own once
+  a body follows it, so the only pattern that reaches a real function spans the
+  body too, and a match is a whole node.
+
+  The pattern and the list answer different questions, which is the one way to
+  get this wrong. The pattern decides which constructs match — `$$$BODY` is why
+  a function *with* a body matches at all — and the list decides which parts of
+  each are hashed. Dropping `$$$BODY` from the pattern would not narrow the
+  input; it would stop matching the functions you meant.
+
+  A capture renders as `($NAME …)` around the rendering of every node it bound,
+  and the list is sorted before hashing: it is the *set* of parts that matter,
+  so retyping it in another order is not an edit. That sort cannot hide one,
+  unlike sorting match order would — only two spellings of one set ever
+  normalise together. A multi capture that bound nothing renders as a bare
+  `($ARGS)`, distinct from every count above it.
+
+  A name the pattern does not define is a hard error naming what it does
+  define, and this is the refusal the key could not ship without: an undefined
+  name binds nothing, so it would render empty in every match and narrow the
+  probe silently — with every match still present, so `allow_empty: true` would
+  find nothing to complain about. An anonymous `$$$` or a `$_` binds nothing in
+  ast-grep and cannot be named at all. Three more refusals land at load, where
+  the manifest alone settles them: an empty list, a name that could never be a
+  metavariable (`$NAME` copied straight out of the pattern), and a duplicate.
+
+  The default is unchanged and is still the answer most of the time. Where a
+  pattern can stop at the boundary you care about, let it; this is for the
+  constructs whose grammar will not let it.
+
+- `file:` and `json:` on a probe, so a rule can depend on one field of a JSON
+  file with no subprocess at all:
+
+  ```yaml
+  probes:
+    nixpkgs-input:
+      file: flake.lock
+      json: '.nodes["nixpkgs"]["locked"]["narHash"]'
+  ```
+
+  Every probe until now was a spawn. This one is not: mmz opens the file,
+  parses it, selects, and hashes the result. No shell, nothing required on
+  `PATH`, no shell quoting to get wrong, and no process per probe on an
+  `mmz --is-fresh` that gates every rule at once — which is the operation whose
+  entire value is being cheap enough to run in a hook.
+
+  It also reaches inputs that were previously inexpressible. A scope names whole
+  files, so a rule depending on one lockfile node had to hash a file with a
+  hundred of them; bumping any input busted every rule pinning it. That is not a
+  coarser version of the rule's dependency, it is a different dependency, and
+  there was no way to write the real one.
+
+  `run:` may carry a `json:` too, selecting out of a command's stdout instead of
+  a file. That halves the spawns rather than removing them, and it is the weaker
+  case — it earns its place by taking `jq` off the ambient-tool surface and by
+  making canonical hashing structural rather than conventional.
+
+  Which is the second thing this changes. mmz hashes its own rendering of the
+  selected value — object keys sorted at every depth, array order preserved —
+  never the bytes it read, so key order is not an input by construction. The
+  `jq -S` on every shelled-out probe in this repo is that same property
+  maintained by everyone remembering it, and forgetting once made a `just`
+  upgrade read as ten stale gates.
+
+  `json:` is jq, run in-process by an embedded engine (jaq), not a narrower
+  path syntax. The reason is compatibility over time rather than power: the
+  probes here already use `,` and `with_entries(select(…))`, so a path-only
+  spelling would have had to change meaning in a later version, and a manifest
+  key's semantics must not break under a reader.
+
+  Everything about it fails closed, exit 6 with nothing recorded: an unreadable
+  `file:`, bytes that are not exactly one JSON value, a program that does not
+  compile or that raises against the document, and — the load-bearing one — a
+  selection that measured nothing. `.a.b.c` against a document lacking them is
+  not a failure in jq but a successful selection of `null`, and a probe tracking
+  `null` reports one digest whatever the document does, leaving the rule fresh
+  forever against an input nobody is measuring. That is exactly what `jq -e`
+  exists to prevent, so `json:` refuses it too. `false` is a value and passes:
+  jq conflates it with `null` only because a shell exit code cannot tell them
+  apart, and mmz is under no such constraint. `allow_empty: true` opts into an
+  empty selection, the same key and the same meaning it already had for stdout.
+
+  `file:` and `run:` are mutually exclusive — a probe declaring both is a
+  manifest error (exit 4) naming the probe, not a precedence rule for a reader
+  to memorise. A `file:` with no `json:` is refused as well: hashing a whole
+  file is what a scope is for, and a scope keeps the gitignore filter and
+  reports which file moved, so a second spelling of it here would only be a
+  quieter one. The probes in this repo's own manifest are unchanged; migrating
+  them moves every gate's digest and belongs in its own reviewable change.
+
+- `probe_shell`, a root-manifest key naming the argv every probe's `run` line
+  is executed by, with the line appended as one final argument. It defaults to
+  `["sh", "-c"]`, which is what every probe ran under before, so nothing
+  changes for a manifest that omits it.
+
+  A probe resolves its commands through whatever `PATH` the caller had, which
+  quietly makes the caller's shell part of what the probe reports — and a probe
+  is supposed to report the project. The same probe run inside a project shell
+  and outside it can disagree about a tool's version, and the disagreement
+  surfaces as an unexplained stale rule rather than as an error, because a
+  digest that moved is indistinguishable from one that should have.
+  `["direnv", "exec", ".", "sh", "-c"]` or
+  `["nix", "develop", "--command", "sh", "-c"]` pins the answer.
+
+  Root-manifest-only, like `cache_dir`, `gitignore`, `strict` and `on_hit`: a
+  fragment setting it would leave undecidable which one governs a probe
+  declared in a third file. An empty list is a load error (exit 4), since there
+  would be nothing to spawn, and it is caught at load rather than in the spawn
+  path. `mmz --dump-config` reports it alongside the other four, marked
+  `(default)` when unwritten.
+
+  This pins the environment; it does not make mmz aware of it. A probe measured
+  under the wrong shell is still one mmz will trust. What the key buys is that
+  there need no longer be a wrong shell to be measured under.
+
+- A documentation site under `www/`,
+ built from Typst sources with
   [tola](https://github.com/tola-rs/tola-ssg) and searchable via Pagefind,
   replacing the single hand-written `index.html` that restated the README from
   memory. Twelve pages, and the reference ones are generated rather than

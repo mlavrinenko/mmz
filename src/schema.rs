@@ -7,9 +7,10 @@
 //! at either for completion and validation in your editor.
 //!
 //! The two are not maintained independently: [`crate::compose`] rejects
-//! `cache_dir`, `gitignore`, `strict` and `on_hit` in an imported file (see
+//! `cache_dir`, `gitignore`, `strict`, `on_hit` and `probe_shell` in an
+//! imported file (see
 //! `check_no_policy_keys` there), so [`FRAGMENT_SCHEMA`] is exactly
-//! [`SCHEMA`] with those four properties removed — same `imports`, `scopes`,
+//! [`SCHEMA`] with those five properties removed — same `imports`, `scopes`,
 //! `probes` and `commands` shapes, same `additionalProperties: false`. The
 //! `tests` module below asserts that relationship on every `cargo test`
 //! rather than through a generate-then-diff gate, so drift in either
@@ -41,6 +42,15 @@ mod tests {
             "commands",
             "gitignore",
             "cache_dir",
+            "probes",
+            "run",
+            "file",
+            "json",
+            "allow_empty",
+            "ast",
+            "capture",
+            "lang",
+            "probe_shell",
             "match",
             "exact",
             "tags",
@@ -71,7 +81,7 @@ mod tests {
     }
 
     /// The derivation the module doc promises: the fragment schema's
-    /// property set is exactly the config schema's minus the four policy
+    /// property set is exactly the config schema's minus the five policy
     /// keys, every property the two share is byte-identical (compared as
     /// parsed JSON, so key order in the source files cannot fail this by
     /// accident), and both keep `additionalProperties: false`. Fails on

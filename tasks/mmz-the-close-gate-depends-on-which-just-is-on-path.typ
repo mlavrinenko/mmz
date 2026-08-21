@@ -4,7 +4,19 @@
   title: "mmz: the close gate depends on which just is on PATH",
   priority: framework("ice", confidence: 0.9, ease: 5.0, impact: 6.0),
   tags: ("gating", "tooling"),
-  status: proposed(2026, 8, 20),
+  links: (
+    related("mmz-just-machete-is-not-busted-by-a-dev-shell-bump.typ")[the
+      under-declared gate found while auditing this one's fourth option],
+    related("mmz-gate-rules-do-not-declare-the-tools-they-run.typ")[the
+      input-side answer to the same question this one asks about environment],
+    related("mmz-adopt-probe-shell-in-this-repo-s-own-manifest.typ")[the
+      deferred adoption of the key this one produced],
+  ),
+  status: done(
+    2026,
+    8,
+    20,
+  )[Closed by the milestone rather than by one change: jq -S removed the accidental version dependency, probe\_shell answered the precondition side, and per-flake-input tool probes answered the identity side.],
 )
 
 == Summary
@@ -67,8 +79,57 @@ just is on PATH*.
   `flake.lock` in the `rust` scope already does for rustc. Arguably correct, and
   the most expensive.
 
-`jq -S` plus one of the first or third is probably the answer. Decide before
-implementing.
+== What the audit found
+
+The fourth option is already implemented, and would not have helped.
+`flake.lock` is in the `rust` scope, and nine of the ten gates name `rust`, so
+a `nix flake update` that bumps `just` already busts them. (The tenth is
+`just machete`, which is a real gap — filed separately.)
+
+It would not have caught this bug because `flake.lock` is byte-identical
+inside and outside `nix develop`. It records what the shell *would* hand you,
+not what the probe *actually invoked*. Making the tool version a genuine input
+needs a self-reporting probe (`just --version`), which detects the mismatch but
+turns the phantom-stale into a real bust — honest, no more usable.
+
+So the four options all answer "how do we make the digest stable", and none
+answers the question the failure actually poses: is the environment part of the
+rule's *identity*, or a *precondition* of the measurement?
+
+- Identity means hashing the tool surface — every tool every recipe reaches.
+  Unbounded, and one will be missed.
+- Precondition means mmz *refuses to measure* in an environment it was not told
+  to expect, instead of quietly hashing a foreign tool's output. That is the
+  fifth option, and it matches the rest of the design: mmz already fails closed
+  on a missing manifest, an unmatched command, an empty probe. An unmet
+  environment precondition is the same class, and currently the only one that
+  degrades into a wrong answer rather than an error.
+
+== Progress
+
+`jq -S` landed on all eleven probes, with the rationale recorded in
+`.mmz/conf.d/10-rust.yaml` and the regression tests in
+`tests/gate_probe_normalisation.rs` (order-stability, an unsorted control, and
+a scan asserting every jq probe in this repo sorts). That closes the
+accidental version dependency.
+
+Both halves of the identity-vs-precondition fork then landed, which is what
+closes this.
+
+*Precondition:* `probe_shell` lets a manifest pin the argv every probe's `run`
+line is handed to, so the answer stops depending on where mmz was invoked from.
+Adopting it in this repo is deferred — neither candidate value is both cheap and
+CI-available, and `.mmz/config.yaml` carries the measurements and a commented
+form pointing at the cancelled adoption task.
+
+*Identity:* each gate now declares the tools it runs, as per-flake-input probes
+reading one node of `flake.lock` with no subprocess. That is the input-side
+answer, and it turned out finer than the blanket it replaced rather than
+coarser: bumping tola re-runs one gate and qahq two, where each previously
+re-ran nine.
+
+The probes still resolve through the caller's PATH by default, which is now a
+declared default rather than an unexamined one.
 
 == Regression test
 

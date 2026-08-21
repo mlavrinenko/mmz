@@ -15,9 +15,12 @@
 # restore have to be ONE critical section or a concurrent reader sees the gap
 # between them.
 #
-# Four artifacts, three sources:
+# Five artifacts, five sources:
 #   - crate-map.json    <- `cargo metadata` + rust-toolchain.toml (see
 #                          www/crate-map.jq)
+#   - sizes.json        <- www/sizes.yaml, what www/measure-sizes.sh commits,
+#                          cross-checked against the crate's `lang-` features
+#                          (see www/sizes.jq)
 #   - gates.json        <- `just --dump --dump-format json`, for the
 #                          `[group("gate")]` tags and `check`'s own dependency
 #                          list (see www/gates.jq)
@@ -99,6 +102,19 @@ cargo metadata --format-version 1 \
   | jq -f "$SCRIPT_DIR/crate-map.jq" --arg channel "$CHANNEL" \
   | emit crate-map.json
 
+# --- sizes.json --------------------------------------------------------------
+# The one fact class this script does not MEASURE, only republishes.
+# www/measure-sizes.sh links the binary thirty times, so it runs on demand and
+# commits www/sizes.yaml; here is the cross-check that makes that file
+# trustworthy — its grammar set against the crate's own `lang-` features, argued
+# in www/sizes.jq — plus the byte-to-prose formatting no page should do for
+# itself. `--no-deps`, unlike above: the features wanted are the root package's.
+FEATURES="$(cargo metadata --format-version 1 --no-deps \
+  | jq -c -f "$SCRIPT_DIR/lang-features.jq")"
+yq . "$SCRIPT_DIR/sizes.yaml" \
+  | jq -f "$SCRIPT_DIR/sizes.jq" --argjson features "$FEATURES" \
+  | emit sizes.json
+
 # --- gates.json + just.typ ---------------------------------------------------
 # One `just --dump` shell-out, two artifacts. gates.json is the gate table
 # CONTRIBUTING.md renders; just.typ is the module every doc source calls a
@@ -172,7 +188,7 @@ yq '{limits, overrides}' .linecop.yaml | emit linecop-caps.json
 # `emit` runs at the end of a pipeline and therefore in a SUBSHELL, so it cannot
 # accumulate this list itself; the names live here, where they are also the
 # script's declared contract.
-FACTS=(crate-map.json gates.json just.typ linecop-caps.json)
+FACTS=(crate-map.json gates.json just.typ linecop-caps.json sizes.json)
 for fact in "${FACTS[@]}"; do
   if [ ! -s "$OUT/$fact" ]; then
     echo "generate-facts.sh: $fact was not written" >&2

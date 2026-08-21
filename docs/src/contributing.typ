@@ -152,12 +152,22 @@ inline-test workflow. It runs as part of #just.fix-check().
 - Every bug fix gets a regression test. The bug is evidence that the case was
   reachable; the test is what stops it being reachable twice.
 
-Coverage is enforced separately from #just.check(), in CI and on demand:
+Coverage is enforced separately from #just.check(), in CI and on demand, and so
+is the grammar set:
 
 ```bash
-just cover   # tarpaulin, fails under 70%
-just crap    # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+just cover          # tarpaulin, fails under 70%
+just crap           # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+just test-lang-all  # the suite with every tree-sitter grammar compiled in
 ```
+
+#just.check() runs on default features, which is the Rust grammar and nothing
+else — so `ast_lang_tests.rs`'s claim that every language in the table really
+parses covers one of twenty-eight. #just.test-lang-all() covers the rest, on its
+own CI job, because the release publishes a `lang-all` binary and an untested
+grammar set is not something to put a version number on. It is deliberately not
+a gate arm: twenty-seven C compiles do not belong in front of the recipe you run
+in a loop. Run it after touching `src/ast_lang.rs` or the `lang-*` features.
 
 #just.crap() exists because a global coverage threshold can stay green while one
 branchy, untested function rots. When it flags a function, add tests or reduce
@@ -186,6 +196,20 @@ reference is generated from `mmz --schema`, the CLI reference from `mmz --help`,
 every transcript from a real run against `examples/demo`, and the gate table
 above from `just --dump`. If you find yourself typing a fact that already exists
 in a file the build can read, derive it instead.
+
+= Adding a manifest key
+
+`Manifest` carries `deny_unknown_fields`, so the struct in `src/manifest.rs` is
+the manifest's whole surface — and the JSON Schema, the reference page's prose
+notes and the composition layer's policy-key handling are all derived from it
+rather than discovering it. A key added in one place and nowhere else fails a
+gate rather than shipping half-wired.
+
+The step list lives on `Manifest`'s own doc comment, next to the field you are
+adding, so it cannot drift away from the struct it describes.
+#link("docs/contributing/manifest-keys.md")[docs/contributing/manifest-keys.md]
+covers why each coupling exists, which of them will catch you, and what makes a
+key a root-only policy key.
 
 = Dependency drift
 

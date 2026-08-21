@@ -1,7 +1,7 @@
 //! The mmz manifest (`.mmz/config.yaml`): named input scopes and the command
 //! rules that reference them.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Deserializer};
@@ -29,6 +29,16 @@ pub(crate) const fn default_gitignore() -> bool {
 /// manifest omits the key.
 pub(crate) fn default_cache_dir() -> String {
     ".mmz/cache".to_owned()
+}
+
+/// Default for [`Manifest::probe_shell`] — `sh -c`, the shell every probe ran
+/// under before the key existed. `pub(crate)` so [`crate::compose`] can apply
+/// the same default when a root manifest omits the key.
+pub(crate) fn default_probe_shell() -> Vec<String> {
+    crate::probe::DEFAULT_SHELL
+        .iter()
+        .map(|part| (*part).to_owned())
+        .collect()
 }
 
 /// Trims each declared tag and drops the ones left blank, so a stray
@@ -151,49 +161,55 @@ pub enum MatchMode {
     Exact,
 }
 
-/// A runtime situation mmz can either error on (strict) or fall back from.
-///
-/// Only the cases reachable once a manifest has loaded are configurable; a
-/// missing or unparseable manifest always errors, since there is no `strict`
-/// list to consult.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StrictCase {
-    /// No rule's name is a token-prefix of the invoked command.
-    NoMatch,
-    /// A matched rule's scopes resolve to zero files on disk.
-    NoInputs,
-}
-
-/// The set of [`StrictCase`]s mmz errors on rather than passing through.
-///
-/// Absent from the manifest means every case (the safe default); an empty list
-/// means none (full passthrough); a subset relaxes the rest.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(transparent)]
-pub struct StrictPolicy {
-    cases: BTreeSet<StrictCase>,
-}
-
-impl StrictPolicy {
-    /// Every case enforced — the default when `strict` is omitted.
-    #[must_use]
-    pub fn all() -> Self {
-        Self {
-            cases: [StrictCase::NoMatch, StrictCase::NoInputs]
-                .into_iter()
-                .collect(),
-        }
-    }
-
-    /// True when `case` should error instead of falling back.
-    #[must_use]
-    pub fn enforces(&self, case: StrictCase) -> bool {
-        self.cases.contains(&case)
-    }
-}
+/// The `strict` policy's two types, split out once this file reached its line
+/// cap. Re-exported so every `manifest::StrictCase` / `manifest::StrictPolicy`
+/// path outside this module keeps working without knowing the split happened.
+#[path = "manifest_strict.rs"]
+mod strict;
+pub use strict::{StrictCase, StrictPolicy};
 
 /// A declared set of command rules and the input scopes they draw on.
+///
+/// # Adding a key here is not a one-file change
+///
+/// `deny_unknown_fields` means this struct is the manifest's whole surface,
+/// and several things downstream are derived from that surface rather than
+/// discovering it — so a field added here and nowhere else fails a gate rather
+/// than shipping half-wired. Every site below is enforced by a test or a gate,
+/// which is deliberate: the list rots, the failures do not. It is here rather
+/// than in a contributing doc because this is the struct you are editing when
+/// you need it.
+///
+/// 1. The field, with `#[serde(default …)]` and a doc comment. A default that
+///    is not a literal needs a `default_*` helper above, and `pub(crate)` on it
+///    so [`crate::compose`] can apply the same one.
+/// 2. `schema/mmz.schema.json`, with a `description`. `src/schema.rs`'s
+///    `schema_documents_every_manifest_field` fails without it, and the
+///    fragment schema is derived by removing the policy keys — so a non-policy
+///    key needs nothing there, and a policy key needs the removal to still
+///    hold.
+/// 3. `www/utils/config-notes.typ`, keyed exactly as the reference renders it
+///    (bare at top level, `commands[].`/`probes[].`/`scopes[].` below).
+///    `just check-doc-facts` asserts the schema's key set and the notes' key
+///    set match in *both* directions.
+/// 4. If it can be validated, [`Manifest::validate`] — and the error in
+///    [`crate::error::Error`] plus its arm in `main.rs`'s `exit_for`, which is
+///    non-exhaustive and will not compile without one. Prefer an existing exit
+///    code; a new one is a documented CLI surface (`www/utils/exit-code-notes.typ`).
+///
+/// A key that governs the whole run is additionally a *policy* key, which is a
+/// second wiring path: add it to [`crate::compose::POLICY_KEYS`] (a fixed-size
+/// array, so the destructurings in `compose_policy.rs` fail to compile until
+/// updated), resolve it in `compose_policy::resolve`, add it to
+/// [`crate::compose::Document`] as `Option<Option<T>>` so an explicit `null` is
+/// caught, and render it in `dump.rs`'s `Policy` and `render_policy` — which is
+/// what makes `mmz --dump-config` able to say whether it was written or
+/// defaulted.
+///
+/// Editing any of `src/manifest.rs`, `src/probe.rs` or `src/main.rs` also puts
+/// an `outdatty` group out of date. That is the gate asking you to confirm you
+/// looked at the dependents, not a failure to fix — `outdatty update --group
+/// <name>` after reviewing them.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
@@ -235,6 +251,22 @@ pub struct Manifest {
     /// Omitted means all cases (the default); see [`StrictPolicy`].
     #[serde(default = "StrictPolicy::all")]
     pub strict: StrictPolicy,
+
+    /// The argv a probe's `run` line is executed by, with the line appended as
+    /// one final argument. Defaults to `["sh", "-c"]`, which is what every
+    /// probe ran under before the key existed.
+    ///
+    /// A probe measures whatever the ambient `PATH` resolves, so a manifest
+    /// whose probes read project tooling can pin the environment they are
+    /// measured in — `["direnv", "exec", ".", "sh", "-c"]`, or
+    /// `["nix", "develop", "--command", "sh", "-c"]` — instead of inheriting
+    /// whichever shell the caller happened to be in. The `run:` lines are
+    /// untouched by this: only the process interpreting them changes.
+    ///
+    /// Must name at least a program; an empty list is a load error, since
+    /// there would be nothing to spawn. See [`crate::probe`].
+    #[serde(default = "default_probe_shell")]
+    pub probe_shell: Vec<String>,
 
     /// Message printed to stderr when a command is skipped (a cache hit).
     /// `{cache:<field>}` macros substitute a field from the matched rule's
@@ -315,7 +347,7 @@ impl Manifest {
     /// [`Error::UnknownInput`], [`Error::DuplicateTag`], or
     /// [`Error::InvalidOutput`].
     pub fn validate(&self) -> Result<()> {
-        crate::probe::validate(&self.probes, &self.scopes)?;
+        crate::probe::validate(&self.probes, &self.scopes, &self.probe_shell)?;
         let mut seen: Vec<&str> = Vec::new();
         for (index, command) in self.commands.iter().enumerate() {
             if command.name.trim().is_empty() {

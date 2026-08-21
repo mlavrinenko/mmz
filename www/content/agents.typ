@@ -57,8 +57,11 @@ Every code means one thing, so branching on `$?` is safe:
 - `4` is a manifest problem, and is the one case no setting relaxes.
 - `5` and `6` both mean a run happened and deliberately left no record: a
   declared output was missing, or a probe failed.
+- `7` is a gate that selected no rule — a tag nothing carries, most often. It is
+  not a stale build and not a passing one; it is a gate asking about nothing.
 
-An agent should treat `4`, `5` and `6` as "fix the cause", never as "retry".
+An agent should treat `4`, `5`, `6` and `7` as "fix the cause", never as
+"retry".
 
 = Recording a pass
 
@@ -84,7 +87,14 @@ list every file the command could read.
 - Sources, and the manifests and lockfiles that pin its dependencies.
 - The toolchain pins, if a toolchain change should re-run it —
   `rust-toolchain.toml`, `flake.lock`. `mmz` trusts file content, never the
-  ambient environment.
+  ambient environment. A whole `flake.lock` in a scope is the simple default,
+  and it over-busts once the lockfile is big: a hundred nodes hashed together
+  means any transitive bump re-runs every rule that pins it. Name the one node
+  a rule's tools come out of instead — a `file:` +
+  #link(u("/inputs/"))[`json:` probe] on
+  `.nodes["<input>"]["locked"]["narHash"]` — remembering that such a probe is
+  exact for a tool that is its own flake input and only a proxy for one out of
+  `nixpkgs`.
 - The recipe or script body that defines the command, if it lives in a file. If
   it lives in _part_ of a file, use a #link(u("/inputs/"))[probe] rather than
   hashing the whole file.

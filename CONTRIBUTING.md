@@ -88,12 +88,15 @@ As a Rust file approaches its cap, `just eject` moves its inline `#[cfg(test)]` 
 - CLI and integration tests live in `tests/` and drive the built binary with [assert\_cmd](https://docs.rs/assert_cmd) and [predicates](https://docs.rs/predicates).
 - Every bug fix gets a regression test. The bug is evidence that the case was reachable; the test is what stops it being reachable twice.
 
-Coverage is enforced separately from `just check`, in CI and on demand:
+Coverage is enforced separately from `just check`, in CI and on demand, and so is the grammar set:
 
 ```bash
-just cover   # tarpaulin, fails under 70%
-just crap    # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+just cover          # tarpaulin, fails under 70%
+just crap           # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+just test-lang-all  # the suite with every tree-sitter grammar compiled in
 ```
+
+`just check` runs on default features, which is the Rust grammar and nothing else — so `ast_lang_tests.rs`’s claim that every language in the table really parses covers one of twenty-eight. `just test-lang-all` covers the rest, on its own CI job, because the release publishes a `lang-all` binary and an untested grammar set is not something to put a version number on. It is deliberately not a gate arm: twenty-seven C compiles do not belong in front of the recipe you run in a loop. Run it after touching `src/ast_lang.rs` or the `lang-*` features.
 
 `just crap` exists because a global coverage threshold can stay green while one branchy, untested function rots. When it flags a function, add tests or reduce its branching — never raise the threshold to dodge it.
 
@@ -110,6 +113,12 @@ just docs check   # build, index, and validate the site
 [docs/contributing/generated-docs.md](docs/contributing/generated-docs.md) covers the pipeline: which facts are derived from where, how to add a source, and the typlite constraints a source has to write within.
 
 The rule that matters: **a doc states a fact by reading it**. The manifest reference is generated from `mmz --schema`, the CLI reference from `mmz --help`, every transcript from a real run against `examples/demo`, and the gate table above from `just --dump`. If you find yourself typing a fact that already exists in a file the build can read, derive it instead.
+
+## Adding a manifest key
+
+`Manifest` carries `deny_unknown_fields`, so the struct in `src/manifest.rs` is the manifest’s whole surface — and the JSON Schema, the reference page’s prose notes and the composition layer’s policy-key handling are all derived from it rather than discovering it. A key added in one place and nowhere else fails a gate rather than shipping half-wired.
+
+The step list lives on `Manifest`’s own doc comment, next to the field you are adding, so it cannot drift away from the struct it describes. [docs/contributing/manifest-keys.md](docs/contributing/manifest-keys.md) covers why each coupling exists, which of them will catch you, and what makes a key a root-only policy key.
 
 ## Dependency drift
 

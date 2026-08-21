@@ -17,7 +17,8 @@
 //!   *different* files is [`Error::DuplicateCommandAcrossFiles`]; the same name
 //!   twice in *one* file is still [`Error::DuplicateCommand`], caught by
 //!   [`Manifest::validate`] exactly as it is today.
-//! - `cache_dir`, `gitignore`, `strict` and `on_hit` are root-manifest-only;
+//! - `cache_dir`, `gitignore`, `strict`, `on_hit` and `probe_shell` are
+//!   root-manifest-only;
 //!   any of them in an imported file is [`Error::FragmentPolicyKey`]. A
 //!   [`crate::manifest::Command`]'s own `on_hit` is unaffected — different key.
 //! - `imports` itself never reaches the merged [`Manifest`]; it is consumed
@@ -53,9 +54,7 @@ use serde::{Deserialize, Deserializer};
 
 use crate::error::{Error, Result};
 use crate::import_paths::expand_import;
-use crate::manifest::{
-    Command, Manifest, Scope, StrictPolicy, default_cache_dir, default_gitignore,
-};
+use crate::manifest::{Command, Manifest, Scope, StrictPolicy};
 use crate::probe::Probe;
 use crate::provenance::Provenance;
 
@@ -94,6 +93,8 @@ struct Document {
     strict: Option<Option<StrictPolicy>>,
     #[serde(default, deserialize_with = "double_option")]
     on_hit: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    probe_shell: Option<Option<Vec<String>>>,
 }
 
 /// Deserializes a field as `Option<Option<T>>`: `#[serde(default)]` supplies
@@ -277,25 +278,13 @@ pub(crate) fn load(path: &Path, root: &Path) -> Result<(Manifest, Provenance)> {
     let document = parse_text(&text, path, root)?;
     let canonical = fs::canonicalize(path)?;
 
-    let gitignore = require_or_default(
-        document.gitignore,
-        "gitignore",
-        path,
-        root,
-        default_gitignore,
-    )?;
-    let cache_dir = require_or_default(
-        document.cache_dir,
-        "cache_dir",
-        path,
-        root,
-        default_cache_dir,
-    )?;
-    let strict = require_or_default(document.strict, "strict", path, root, StrictPolicy::all)?;
-    // Unlike the other three, an explicit `on_hit: null` in the root has
-    // always been legal — `Manifest::on_hit` is `Option<String>` — so it
-    // collapses to `None` exactly like an absent key, not an error.
-    let on_hit = document.on_hit.flatten();
+    let Resolved {
+        gitignore,
+        cache_dir,
+        strict,
+        on_hit,
+        probe_shell,
+    } = policy::resolve(&document, path, root)?;
 
     let mut state = MergeState {
         root: root.to_path_buf(),
@@ -327,6 +316,7 @@ pub(crate) fn load(path: &Path, root: &Path) -> Result<(Manifest, Provenance)> {
         cache_dir,
         strict,
         on_hit,
+        probe_shell,
     };
     manifest.validate()?;
 
@@ -341,39 +331,6 @@ pub(crate) fn load(path: &Path, root: &Path) -> Result<(Manifest, Provenance)> {
     ))
 }
 
-/// Resolves one root-only policy field's double-`Option` into the value
-/// [`Manifest`] wants: an absent key (`None`) uses `default`, a present value
-/// (`Some(Some(value))`) is used as written, and a present-but-explicit
-/// `null` (`Some(None)`) is [`Error::NullPolicyKey`] rather than being allowed
-/// to fall through to `default` silently. Before composition existed these
-/// fields were plain, non-nullable types, so `null` was already a hard parse
-/// error; the shared per-file [`Document`] has to accept `null` so a
-/// *fragment* setting one is still caught by [`Error::FragmentPolicyKey`],
-/// which means the root's own explicit `null` has to be checked here instead
-/// — an author who wrote `gitignore:` meaning `false` must not silently
-/// resolve to `true` with no diagnostic.
-///
-/// # Errors
-///
-/// Returns [`Error::NullPolicyKey`] naming `key` and `path` (rendered against
-/// `root`, see [`load`]) when `value` is `Some(None)`.
-fn require_or_default<T>(
-    value: Option<Option<T>>,
-    key: &str,
-    path: &Path,
-    root: &Path,
-    default: impl FnOnce() -> T,
-) -> Result<T> {
-    match value {
-        None => Ok(default()),
-        Some(None) => Err(Error::NullPolicyKey {
-            key: key.to_owned(),
-            path: Provenance::shorten(path, root),
-        }),
-        Some(Some(resolved)) => Ok(resolved),
-    }
-}
-
 /// Parses `text` (read from `path`) into a [`Document`], naming `path` on
 /// failure — always the file actually being parsed, root or fragment, so a
 /// syntax error inside a fragment never gets blamed on the root manifest —
@@ -385,8 +342,8 @@ fn parse_text(text: &str, path: &Path, root: &Path) -> Result<Document> {
     })
 }
 
-/// The root-manifest-only keys: `cache_dir`, `gitignore`, `strict` and
-/// `on_hit` may be set on the root manifest but never on an imported
+/// The root-manifest-only keys: `cache_dir`, `gitignore`, `strict`, `on_hit`
+/// and `probe_shell` may be set on the root manifest but never on an imported
 /// fragment. This is the single source of truth for that surface — the only
 /// place the four names are spelled as literals — and it has two readers:
 /// `policy::check_no_policy_keys`, the rule actually enforced at load time,
@@ -399,7 +356,8 @@ fn parse_text(text: &str, path: &Path, root: &Path) -> Result<Document> {
 /// outside `#[cfg(test)]` calls is flagged unused in a plain build — the
 /// const itself, sitting in the module that also reaches for it via
 /// `super::POLICY_KEYS`, has no such problem.
-pub(crate) const POLICY_KEYS: [&str; 4] = ["cache_dir", "gitignore", "strict", "on_hit"];
+pub(crate) const POLICY_KEYS: [&str; 5] =
+    ["cache_dir", "gitignore", "strict", "on_hit", "probe_shell"];
 
 /// The check that rejects a policy key outside the root, and the query for
 /// whether one was written or defaulted — split out to `compose_policy.rs`
@@ -408,8 +366,8 @@ pub(crate) const POLICY_KEYS: [&str; 4] = ["cache_dir", "gitignore", "strict", "
 /// below, so nothing outside this module has to know the split happened.
 #[path = "compose_policy.rs"]
 mod policy;
-use policy::check_no_policy_keys;
 pub(crate) use policy::declared_policy_keys;
+use policy::{Resolved, check_no_policy_keys};
 
 /// Renders an import chain root first, e.g. `a.yaml -> b.yaml -> a.yaml`,
 /// each link rendered against `root` (see [`load`]).

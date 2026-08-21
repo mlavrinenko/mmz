@@ -31,9 +31,18 @@
 
       in
       {
-        # For `nix build` & `nix run`:
+        # For `nix build` & `nix run`. The same two flavours the release
+        # publishes: `default` carries the Rust grammar alone, `full` carries
+        # every one. Nix is the cheap place to offer the choice — no CI matrix
+        # leg, and an overlay can override `cargoBuildOptions` for any subset in
+        # between, which is the freedom a prebuilt asset cannot give.
         packages.default = naersk'.buildPackage {
           src = ./.;
+        };
+
+        packages.full = naersk'.buildPackage {
+          src = ./.;
+          cargoBuildOptions = prev: prev ++ [ "--features" "lang-all" ];
         };
 
         # For `nix develop`:

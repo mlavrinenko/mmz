@@ -71,6 +71,38 @@ usage error, since a command already resolves to exactly one rule.
 Tags are case-faithful and trimmed, blank entries are dropped, and declaring the
 same tag twice on one rule is a manifest error.
 
+= A gate over nothing is refused
+
+`mmz --is-fresh --tag gats` — one letter off — selects no rule, and a gate over
+no rule is vacuously true. That is a pass nobody earned, so it is an error
+(exit 7) naming the tags it filtered on and listing the ones the manifest
+actually declares:
+
+#transcript("is-fresh-empty-tag.txt")
+
+The same refusal covers the other two ways a selection empties out: a manifest
+that declares no `commands:` at all, and a selected rule that fans over a scope
+resolving to no files. Each of them would otherwise exit 0 — the answer of a
+gate that checked nothing, spelled exactly like the answer of one that checked
+everything and found it fresh.
+
+The code is its own, not `1`, because the two are different questions for
+whoever branches on `$?`: `1` says the build is stale, `7` says the gate is
+pointed at nothing. A `gate` tag dropped by one bad merge is the second, and it
+must not read as the first.
+
+`--status` over the same empty selection still exits 0 — a report asserts
+nothing, so an empty one is a fine answer — but it says which emptiness it is
+rather than claiming no rules are defined:
+
+#transcript("status-empty-tag.txt")
+
+#callout("note")[
+  This is why the tag a project gates on is worth grepping for after a rename.
+  `mmz --status --tag <tag>` is the cheap check: it shows the selection the
+  gate would assert over, without asserting anything.
+]
+
 = Why this is a tag and not a second manifest
 
 One manifest can now hold a gating subset alongside memoized commands a gate

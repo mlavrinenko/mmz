@@ -26,6 +26,11 @@ groups:
   - name: manifest-schema
     source:
       - src/manifest.rs
+      # The `strict` types split out of manifest.rs once it hit its line cap.
+      # Listed because the split moved a schema-bearing surface, not because
+      # the file is new: a key edited here reaches the schema exactly as one
+      # edited in manifest.rs does.
+      - src/manifest_strict.rs
       - src/probe.rs
     dependents:
       - schema/mmz.schema.json
@@ -67,6 +72,26 @@ groups:
     dependents:
       - CHANGELOG.md
 
+  # Binary size is the one doc fact whose measurement costs half an hour —
+  # thirty LTO links, one per grammar — so it cannot be derived on every docs
+  # build the way the crate map and the gate table are. It is measured on
+  # demand (`just measure-sizes`) and committed, and this group is what
+  # schedules the re-measure: a dependency or feature change moves what the
+  # binary weighs, and nothing else in the tree would notice.
+  #
+  # The review this asks for is genuinely a judgement, which is why it belongs
+  # here and not in a gate. A patch bump to a leaf dependency moves the number
+  # by less than the rounding the docs print; a new grammar or a tree-sitter
+  # major does not. A reviewer who decides it does not matter re-confirms with
+  # `just outdatty-update` and no build is run — which a gate could never
+  # allow, and is exactly the call a watermark is for.
+  - name: binary-size
+    source:
+      - Cargo.toml
+      - Cargo.lock
+    dependents:
+      - www/sizes.yaml
+
   # The Justfile is the gate surface. Its recipes are mirrored three ways that
   # no generator closes: each gate's prose, the .mmz/conf.d/ fragment that
   # memoizes it (rule name = `just <recipe>`, plus the probe pinning its body),
@@ -93,7 +118,12 @@ groups:
       - www/generate.sh
       - www/generate-facts.sh
       - www/generate-site-pages.sh
+      # Not a writer of www/generated/ like the three above, but part of the
+      # same pipeline and documented in the same file: it is the producer of the
+      # one committed fact the generators only republish.
+      - www/measure-sizes.sh
       - docs/generate-md.sh
+      - .just/scripts/check-capture-paths.sh
       - .just/scripts/check-doc-coverage.sh
       - .just/scripts/check-doc-facts.sh
       - .just/scripts/docs-md-check.sh

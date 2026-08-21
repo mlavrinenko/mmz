@@ -84,6 +84,13 @@ pub enum Error {
         name: String,
     },
 
+    /// `probe_shell` was set to an empty list, so there is no program to run a
+    /// probe under.
+    #[error(
+        "`probe_shell` is empty; it must name at least the program a probe's `run` line is passed to (the default is [\"sh\", \"-c\"])"
+    )]
+    EmptyProbeShell,
+
     /// A probe command exited non-zero, so its stdout is not a usable input.
     #[error(
         "probe `{name}` failed (exit {code}); mmz consumed no output and wrote no cache record\n  command: {run}\n  stderr: {stderr}"
@@ -122,6 +129,88 @@ pub enum Error {
         name: String,
         /// The `run` line, as the manifest spells it.
         run: String,
+    },
+
+    /// A probe's source keys do not describe one readable thing: both `run:`
+    /// and `file:`, neither of them, or a `file:` with no `json:` to select
+    /// from it.
+    ///
+    /// Checked at load with the manifest's other shape rules, so a malformed
+    /// probe is refused even when no rule names it, and the message can name
+    /// the probe — which a `serde` conversion on the value alone could not.
+    #[error("probe `{name}` {reason}")]
+    ProbeSource {
+        /// Name of the offending probe.
+        name: String,
+        /// What is wrong with its source keys, and what to write instead.
+        reason: String,
+    },
+
+    /// A probe's `file:` could not be read, so there are no bytes to select
+    /// from. Named separately from [`Error::Io`] because a probe's error must
+    /// name the probe: a bare "no such file" leaves a reader hunting.
+    #[error(
+        "probe `{name}` could not read `{path}`; mmz consumed no output and wrote no cache record\n  {source}"
+    )]
+    ProbeFileUnreadable {
+        /// Name of the offending probe.
+        name: String,
+        /// The path, as the manifest spells it.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+
+    /// The bytes a `json:` probe was pointed at are not one JSON value — an
+    /// empty file, a tool that logged a line before its JSON, a truncated
+    /// write.
+    #[error(
+        "probe `{name}` read {origin}, which is not one JSON value ({reason}); mmz consumed no output and wrote no cache record"
+    )]
+    ProbeJsonInput {
+        /// Name of the offending probe.
+        name: String,
+        /// What was read, as the manifest points at it.
+        origin: String,
+        /// What the parser objected to.
+        reason: String,
+    },
+
+    /// A `json:` program did not compile, or raised while running. One variant
+    /// for both because the fix is the same edit — the program is wrong for
+    /// the document it was pointed at — and the reason says which half broke.
+    #[error(
+        "probe `{name}` could not select from {origin} ({reason}); mmz consumed no output and wrote no cache record\n  json: {program}"
+    )]
+    ProbeJsonFailed {
+        /// Name of the offending probe.
+        name: String,
+        /// The `json:` program, as the manifest spells it.
+        program: String,
+        /// What it was run against.
+        origin: String,
+        /// What jaq objected to.
+        reason: String,
+    },
+
+    /// A `json:` selector yielded no value, or only `null`.
+    ///
+    /// The same refusal [`Error::ProbeEmpty`] makes for stdout, at the place
+    /// the selection happens: a probe tracking `null` reports the same digest
+    /// whatever the document does, so the rule is permanently fresh against an
+    /// input nobody is measuring. `false` is a value and passes — jq's `-e`
+    /// conflates the two only because a shell exit code cannot tell them
+    /// apart, and mmz is under no such constraint.
+    #[error(
+        "probe `{name}` selected nothing from {origin}; that digest would measure nothing, so the rule would be fresh forever — fix the selector, or set `allow_empty: true` if an absent value really is a valid input\n  json: {program}"
+    )]
+    ProbeJsonEmpty {
+        /// Name of the offending probe.
+        name: String,
+        /// The `json:` program, as the manifest spells it.
+        program: String,
+        /// What it was run against.
+        origin: String,
     },
 
     /// A command rule has a blank `name`.
@@ -163,6 +252,46 @@ pub enum Error {
         command: String,
         /// The duplicated tag.
         tag: String,
+    },
+
+    /// A gate resolved to no rule at all, because the manifest declares none.
+    ///
+    /// One of three spellings of the same refusal (with
+    /// [`Error::NoTaggedRules`] and [`Error::NoExpansions`]): `mmz --is-fresh`
+    /// asserts that work is done, and an assertion over an empty set is
+    /// vacuously true — a pass nobody earned. Every other selector that
+    /// resolves to nothing is loud ([`Error::NoMatch`], [`Error::NoInputs`],
+    /// [`Error::ProbeEmpty`]), so this one is too.
+    #[error(
+        "the manifest at {path} declares no commands, so this gate would pass without checking anything; declare a rule under `commands:`"
+    )]
+    NoRules {
+        /// Path of the manifest that declares nothing to gate.
+        path: PathBuf,
+    },
+
+    /// A `--tag` filter selected no rule, so the gate over it would be
+    /// vacuously true. See [`Error::NoRules`].
+    #[error(
+        "no rule carries {tags}, so this gate would pass without checking anything; {declared}"
+    )]
+    NoTaggedRules {
+        /// The filter, as a phrase naming every tag it required.
+        tags: String,
+        /// What the manifest does declare, so a typo is visible on the spot.
+        declared: String,
+    },
+
+    /// Every rule the gate selected fans over a scope that resolved to no
+    /// files, so the selection expanded to zero cache identities — an empty
+    /// gate reached through the fan rather than through the filter. See
+    /// [`Error::NoRules`].
+    #[error(
+        "every gated rule fans over a scope that resolved to no files ({rules}), so this gate would pass without checking anything"
+    )]
+    NoExpansions {
+        /// The selected rule names, as the manifest spells them.
+        rules: String,
     },
 
     /// `--is-fresh` (or another tag-filtered action) was given both a `--tag`
@@ -335,142 +464,23 @@ pub enum Error {
         /// The root manifest that set it.
         path: PathBuf,
     },
+
+    /// A probe's `ast:` key could not produce a digest. The detail — and which
+    /// refusal it is — lives with the matcher in [`crate::ast::AstFailure`],
+    /// because one of those cases is answered by a cargo feature rather than a
+    /// manifest edit and would not survive being flattened into a string here.
+    #[error("probe `{name}` {source}")]
+    ProbeAst {
+        /// Name of the offending probe.
+        name: String,
+        /// What the matcher refused, and the edit or flag that fixes it.
+        source: Box<crate::ast::AstFailure>,
+    },
 }
 
 /// Convenience alias for fallible operations in this crate.
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
-mod tests {
-    use super::Error;
-
-    #[test]
-    fn messages_are_actionable() {
-        let scope = Error::UnknownScope {
-            command: "cargo test".to_owned(),
-            scope: "rust".to_owned(),
-        };
-        assert!(scope.to_string().contains("unknown scope `rust`"));
-        let dup = Error::DuplicateCommand("sh".to_owned());
-        assert!(dup.to_string().contains("duplicate command name"));
-        let blank = Error::EmptyCommandName(2);
-        assert!(blank.to_string().contains("empty `name`"));
-
-        let no_match = Error::NoMatch {
-            command: "cargo build".to_owned(),
-        };
-        assert!(
-            no_match
-                .to_string()
-                .contains("no rule matches `cargo build`")
-        );
-        let no_inputs = Error::NoInputs {
-            rule: "cargo test".to_owned(),
-        };
-        assert!(no_inputs.to_string().contains("matched no input files"));
-        let no_manifest = Error::NoManifest {
-            start: std::path::PathBuf::from("/tmp/x"),
-        };
-        assert!(
-            no_manifest
-                .to_string()
-                .contains("no .mmz/config.yaml found")
-        );
-
-        let bad_output = Error::InvalidOutput {
-            command: "just cover".to_owned(),
-            path: "target/*.info".to_owned(),
-            reason: "outputs are literal paths, not patterns".to_owned(),
-        };
-        assert!(
-            bad_output
-                .to_string()
-                .contains("declares invalid output `target/*.info`")
-        );
-        let missing = Error::MissingOutput {
-            rule: "just cover".to_owned(),
-            path: "target/coverage/lcov.info".to_owned(),
-        };
-        let text = missing.to_string();
-        assert!(
-            text.contains("target/coverage/lcov.info"),
-            "the missing artifact is named: {text}"
-        );
-        assert!(
-            text.contains("no cache record was written"),
-            "and the consequence is spelled out: {text}"
-        );
-    }
-
-    #[test]
-    fn probe_messages_name_the_probe_and_the_consequence() {
-        let failed = Error::ProbeFailed {
-            name: "fmt-recipe".to_owned(),
-            run: "just --dump | jq .recipes".to_owned(),
-            code: 5,
-            stderr: "jq: error: no such key".to_owned(),
-        };
-        let text = failed.to_string();
-        assert!(
-            text.contains("probe `fmt-recipe`"),
-            "names the probe: {text}"
-        );
-        assert!(text.contains("exit 5"), "names the exit code: {text}");
-        assert!(text.contains("jq: error"), "carries stderr: {text}");
-        assert!(
-            text.contains("wrote no cache record"),
-            "a failed probe never reaches the hasher, and says so: {text}"
-        );
-
-        let spawn = Error::ProbeSpawn {
-            name: "toolchain".to_owned(),
-            run: "rustc -vV".to_owned(),
-            source: std::io::Error::other("no such file"),
-        };
-        let text = spawn.to_string();
-        assert!(
-            text.contains("probe `toolchain`"),
-            "names the probe: {text}"
-        );
-        assert!(
-            text.contains("wrote no cache record"),
-            "an unspawnable probe is the same hard stop: {text}"
-        );
-
-        let empty = Error::ProbeEmpty {
-            name: "selector".to_owned(),
-            run: "jq -c .missing".to_owned(),
-        };
-        let text = empty.to_string();
-        assert!(text.contains("probe `selector`"), "names the probe: {text}");
-        assert!(
-            text.contains("allow_empty"),
-            "points at the opt-in rather than leaving it a dead end: {text}"
-        );
-    }
-
-    #[test]
-    fn input_namespace_messages_are_actionable() {
-        let unknown = Error::UnknownInput {
-            command: "cargo test".to_owned(),
-            input: "ghost".to_owned(),
-        };
-        let text = unknown.to_string();
-        assert!(
-            text.contains("unknown input `ghost`"),
-            "names the entry: {text}"
-        );
-        assert!(
-            text.contains("`scopes:` or `probes:`"),
-            "names both places it could be declared: {text}"
-        );
-
-        let clash = Error::NameCollision {
-            name: "rust".to_owned(),
-        };
-        assert!(
-            clash.to_string().contains("one namespace"),
-            "the collision explains why one name cannot be both"
-        );
-    }
-}
+#[path = "error_tests.rs"]
+mod tests;

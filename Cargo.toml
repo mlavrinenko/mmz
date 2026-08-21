@@ -31,7 +31,88 @@ serde_json = "1"
 blake3 = "1"
 globset = "0.4"
 ignore = "0.4"
+jaq-core = "3.1.0"
+jaq-std = "3.0.2"
+jaq-json = "2.0.2"
+ast-grep-core = { version = "0.45.1", features = ["tree-sitter"] }
+ast-grep-language = { version = "0.45.1", default-features = false }
 
+
+# One tree-sitter grammar per feature, because a grammar is not small — the full
+# set outweighs the binary carrying it many times over. No figure is quoted
+# here on purpose: what each grammar costs is MEASURED, by `just measure-sizes`
+# into www/sizes.yaml, and the docs read that file. A number typed here would be
+# a copy with nothing to keep it true, which is how the last one went stale.
+#
+# `default` carries `lang-rust` alone. Not because mmz is written in Rust — it
+# is a language-agnostic runner — but because a default set may only promise
+# what the suite exercises, and one grammar is what mmz tests `ast:` against.
+# Every other language is one flag away and mmz's error names the exact flag,
+# so the cost of a wrong default is a message, never a silently missing input.
+[features]
+default = ["lang-rust"]
+
+lang-bash = ["ast-grep-language/tree-sitter-bash"]
+lang-c = ["ast-grep-language/tree-sitter-c"]
+lang-cpp = ["ast-grep-language/tree-sitter-cpp"]
+lang-csharp = ["ast-grep-language/tree-sitter-c-sharp"]
+lang-css = ["ast-grep-language/tree-sitter-css"]
+lang-dart = ["ast-grep-language/tree-sitter-dart"]
+lang-elixir = ["ast-grep-language/tree-sitter-elixir"]
+lang-go = ["ast-grep-language/tree-sitter-go"]
+lang-haskell = ["ast-grep-language/tree-sitter-haskell"]
+lang-hcl = ["ast-grep-language/tree-sitter-hcl"]
+lang-html = ["ast-grep-language/tree-sitter-html"]
+lang-java = ["ast-grep-language/tree-sitter-java"]
+lang-javascript = ["ast-grep-language/tree-sitter-javascript"]
+lang-json = ["ast-grep-language/tree-sitter-json"]
+lang-kotlin = ["ast-grep-language/tree-sitter-kotlin"]
+lang-lua = ["ast-grep-language/tree-sitter-lua"]
+lang-markdown = ["ast-grep-language/tree-sitter-md"]
+lang-nix = ["ast-grep-language/tree-sitter-nix"]
+lang-php = ["ast-grep-language/tree-sitter-php"]
+lang-python = ["ast-grep-language/tree-sitter-python"]
+lang-ruby = ["ast-grep-language/tree-sitter-ruby"]
+lang-rust = ["ast-grep-language/tree-sitter-rust"]
+lang-scala = ["ast-grep-language/tree-sitter-scala"]
+lang-solidity = ["ast-grep-language/tree-sitter-solidity"]
+lang-swift = ["ast-grep-language/tree-sitter-swift"]
+# One grammar crate, two parsers: `.tsx`'s `<div/>` is a type assertion in
+# `.ts`, so ast-grep keeps them apart and so does mmz's language table.
+lang-typescript = ["ast-grep-language/tree-sitter-typescript"]
+lang-yaml = ["ast-grep-language/tree-sitter-yaml"]
+
+# Every grammar, and the dominant cost of any build that carries it (priced in
+# www/sizes.yaml); reach for the individual flags unless you need the lot.
+lang-all = [
+  "lang-bash",
+  "lang-c",
+  "lang-cpp",
+  "lang-csharp",
+  "lang-css",
+  "lang-dart",
+  "lang-elixir",
+  "lang-go",
+  "lang-haskell",
+  "lang-hcl",
+  "lang-html",
+  "lang-java",
+  "lang-javascript",
+  "lang-json",
+  "lang-kotlin",
+  "lang-lua",
+  "lang-markdown",
+  "lang-nix",
+  "lang-php",
+  "lang-python",
+  "lang-ruby",
+  "lang-rust",
+  "lang-scala",
+  "lang-solidity",
+  "lang-swift",
+  "lang-typescript",
+  "lang-yaml",
+]
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"

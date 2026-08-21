@@ -37,7 +37,8 @@
 //! ([`compose`]), `imports:` path resolution ([`import_paths`]), the source
 //! of every scope, probe and command a merge produces ([`provenance`]),
 //! pattern resolution ([`resolve`]), content hashing ([`hashing`]),
-//! command-driven inputs ([`probe`]), declared artifact outputs
+//! command-driven inputs ([`probe`]), in-process AST matching ([`ast`]),
+//! declared artifact outputs
 //! ([`outputs`]), rule matching ([`matcher`]), glob-fanned parametric rules
 //! ([`parametric`]), the cache ([`cache`]), cache-hit notices ([`notice`]), the
 //! process clock ([`clock`]), and the orchestration engine ([`engine`]). The
@@ -51,6 +52,11 @@
 //! record's `ran_at` and `mmz --status`'s ages become facts a build can capture;
 //! leave it unset and mmz reads the system clock. See [`clock`].
 
+/// The in-process AST matcher a probe's `ast:` key selects with, and the
+/// failure type [`Error::ProbeAst`] carries. Public because a missing
+/// grammar is answered by a build flag, and a library caller matching on
+/// that case needs the variant rather than a rendered string.
+pub mod ast;
 pub mod cache;
 pub mod clock;
 pub mod compose;
@@ -72,6 +78,25 @@ pub mod prune;
 pub mod resolve;
 pub mod schema;
 pub mod status;
+
+/// Which grammars this build carries, and how `lang:` and a file extension
+/// reach one. Internal: the set is a build-time fact mmz reports through
+/// errors and `--dump-config`, never a type a caller holds.
+mod ast_lang;
+
+/// How one matched node becomes the bytes an `ast:` probe hashes. Internal for
+/// the same reason [`json`] is: bytes in, bytes out.
+mod ast_render;
+
+/// The in-process jq engine a probe's `json:` key selects with. Internal: it
+/// takes bytes and a program and hands back bytes, so no jaq type reaches a
+/// library caller's signature and the engine stays swappable.
+mod json;
+
+/// Whether a chosen set of rules is something to gate or report on, and what
+/// to say when it came out empty. Internal: it decides the wording of an
+/// error and of one report line, neither of which a library caller composes.
+mod selection;
 
 pub use engine::run;
 pub use error::{Error, Result};

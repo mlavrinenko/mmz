@@ -56,8 +56,30 @@ jobs:
     name: Build (${{ matrix.target }})
     needs: [check, name]
     runs-on: ${{ matrix.os }}
+    # Two flavours per target, because which grammars a build carries is a
+    # compile-time choice and the two audiences want opposite answers.
+    #
+    # `default` is byte-for-byte what `cargo install mmz` gives you: Rust alone,
+    # ~5.5 MB. `full` is `lang-all` — every grammar, ~45 MB, and the only build
+    # for which a manifest naming a language can never be answered with "rebuild
+    # it yourself". The people downloading a prebuilt binary are the people who
+    # did not want to build one, so shipping only the first left exactly them
+    # stuck.
+    #
+    # No third "popular" tier. `default` fails predictably and `full` never
+    # fails; a curated middle fails for SOME of your colleagues and not others,
+    # which is the trap the docs already warn about wearing a release asset's
+    # name. Anyone wanting a specific subset has `cargo install --features`,
+    # which beats any set we could pick for them.
     strategy:
       matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-msvc
+        flavour: [default, full]
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
@@ -69,6 +91,14 @@ jobs:
             os: macos-latest
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+          # The asset keeps the plain name, so the file a reader reaches for
+          # first is the one that matches `cargo install mmz`.
+          - flavour: default
+            features: ""
+            suffix: ""
+          - flavour: full
+            features: "--features lang-all"
+            suffix: "-full"
 
     steps:
       - uses: actions/checkout@v6.0.3
@@ -81,10 +111,17 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
+      # Keyed by flavour as well as target: the two builds share a target
+      # directory name and nothing else, and a `full` build restoring a
+      # `default` cache would recompile everything anyway.
       - uses: Swatinem/rust-cache@v2.9.1
         with:
-          key: ${{ matrix.target }}
+          key: ${{ matrix.target }}-${{ matrix.flavour }}
 
+      # Every tree-sitter scanner in the dependency set is C, none C++, so the
+      # C cross-compiler below covers all twenty-seven grammars and not just
+      # the one a default build carries. The `cc` crate finds it by the target
+      # triple's conventional prefix; only the linker has to be named.
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -93,20 +130,75 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.features }}
 
-      - name: Rename binary (unix)
-        if: runner.os != 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }} ${{ needs.name.outputs.binary }}-${{ matrix.target }}
+      # The binary's own account of what it carries, checked against the
+      # flavour this leg was supposed to build. Without it a matrix wiring
+      # mistake ships two identical binaries under two names, and nothing
+      # downstream would notice — the file sizes are the only other tell, and
+      # nobody reads those. Skipped on the cross leg, which cannot run its own
+      # output.
+      - name: Verify the flavour is what it claims
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -eo pipefail
+          expected='1 ast lang'
+          if [ "${{ matrix.flavour }}" = full ]; then expected='28 ast langs'; fi
+          ext=""
+          if [ "${{ runner.os }}" = Windows ]; then ext=".exe"; fi
+          reported=$(./target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }}$ext --version)
+          echo "$reported"
+          case "$reported" in
+            *"($expected)"*) ;;
+            *) echo "::error::${{ matrix.flavour }} build reports '$reported', expected '($expected)'"; exit 1 ;;
+          esac
 
-      - name: Rename binary (windows)
-        if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }}.exe ${{ needs.name.outputs.binary }}-${{ matrix.target }}.exe
+      # Assets are archives, not raw binaries. A tree-sitter parse table is a
+      # large array of small integers, and it shows: the `full` flavour goes
+      # 45.4 MB -> 5.7 MB, eight to one, across five targets. The raw asset was
+      # defensible while every one was ~2 MB and is not at 45 MB.
+      #
+      # This RENAMES the assets, which is the only reason it was not done with
+      # the flavour split. Nothing is pinned to the old names: every asset of
+      # every release from v0.1.1 to v0.7.0 sits at 0-1 downloads, this repo
+      # publishes no install script, and the docs link the releases page rather
+      # than any asset. Old releases keep their raw binaries; the change starts
+      # here and gets cheaper never.
+      #
+      # One bash step for every runner rather than a unix/windows pair: the
+      # `.zip`-vs-`.tar.gz` split is two lines, and the naming, staging and
+      # LICENSE copy are identical. Windows runners ship both bash and 7z.
+      #
+      # The archive is flat — the binary under its plain name, so an extract
+      # puts a runnable `mmz` in the current directory rather than a versioned
+      # folder to reach into. LICENSE-MIT rides along because redistributing a
+      # binary is exactly the case the licence asks to be carried with it; the
+      # raw assets never did.
+      - name: Package the archive
+        shell: bash
+        run: |
+          set -eo pipefail
+          bin='${{ needs.name.outputs.binary }}'
+          asset="$bin${{ matrix.suffix }}-${{ matrix.target }}"
+          src="target/${{ matrix.target }}/release/$bin"
+          mkdir -p dist
+          cp LICENSE-MIT dist/
+          if [ "${{ runner.os }}" = Windows ]; then
+            cp "$src.exe" "dist/$bin.exe"
+            (cd dist && 7z a -tzip -mx=9 "../$asset.zip" "$bin.exe" LICENSE-MIT >/dev/null)
+            packaged="$asset.zip"
+          else
+            cp "$src" "dist/$bin"
+            tar -czf "$asset.tar.gz" -C dist "$bin" LICENSE-MIT
+            packaged="$asset.tar.gz"
+          fi
+          ls -l "$packaged"
 
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: ${{ needs.name.outputs.binary }}-${{ matrix.target }}
-          path: ${{ needs.name.outputs.binary }}-${{ matrix.target }}*
+          name: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}
+          path: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}.*
 
   publish:
     name: Publish to crates.io
@@ -138,8 +230,18 @@ jobs:
         with:
           merge-multiple: true
 
+      # Checksums exist because the assets are now archives. A raw binary
+      # answers "did this download intact" by running it; an archive that
+      # arrived truncated fails inside a tar, one step removed from the
+      # download that actually broke. One file over the whole set, in the
+      # format `sha256sum -c` reads back.
+      - name: Checksum the assets
+        run: sha256sum ${{ needs.name.outputs.binary }}-* > SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.0
         with:
           generate_release_notes: true
-          files: ${{ needs.name.outputs.binary }}-*
+          files: |
+            ${{ needs.name.outputs.binary }}-*
+            SHA256SUMS
