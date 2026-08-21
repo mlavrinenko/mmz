@@ -15,7 +15,7 @@ groups:
       www/utils/exit-code-notes.typ: f07969ae6ecd851de6a2c87bd325b2a43d3456829d7e7609f56a8489b0bec9e2
   dev-shell:
     source:
-      flake.nix: cc4c2a0b5bccfa3567cd80db4f0f266f2b277ee17b756b73c8fc66777da7764b
+      flake.nix: d20dc5029e935737d75c8ff70f0635342bdae2f4828dd3477d977e625e0f3be0
     dependents:
       docs/src/contributing.typ: 7c61eb29d3da37da33fd5dc2c69312446a59260eb692de8caeca72bd1c4ea845
   docs-pipeline:
@@ -34,13 +34,13 @@ groups:
   gates:
     source:
       .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a
-      Justfile: 747edfaf94d50dd448d1096d50ebf76c3861c7bde22fb995345ef8cda8b9e620
+      Justfile: 71b89e617ca028f84106426e6bac1bf7b93be807ef5aab245fd8cf6884ee93a4
     dependents:
       .mmz/conf.d/10-rust.yaml: ce20bfa2f797b8a8d3d4c471e1dd0ea4ad3897fb2f31e676d1a090f53824d41e
       .mmz/conf.d/20-docs.yaml: 398c05e57b2c48e5085242abb8b4ea730d46958542410479b9da021447820d53
-      .mmz/conf.d/30-repo.yaml: 68fbe9ff8720f28e8ec0b2f40e70e1e29d057f3a7c06d57e93399b4e04af2497
-      docs/src/contributing/gates.typ: c2d0c51183be8aa88875663410403f0df56f0c858de924d2d5b32b052202c3e7
-      www/utils/gate-notes.typ: b947b1a5c297b1df2003f800adbfc5356d2336c0a0d08d5c11e0507f45b4bf2b
+      .mmz/conf.d/30-repo.yaml: 34e1fafbc9aedb345bc767510c651608ecc49cf09e9355704e031bdb750b70d2
+      docs/src/contributing/gates.typ: 2050321c79e0dfc9ec5b885f9f615e81f06ca6bc9e68fb5f8d85ed6d38e53d03
+      www/utils/gate-notes.typ: d4a5b0e3c9c7e0b5051178e40179792eed4329d260c6a9f7562a86d68ecc434d
   manifest-prose:
     source:
       schema/mmz.schema.json: 496d4ac14442cc79ee6b7ec0d648224efcec0e06586941b83a0db13a0b415114

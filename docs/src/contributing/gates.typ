@@ -174,6 +174,44 @@ violated in practice: `just machete` shipped depending on the Cargo manifests
 and its own recipe body, and on nothing that moved when `cargo-machete` was
 swapped underneath it.
 
+= When the input is not a file
+
+#just.check-changelog-history() is the one gate whose subject lives in git
+rather than in the working tree: it asserts that every `## [x.y.z]` section of
+`CHANGELOG.md` still reads exactly as `git show vx.y.z:CHANGELOG.md` has it. A
+released section is a historical record, so an edit to one is either a mistake
+or a rewrite — and the mistake is what happened, unnoticed for thirteen commits,
+because no gate read the file at all.
+
+That subject makes two of its inputs unusual.
+
+The tags are not reachable by any scope's globs, so the rule carries a `run:`
+probe over
+`git tag --list 'v*' --merged HEAD --format='%(refname:short) %(objectname) %(*objectname)'`.
+A tag's commit determines the bytes at that commit, so hashing the tag list and
+what each entry resolves to is the whole git side of the comparison — a new tag,
+a moved tag or a re-tag busts the rule, and nothing else does. It is the only
+`run:` probe outside the recipe probes, and the reason is that there is no
+file-shaped substitute: `git gc` packs `.git/refs` away, and reading it directly
+would be reaching past the tool that owns it.
+
+The tags must also be _present_. A shallow checkout has the refs but not the
+trees, so `--merged HEAD` resolves nothing and the gate would pass over an empty
+set — the same silent green it exists to prevent. The script refuses a shallow
+clone rather than reporting success, and both workflows that run
+#just.check() check out with `fetch-depth: 0`. That coupling is the price of
+gating on history from inside `just check`; it is one line of workflow, and the
+alternative — a CI-only arm — would mean the check a contributor can run
+locally and the check that blocks a merge are different checks.
+
+A deliberate rewrite of a released section is recorded with
+#just.changelog-waive("<version>", "<why>"), which appends the rewritten
+section's own hash to `CHANGELOG.waivers`. The shape is `outdatty.lock`'s and so
+is the meaning: a recorded hash says a human looked, not that a tool agreed.
+Deliberately not a flag — a waiver that turned the check off for a version would
+leave that section unguarded forever, whereas a hash over the current bytes
+fails again the moment they move.
+
 = Running a gate directly
 
 `memo` is a wrapper, not a requirement. Every gate is an ordinary recipe:

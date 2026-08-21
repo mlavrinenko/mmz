@@ -14,7 +14,7 @@ just check      # the full gate, memoized
 
 ## The gate
 
-`just check` runs ten gates in parallel. Each arm goes through `just memo <gate>`, which is `mmz just <gate>` — so a gate whose declared inputs have not moved since it last passed is skipped rather than re-run. [docs/contributing/gates.md](docs/contributing/gates.md) covers the memoization itself: what it buys, what it costs, and how to record a pass.
+`just check` runs 11 gates in parallel. Each arm goes through `just memo <gate>`, which is `mmz just <gate>` — so a gate whose declared inputs have not moved since it last passed is skipped rather than re-run. [docs/contributing/gates.md](docs/contributing/gates.md) covers the memoization itself: what it buys, what it costs, and how to record a pass.
 
 | Gate | Command | What it prevents |
 | --- | --- | --- |
@@ -24,6 +24,7 @@ just check      # the full gate, memoized
 | `machete` | `cargo machete` | A dependency nobody imports is still a dependency somebody audits, builds and ships. Catches the ones a refactor orphaned. |
 | `check-file-size` | `linecop` | Caps every file at the limit `.linecop.yaml` sets for its language. The point is not tidiness: a file nobody can hold in their head is where the untested branch hides. |
 | `outdatty-check` | `outdatty check` | Fails when a source changed and the dependents `outdatty.yaml` couples to it were not re-confirmed. It cannot check that a doc is _correct_ — only that a human looked since the code moved. |
+| `check-changelog-history` | Fail if a released changelog section drifted from its tag | Fails when a `## [x.y.z]` section stops saying what its `vx.y.z` tag shipped. A released section is a historical record, and the edit that swallowed one here went unnoticed for thirteen commits. A deliberate rewrite is recorded in `CHANGELOG.waivers` by `just changelog-waive`. |
 | `check-doc-coverage` | Fail if a CLI action has no hand-written note | Fails when `mmz --help` advertises an action with no hand-written note, or a note names an action the binary no longer has. The list is parsed out of the binary, so it cannot be satisfied by editing a list. |
 | `check-doc-facts` | Fail if a derived doc fact has no hand-written prose | The same set-difference over the derived facts: a manifest key with no prose, a gate with no prose, a page unreachable from the sidebar, a sidebar entry pointing at no page. |
 | `docs-check` | `tola build && pagefind --site public/mmz --silent && tola validate` | Builds the docs site and validates every internal link and asset reference. A cross-page link is a string until something resolves it; this is the something. |

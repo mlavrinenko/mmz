@@ -62,6 +62,11 @@
             cargo-tarpaulin
             clippy
             rustfmt
+            # `just check-changelog-history` compares CHANGELOG.md against what
+            # each `v*` tag shipped, so git is a gate tool here and not merely
+            # the thing the checkout arrived through. Pinned like the rest, so
+            # the gate names `nixpkgs-tools` honestly.
+            git
             jq
             just
             moreutils

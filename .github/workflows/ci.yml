@@ -24,7 +24,16 @@ jobs:
     name: Check, Lint, Test
     runs-on: ubuntu-latest
     steps:
+      # Full history, tags included. `just check-changelog-history` compares
+      # every released CHANGELOG.md section against the tag that shipped it, and
+      # the default shallow checkout has the tag refs but not the trees behind
+      # them — which would leave the gate with nothing to compare. It refuses a
+      # shallow clone rather than passing over an empty set, so this line is
+      # load-bearing: drop it and the Check job fails, loudly, instead of
+      # quietly checking nothing.
       - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       # Caches /nix through the GitHub Actions cache (no external account or
       # token). Replaces the deprecated DeterminateSystems/magic-nix-cache-action.

@@ -1,0 +1,24 @@
+# CHANGELOG.waivers — deliberate rewrites of released changelog sections.
+#
+# `just check-changelog-history` asserts that every `## [x.y.z]` section in
+# CHANGELOG.md still reads exactly as the `vx.y.z` tag shipped it, because a
+# released section is a historical record and an edit to one is normally a
+# mistake. This file is where the exception is written down.
+#
+# Written by `just changelog-waive <version> <reason>`, one line each:
+#
+#   <version> <sha256> # <reason>
+#
+# The hash covers the section's bytes AT THE MOMENT OF WAIVING, not the tag's,
+# in the spirit of outdatty.lock beside it: a recorded hash is a review
+# watermark — it means a human looked, not that a tool agreed. Recording one is
+# therefore not a switch that turns the check off for a version. A later
+# corruption of a waived section moves the bytes away from the recorded hash and
+# fails the gate again, which the unconditional-skip spelling could not do.
+#
+# A waiver whose section has gone back to matching its tag fails too. An entry
+# with nothing to cover is an entry nobody rereads, and the next edit to that
+# section would land underneath it unreviewed.
+#
+# Empty of entries, and the shipped history has never been rewritten. If that
+# stays true, this file stays a header.

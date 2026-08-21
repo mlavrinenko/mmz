@@ -40,6 +40,12 @@
     were not re-confirmed. It cannot check that a doc is _correct_ — only that a
     human looked since the code moved.
   ],
+  "check-changelog-history": [
+    Fails when a `## [x.y.z]` section stops saying what its `vx.y.z` tag shipped.
+    A released section is a historical record, and the edit that swallowed one
+    here went unnoticed for thirteen commits. A deliberate rewrite is recorded
+    in `CHANGELOG.waivers` by `just changelog-waive`.
+  ],
   "check-doc-coverage": [
     Fails when `mmz --help` advertises an action with no hand-written note, or a
     note names an action the binary no longer has. The list is parsed out of the

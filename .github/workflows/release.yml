@@ -37,7 +37,12 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
+      # Full history, tags included — `just check` runs the changelog-history
+      # gate, which reads every released section out of its tag. See the same
+      # note in ci.yml.
       - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
         with:

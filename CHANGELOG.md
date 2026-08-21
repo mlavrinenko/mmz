@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `just check-changelog-history` asserts that every `## [x.y.z]` section of this
+  file still reads exactly as the `vx.y.z` tag shipped it. A released section is
+  a historical record, so an edit to one is either a mistake or a rewrite — and
+  the mistake is what happened: the edit repaired in 0.8.0 swallowed the whole
+  0.7.0 section into `Unreleased`, and ten green gates ran over it for four days
+  and thirteen commits because nothing read this file. `outdatty` couples
+  `Cargo.toml` to it as a _dependent_, which asks that a human re-confirmed, not
+  that the content survived; `linecop` only counts its lines.
+
+  The comparison is one `git show` per tag and no build, so it is a `just check`
+  arm rather than a CI-only one — the check that blocks a merge and the check a
+  contributor runs locally should not be different checks. The price is that CI
+  must check out with `fetch-depth: 0`: a shallow clone has the tag refs but not
+  the trees, and the gate refuses one rather than passing over an empty set.
+
+- `just changelog-waive <version> <reason>` records a deliberate rewrite of a
+  released section into `CHANGELOG.waivers`. The shape is `outdatty.lock`'s and
+  so is the meaning — a recorded hash says a human looked, not that a tool
+  agreed. It covers the rewritten section's own bytes rather than switching the
+  check off for a version, so the next edit to a waived section fails exactly as
+  the first would have, and a waiver whose section has gone back to matching its
+  tag fails as an entry nobody rereads.
+
 ## [0.8.0] - 2026-08-21
 
 ### Added

@@ -43,7 +43,7 @@ fix-check: eject fmt clippy-fix check
 [doc("Run every check-gate sub-recipe in parallel")]
 [group("workflow")]
 [parallel]
-check: (memo "fmt-check") (memo "clippy") (memo "test") (memo "machete") (memo "check-file-size") (memo "outdatty-check") (memo "check-doc-coverage") (memo "check-doc-facts") (memo "docs::check") (memo "docs::md-check")
+check: (memo "fmt-check") (memo "clippy") (memo "test") (memo "machete") (memo "check-file-size") (memo "outdatty-check") (memo "check-changelog-history") (memo "check-doc-coverage") (memo "check-doc-facts") (memo "docs::check") (memo "docs::md-check")
 
 # Wrap a just recipe in mmz: `just memo fmt-check` runs `mmz just fmt-check`, so
 # the rule named `just fmt-check` in .mmz/config.yaml decides whether the recipe
@@ -162,6 +162,31 @@ check-doc-coverage:
 [group("gate")]
 check-doc-facts:
     bash .just/scripts/check-doc-facts.sh
+
+# A released changelog section is a historical record: what `git show
+# <tag>:CHANGELOG.md` says it is, forever. This gate is the one reader of that
+# property — see .just/scripts/check-changelog-history.sh for the edit that went
+# unnoticed for thirteen commits because nothing read the file at all.
+#
+# It needs the tags, so a shallow checkout cannot run it; the script fails
+# loudly rather than passing over an empty tag list, and both CI workflows that
+# run `just check` check out with `fetch-depth: 0`.
+
+[doc("Fail if a released changelog section drifted from its tag")]
+[group("gate")]
+check-changelog-history:
+    bash .just/scripts/check-changelog-history.sh
+
+# The escape hatch for the gate above, in the shape outdatty.lock uses: record
+# the REWRITTEN section's hash, with the reason on the same line. Not a switch
+# that turns the check off for a version — a waived section that moves again
+# fails again.
+
+[doc("Record a deliberate rewrite of a released changelog section")]
+[group("dev")]
+[positional-arguments]
+changelog-waive VERSION *REASON:
+    bash .just/scripts/check-changelog-history.sh --waive "$@"
 
 [doc("Re-confirm dependency groups into outdatty.lock")]
 [group("dev")]

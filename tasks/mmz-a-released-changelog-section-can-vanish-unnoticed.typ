@@ -7,7 +7,11 @@
   links: (
     related("mmz-cut-the-0-8-0-release.typ")[the release that found it],
   ),
-  status: proposed(2026, 8, 21),
+  status: done(
+    2026,
+    8,
+    21,
+  )[\`just check-changelog-history\` is the eleventh gate: for every \`v\*\` tag reachable from HEAD it diffs the \`== \[x.y.z\]\` section against \`git show \<tag>:CHANGELOG.md\`, and \`tests/changelog\_history\_gate.rs\` pins ten behaviours including the swallowed-heading shape that started this. Both open questions settled. The escape hatch is \`just changelog-waive \<version> \<reason>\`, recording the REWRITTEN section's own hash in CHANGELOG.waivers — outdatty's watermark shape, so a waived section that moves again fails again and a waiver with nothing to cover fails as stale. It sits in \`just check\` rather than beside \`just cover\`: it costs one \`git show\` per tag, and a merge-blocking check a contributor cannot run locally is a different check. The tags it needs are bought with \`fetch-depth: 0\` on the two workflows that run the gate, and a shallow clone is refused rather than passed over.],
 )
 
 == Summary
