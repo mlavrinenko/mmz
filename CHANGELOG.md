@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-21
+
 ### Added
 
 - `just check-changelog-history` asserts that every `## [x.y.z]` section of this
@@ -31,6 +33,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check off for a version, so the next edit to a waived section fails exactly as
   the first would have, and a waiver whose section has gone back to matching its
   tag fails as an entry nobody rereads.
+
+### Changed
+
+- An input mmz cannot read now exits `8` rather than `70`. `70` is the internal
+  error — "worth reporting: nothing a manifest can say should produce one" — and
+  an input that vanished mid-run is its opposite: a condition of the tree,
+  reachable from any manifest whose scopes cover a directory something else
+  writes. A caller branching on `$?` could not tell an unreadable file from a
+  bug in mmz, which matters most for the use mmz exists for. Gating a parallel
+  runner is exactly the case where resolve-then-hash has a window by
+  construction: a file the walk listed can be gone by the time the hasher opens
+  it, and the tool is positioned to observe that routinely.
+
+  Nothing is recorded and the wrapped command never runs either way, so `8` is a
+  code a caller can safely retry on where `70` asked for a bug report.
+
+### Fixed
+
+- A read failure while hashing an input now names the file. `Error::Io` was a
+  bare `#[from] std::io::Error` and `hashing::hash_file` propagated
+  `File::open`'s error unchanged, so a whole run failed with one line that
+  dropped the only fact worth having:
+
+  ```console
+  mmz: i/o error: No such file or directory (os error 2)
+  ```
+
+  It now names the input, and says which of the two failures it was: one that
+  went away between the walk and the hash reads `disappeared after it was
+  resolved`, and anything else — a mode, a device error, a path that stopped
+  being a regular file — reads `could not be read`, with the errno beside it.
+  The path is rendered the way `--status` renders one — root-relative under the
+  project root, absolute otherwise — so an error and a report name one file with
+  one spelling, which is what `error.rs`'s own doc comment promised of every
+  other variant.
+
+  Found on MindTape's `just check`, where ~20 gate arms run in parallel under
+  `mmz just <gate>` and several rewrite files inside the widest rule's scope
+  while it is being hashed. One arm failed after its wrapped command had already
+  succeeded, and there was nothing left to act on: the message named no file,
+  and by the time it was read the file was back.
 
 ## [0.8.0] - 2026-08-21
 
