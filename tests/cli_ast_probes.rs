@@ -164,6 +164,15 @@ fn a_pattern_the_grammar_cannot_parse_is_refused_even_with_allow_empty() {
 
 /// The failure whose answer is a build rather than an edit, so the message has
 /// to carry the flag.
+///
+/// Gated on the absence of the one grammar it names, rather than run
+/// unconditionally: under `--features lang-all` — the set the release's `full`
+/// binary ships and the CI grammar job runs — Kotlin is present, the probe
+/// succeeds, and this asserts a refusal that correctly did not happen.
+/// `ast_tests.rs` covers the message itself and picks whichever language the
+/// build actually lacks; what is only testable here is the exit code, and that
+/// needs a build missing something.
+#[cfg(not(feature = "lang-kotlin"))]
 #[test]
 fn a_language_this_build_lacks_names_the_feature_to_rebuild_with() {
     let dir = tempfile::tempdir().expect("tempdir");

@@ -66,3 +66,32 @@ jobs:
       # `just cover` wrote.
       - name: CRAP gate (fails above 30)
         run: nix develop --command just crap
+
+  # `just check` runs on default features, so it parses Rust and nothing else:
+  # the language table it walks is cfg-gated down to one entry, leaving
+  # twenty-seven of mmz's twenty-eight languages unexercised. The release
+  # publishes a `lang-all` binary whose whole point is those twenty-seven, so
+  # they get a run of their own. Its own job rather than a `check` arm, because
+  # twenty-seven C compiles do not belong in front of the recipe people run in
+  # a loop.
+  #
+  # x86_64-linux only. Whether the same set compiles under the cross, Darwin
+  # and MSVC release targets is answered by the release workflow, not here.
+  grammars:
+    name: Test with every grammar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/flake.lock', '**/*.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 5G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
+
+      - name: Test (--features lang-all)
+        run: nix develop --command just test-lang-all

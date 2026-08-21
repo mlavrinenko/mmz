@@ -152,12 +152,22 @@ inline-test workflow. It runs as part of #just.fix-check().
 - Every bug fix gets a regression test. The bug is evidence that the case was
   reachable; the test is what stops it being reachable twice.
 
-Coverage is enforced separately from #just.check(), in CI and on demand:
+Coverage is enforced separately from #just.check(), in CI and on demand, and so
+is the grammar set:
 
 ```bash
-just cover   # tarpaulin, fails under 70%
-just crap    # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+just cover          # tarpaulin, fails under 70%
+just crap           # CRAP metric, fails above 30 — needs the lcov `just cover` writes
+just test-lang-all  # the suite with every tree-sitter grammar compiled in
 ```
+
+#just.check() runs on default features, which is the Rust grammar and nothing
+else — so `ast_lang_tests.rs`'s claim that every language in the table really
+parses covers one of twenty-eight. #just.test-lang-all() covers the rest, on its
+own CI job, because the release publishes a `lang-all` binary and an untested
+grammar set is not something to put a version number on. It is deliberately not
+a gate arm: twenty-seven C compiles do not belong in front of the recipe you run
+in a loop. Run it after touching `src/ast_lang.rs` or the `lang-*` features.
 
 #just.crap() exists because a global coverage threshold can stay green while one
 branchy, untested function rots. When it flags a function, add tests or reduce
