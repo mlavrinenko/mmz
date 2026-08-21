@@ -52,9 +52,10 @@ Exit codes:
     1    --is-fresh: not fresh                    printed nothing (nothing recorded)
     2    usage error                         7    --is-fresh: nothing to gate (the
     3    strict refusal (no rule / inputs)        selection holds no rule)
-    4    manifest missing or invalid         70   internal error
-    5    declared output missing after a     127  command could not be spawned
-         successful run (nothing recorded)
+    4    manifest missing or invalid         8    an input vanished or could not be
+    5    declared output missing after a          read (nothing recorded)
+         successful run (nothing recorded)   70   internal error
+                                             127  command could not be spawned
     otherwise the wrapped command's own exit code"
 );
 
@@ -403,6 +404,7 @@ fn exit_for(err: &Error) -> u8 {
         | Error::ProbeJsonEmpty { .. }
         | Error::ProbeAst { .. } => 6,
         Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,
+        Error::InputVanished { .. } | Error::InputUnreadable { .. } => 8,
         Error::Spawn { .. } => 127,
         Error::Io(_) | Error::Serialize(_) | Error::Internal(_) => 70,
     }

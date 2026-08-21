@@ -71,6 +71,7 @@ Raised, each argued in place in `.linecop.yaml`:
 | Path | Cap |
 | --- | --- |
 | `./CHANGELOG.md` | `1000 lines` |
+| `./src/error.rs` | `550 lines` |
 
 Exempt, because a line count says nothing useful about them — the generated Markdown (capped at its Typst source instead) and the files vendored verbatim from upstream:
 

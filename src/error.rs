@@ -15,9 +15,44 @@ use thiserror::Error;
 /// which is the unambiguous form for it.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// An I/O operation failed.
+    /// An I/O operation failed somewhere no more specific variant covers:
+    /// reading the root manifest, writing `--init`'s template, sweeping the
+    /// cache. Reading a rule's declared inputs is deliberately not one of them
+    /// — that is [`Error::InputVanished`] or [`Error::InputUnreadable`].
     #[error("i/o error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// An input a rule declared was resolved by the walk but was gone by the
+    /// time the hasher opened it.
+    ///
+    /// Split from [`Error::Io`] for the two facts that message drops: which
+    /// file, and that this is a condition of the tree rather than a bug in mmz
+    /// — so it exits 8 rather than 70. Every resolve-then-hash pass has that
+    /// window by construction, and mmz's own use (gating a parallel runner,
+    /// where sibling arms rewrite the tree the walk just listed) sits in front
+    /// of it.
+    #[error(
+        "input `{path}` disappeared after it was resolved; something removed it while mmz was hashing, and no cache record was written — so re-running once the tree has settled is safe"
+    )]
+    InputVanished {
+        /// The input, rendered as a report renders one.
+        path: PathBuf,
+    },
+
+    /// An input a rule declared could not be read for any reason other than
+    /// being gone: permissions, a device error, a path that stopped being a
+    /// regular file.
+    ///
+    /// Named separately from [`Error::Io`] for the same reason
+    /// [`Error::ProbeFileUnreadable`] is — a bare "permission denied" leaves a
+    /// reader hunting for which file it was about.
+    #[error("input `{path}` could not be read; no cache record was written\n  {source}")]
+    InputUnreadable {
+        /// The input, rendered as a report renders one.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
 
     /// No manifest was found searching upward from the working directory.
     #[error("no .mmz/config.yaml found in `{start}` or any parent; create one with `mmz --init`")]

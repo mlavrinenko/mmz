@@ -93,6 +93,21 @@
       gate pointed at nothing.
     ],
   ),
+  "8": (
+    meaning: [An input a rule declared could not be read; nothing was
+      recorded.],
+    detail: [
+      The path is always named, rendered the way `--status` renders it. Split
+      from `70` because it is a condition of the tree rather than a bug in
+      mmz: a file the walk resolved and something else removed before the
+      hasher opened it is the resolve-then-hash window, and gating a parallel
+      runner — mmz's own use — sits in front of that window by construction.
+      The message says which case it was, so a caller can tell "something
+      rewrote the tree, re-run" from "this file is unreadable, fix it". Either
+      way no record is written and the wrapped command never runs, so a
+      re-run is safe.
+    ],
+  ),
   "70": (
     meaning: [Internal error.],
     detail: [Worth reporting: nothing a manifest can say should produce one.],

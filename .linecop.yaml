@@ -57,3 +57,19 @@ overrides:
   # history for a number. Budget it for many releases instead.
   - pattern: ./CHANGELOG.md
     limit: 1000
+  # One `thiserror` enum: every line is a variant, its message, or the prose
+  # that makes the message reviewable. No text boundary splits an enum, and the
+  # usual remedy is already spent — `just eject` moved its tests out to
+  # src/error_tests.rs long ago. The count here tracks how many ways mmz can
+  # fail rather than how much logic sits in the file, and a flat list of
+  # declarations has no branch for an untested one to hide in.
+  #
+  # Raised only as far as the release that hit it needed, and argued as a
+  # holding position rather than an answer: what actually shrinks this file is
+  # the technique `Error::ProbeAst` already uses — a family of variants pushed
+  # into a sub-enum beside the code that raises them — and applying it to the
+  # nine probe variants is a public-API change with its own exit-code and test
+  # surface. See
+  # tasks/mmz-the-error-enum-cannot-take-a-new-variant-under-the-size-cap.typ.
+  - pattern: ./src/error.rs
+    limit: 550
