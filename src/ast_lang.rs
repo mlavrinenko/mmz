@@ -1,13 +1,15 @@
 //! Which languages this build of mmz can parse, and how a probe reaches one.
 //!
 //! Every grammar is a compile-time choice, because a tree-sitter grammar is
-//! not small: the twenty-seven ast-grep ships weigh forty megabytes linked,
-//! against an mmz binary of under four. Shipping all of them would charge every
-//! user who never writes an `ast:` probe for the ones they will never use, and
-//! shipping one fixed small set would permanently exclude every language
-//! outside it. So each is a cargo feature, a documented default set is on, and
-//! [`ALL`] names the rest so a manifest asking for one gets told how to get it
-//! rather than told it does not exist.
+//! not small: the set ast-grep ships dwarfs the binary that would carry it.
+//! What each one costs is measured rather than remembered — `just
+//! measure-sizes` writes `www/sizes.yaml` and the docs read it, while a figure
+//! repeated into this comment would have nothing to keep it true. Shipping all
+//! of them would charge every user who never writes an `ast:` probe for the
+//! ones they will never use, and shipping one fixed small set would permanently
+//! exclude every language outside it. So each is a cargo feature, a documented
+//! default set is on, and [`ALL`] names the rest so a manifest asking for one
+//! gets told how to get it rather than told it does not exist.
 //!
 //! # Why this table exists at all
 //!

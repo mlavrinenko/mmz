@@ -14,7 +14,12 @@
 scopes:
   # The docs pipeline: the site's sources and generators, the Markdown sources,
   # and the fixture every transcript is captured from.
-  docs-src: ["www/**/*.typ", "www/**/*.sh", "www/**/*.jq", "www/tola.toml"]
+  # www/sizes.yaml is named rather than globbed: it is the one committed DATA
+  # file the pipeline reads, and www/generate-facts.sh fails on a measurement
+  # whose grammar set no longer matches the crate's features — so a re-measure
+  # has to bust the docs gates the same way editing a generator does.
+  docs-src:
+    ["www/**/*.typ", "www/**/*.sh", "www/**/*.jq", "www/tola.toml", "www/sizes.yaml"]
   docs-assets: ["www/assets/**"]
   docs-md-src: ["docs/src/**/*.typ", "docs/generate-md.sh"]
   # The committed outputs of the Markdown render. They are inputs to the

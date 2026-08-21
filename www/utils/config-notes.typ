@@ -14,6 +14,10 @@
 // rendered from the schema. What belongs here is what the schema cannot say:
 // when to reach for the key, what it costs, and which failure it prevents.
 
+// The one number in this file, read rather than typed: what every grammar costs
+// together. See www/utils/sizes.typ for the chain behind it.
+#import "sizes.typ" as sizes
+
 #let config-notes = (
   imports: [
     What lets a generated fragment and a hand-written manifest coexist instead
@@ -120,8 +124,8 @@
   "probes[].lang": [
     A build-time fact, not just a manifest one. Grammars are large enough that
     shipping all of them would charge every user who never writes an `ast:`
-    probe about 40 MB, so a stock `cargo install mmz` parses Rust and each other
-    language is a `--features lang-<name>` flag away.
+    probe #sizes.all-grammars.text, so a stock `cargo install mmz` parses Rust and
+    each other language is a `--features lang-<name>` flag away.
 
     That makes a manifest's portability worth a thought: a probe naming a
     language your colleague's mmz was not built with fails for them. It fails

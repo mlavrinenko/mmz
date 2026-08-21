@@ -86,7 +86,7 @@
           },
           "lang": {
             "type": "string",
-            "description": "Which language `ast` parses the bytes as. Optional beside a `file` whose extension mmz recognises, required beside a `run` (a command line implies no language), and a manifest error without `ast`, which would be a key that silently does nothing. A grammar is not small — all twenty-seven weigh about 40 MB linked — so each is a cargo feature and a stock build carries `rust` alone. Naming a language this build lacks is a hard error that names the feature flag to rebuild with; naming one mmz has no grammar for at all is a different error, because it needs a different answer. mmz never falls back to parsing an unknown file as something plausible."
+            "description": "Which language `ast` parses the bytes as. Optional beside a `file` whose extension mmz recognises, required beside a `run` (a command line implies no language), and a manifest error without `ast`, which would be a key that silently does nothing. A grammar is not small — carrying every one would multiply the size of the binary — so each is a cargo feature and a stock build carries `rust` alone. Naming a language this build lacks is a hard error that names the feature flag to rebuild with; naming one mmz has no grammar for at all is a different error, because it needs a different answer. mmz never falls back to parsing an unknown file as something plausible."
           },
           "allow_empty": {
             "type": "boolean",

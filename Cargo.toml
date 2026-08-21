@@ -38,10 +38,11 @@ ast-grep-core = { version = "0.45.1", features = ["tree-sitter"] }
 ast-grep-language = { version = "0.45.1", default-features = false }
 
 
-# One tree-sitter grammar per feature, because a grammar is not small: the
-# twenty-seven ast-grep ships weigh 40 MB linked, against an mmz binary of
-# 3.5 MB. Measured cost per grammar (release profile, stripped, LTO) is in
-# www/content/inputs.typ so the choice below is checkable rather than taste.
+# One tree-sitter grammar per feature, because a grammar is not small — the full
+# set outweighs the binary carrying it many times over. No figure is quoted
+# here on purpose: what each grammar costs is MEASURED, by `just measure-sizes`
+# into www/sizes.yaml, and the docs read that file. A number typed here would be
+# a copy with nothing to keep it true, which is how the last one went stale.
 #
 # `default` carries `lang-rust` alone. Not because mmz is written in Rust — it
 # is a language-agnostic runner — but because a default set may only promise
@@ -81,8 +82,8 @@ lang-swift = ["ast-grep-language/tree-sitter-swift"]
 lang-typescript = ["ast-grep-language/tree-sitter-typescript"]
 lang-yaml = ["ast-grep-language/tree-sitter-yaml"]
 
-# Every grammar. Costs about 40 MB of binary; reach for the individual flags
-# unless you genuinely need the lot.
+# Every grammar, and the dominant cost of any build that carries it (priced in
+# www/sizes.yaml); reach for the individual flags unless you need the lot.
 lang-all = [
   "lang-bash",
   "lang-c",

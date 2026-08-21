@@ -49,6 +49,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refusal that correctly did not happen. It is now gated on the absence of the
   grammar it names.
 
+- `just measure-sizes` measures what each grammar costs a linked binary and
+  writes `www/sizes.yaml`, which every binary-size figure in the docs is now
+  read from. Thirty release builds — the grammar-free baseline, `default`,
+  `lang-all`, and each grammar as its own delta against the baseline — so it is
+  a recipe you run on purpose, not a gate.
+
+  `www/generate-facts.sh` republishes the measurement, cross-checking its
+  grammar set against the crate's own `lang-` features: a grammar added without
+  a re-measure fails the docs build naming it, rather than rendering a table
+  that quietly omits a language mmz can parse. `outdatty`'s `binary-size` group
+  asks for the re-run when `Cargo.toml` or `Cargo.lock` moves under a recorded
+  measurement — a review, not a rebuild, because whether a dependency bump moved
+  the number enough to matter is a judgement.
+
 ### Changed
 
 - Release assets are archives rather than raw binaries: `.tar.gz` per unix
@@ -64,6 +78,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   docs link the releases page rather than any file. Releases up to v0.7.0 keep
   their raw binaries; a script pinned to `releases/latest/download/mmz-<target>`
   wants `mmz-<target>.tar.gz` from here on.
+
+- The binary sizes the docs quote are measured rather than typed. The claim that
+  a grammar is not small carried four hand-written figures, and the first had
+  already rotted: no build had produced the 3.5 MB binary the page claimed since
+  the jq and ast-grep engines landed. `Cargo.toml`, `src/ast_lang.rs` and both
+  JSON Schemas now make the argument without quoting a number, because none of
+  them can read one.
 
 ### Fixed
 

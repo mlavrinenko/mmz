@@ -1,6 +1,7 @@
 #import "../utils/page.typ": page
 #import "../utils/ui.typ": callout
 #import "../utils/site.typ": u
+#import "../utils/sizes.typ" as sizes
 
 #let meta = (
   route: "/code/",
@@ -164,10 +165,10 @@ all; give the pattern a `$$$ARGS` if you want that run to be an input.
 
 = Which languages a build can parse
 
-Every grammar is a compile-time choice, because grammars are not small. Measured
-against the release profile, the twenty-seven ast-grep ships come to about
-40 MB linked, against an mmz binary of 3.5 MB. The cheapest is `json` at 160 KB;
-the dearest is `kotlin` at 5.8 MB.
+Every grammar is a compile-time choice, because grammars are not small: the
+#sizes.count ast-grep ships take a stock #sizes.builds.default.text release
+binary to #sizes.builds.full.text. The cheapest is #raw(sizes.cheapest.name)
+at #sizes.cheapest.text, the dearest #raw(sizes.dearest.name) at #sizes.dearest.text.
 
 So each is a cargo feature, and a stock install carries `rust` alone — the one
 mmz's own suite exercises, since a default set may only promise what is tested:
@@ -175,13 +176,12 @@ mmz's own suite exercises, since a default set may only promise what is tested:
 ```bash
 cargo install mmz                              # rust
 cargo install mmz --features lang-python,lang-go
-cargo install mmz --features lang-all          # every grammar, ~40 MB
+cargo install mmz --features lang-all          # every grammar
 ```
 
-Releases carry that last one prebuilt as `mmz-full-<target>`, for the people who
+Releases carry that last one prebuilt as `mmz-full-<target>`, for people who
 download a binary precisely because they did not want to build one. Either way
-`mmz --version` reports the count, so a binary can be asked what it parses
-without having to be made to fail first.
+`mmz --version` reports the count, so a build can be asked what it parses.
 
 `lang:` says which to use. It is optional beside a `file:` whose extension mmz
 recognises, and required beside a `run:` — a command line implies no language,

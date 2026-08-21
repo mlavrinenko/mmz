@@ -114,6 +114,21 @@ test *ARGS:
 test-lang-all:
     cargo test --workspace --features lang-all
 
+# Re-measure what each grammar costs a linked binary, into www/sizes.yaml — the
+# file every binary-size figure in the docs is read from. Thirty release builds,
+# each a full LTO link, so about half an hour: deliberately not a gate and not a
+# `check` arm, the way `cover` and `test-lang-all` are not.
+#
+# What asks for it instead is `just outdatty-check`, whose `binary-size` group
+# fails once Cargo.toml or Cargo.lock has moved under the recorded measurement.
+# That is the right trigger, because it is a human who judges whether a
+# dependency bump moved the number enough to be worth half an hour.
+
+[doc("Re-measure binary size per grammar into www/sizes.yaml")]
+[group("dev")]
+measure-sizes:
+    bash www/measure-sizes.sh
+
 [doc("Check for unused dependencies")]
 [group("gate")]
 machete:
