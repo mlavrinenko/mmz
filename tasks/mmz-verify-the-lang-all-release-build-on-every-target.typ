@@ -9,6 +9,8 @@
       this proves],
     related("mmz-release-assets-ship-uncompressed.typ")[the archives this run
       also has to prove],
+    depends-on("mmz-cut-the-0-8-0-release.typ")[the tag whose workflow run
+      this watches],
   ),
   status: proposed(2026, 8, 21),
 )
