@@ -7,6 +7,8 @@
   links: (
     depends-on("mmz-the-release-ships-a-rust-only-binary.typ")[the matrix
       this proves],
+    related("mmz-release-assets-ship-uncompressed.typ")[the archives this run
+      also has to prove],
   ),
   status: proposed(2026, 8, 21),
 )
@@ -29,7 +31,14 @@ Push a tag (or dispatch the workflow) and confirm, for all five targets:
 - The `full` leg compiles. `windows-msvc` is the one to watch: it goes from one
   C grammar to twenty-seven, and MSVC is the least forgiving compiler in the
   matrix.
-- Both assets are attached, and their names distinguish the flavours.
+- Both assets are attached, and their names distinguish the flavours. They are
+  now archives — `.tar.gz` per unix target, `.zip` for Windows — so check that
+  each extracts to a runnable binary under its plain name beside `LICENSE-MIT`,
+  and that `sha256sum -c SHA256SUMS` passes over the set.
+- The Windows packaging step in particular is unproven: it archives through
+  `7z`, which the `windows-latest` image is documented to carry but which no
+  run has yet exercised here. Git Bash's `tar` is GNU tar and cannot write a
+  zip, so there is no fallback in the step if `7z` is missing.
 - `mmz-full-<target> --version` reports 28 ast langs; `mmz-<target> --version`
   reports 1. That is the check that the matrix wired the features to the
   binary it labelled, rather than building the same thing twice.

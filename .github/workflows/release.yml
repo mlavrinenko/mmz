@@ -132,14 +132,6 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.features }}
 
-      - name: Rename binary (unix)
-        if: runner.os != 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }} ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}
-
-      - name: Rename binary (windows)
-        if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }}.exe ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}.exe
-
       # The binary's own account of what it carries, checked against the
       # flavour this leg was supposed to build. Without it a matrix wiring
       # mistake ships two identical binaries under two names, and nothing
@@ -162,10 +154,51 @@ jobs:
             *) echo "::error::${{ matrix.flavour }} build reports '$reported', expected '($expected)'"; exit 1 ;;
           esac
 
+      # Assets are archives, not raw binaries. A tree-sitter parse table is a
+      # large array of small integers, and it shows: the `full` flavour goes
+      # 45.4 MB -> 5.7 MB, eight to one, across five targets. The raw asset was
+      # defensible while every one was ~2 MB and is not at 45 MB.
+      #
+      # This RENAMES the assets, which is the only reason it was not done with
+      # the flavour split. Nothing is pinned to the old names: every asset of
+      # every release from v0.1.1 to v0.7.0 sits at 0-1 downloads, this repo
+      # publishes no install script, and the docs link the releases page rather
+      # than any asset. Old releases keep their raw binaries; the change starts
+      # here and gets cheaper never.
+      #
+      # One bash step for every runner rather than a unix/windows pair: the
+      # `.zip`-vs-`.tar.gz` split is two lines, and the naming, staging and
+      # LICENSE copy are identical. Windows runners ship both bash and 7z.
+      #
+      # The archive is flat — the binary under its plain name, so an extract
+      # puts a runnable `mmz` in the current directory rather than a versioned
+      # folder to reach into. LICENSE-MIT rides along because redistributing a
+      # binary is exactly the case the licence asks to be carried with it; the
+      # raw assets never did.
+      - name: Package the archive
+        shell: bash
+        run: |
+          set -eo pipefail
+          bin='${{ needs.name.outputs.binary }}'
+          asset="$bin${{ matrix.suffix }}-${{ matrix.target }}"
+          src="target/${{ matrix.target }}/release/$bin"
+          mkdir -p dist
+          cp LICENSE-MIT dist/
+          if [ "${{ runner.os }}" = Windows ]; then
+            cp "$src.exe" "dist/$bin.exe"
+            (cd dist && 7z a -tzip -mx=9 "../$asset.zip" "$bin.exe" LICENSE-MIT >/dev/null)
+            packaged="$asset.zip"
+          else
+            cp "$src" "dist/$bin"
+            tar -czf "$asset.tar.gz" -C dist "$bin" LICENSE-MIT
+            packaged="$asset.tar.gz"
+          fi
+          ls -l "$packaged"
+
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}
-          path: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}*
+          path: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}.*
 
   publish:
     name: Publish to crates.io
@@ -197,8 +230,18 @@ jobs:
         with:
           merge-multiple: true
 
+      # Checksums exist because the assets are now archives. A raw binary
+      # answers "did this download intact" by running it; an archive that
+      # arrived truncated fails inside a tar, one step removed from the
+      # download that actually broke. One file over the whole set, in the
+      # format `sha256sum -c` reads back.
+      - name: Checksum the assets
+        run: sha256sum ${{ needs.name.outputs.binary }}-* > SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.0
         with:
           generate_release_notes: true
-          files: ${{ needs.name.outputs.binary }}-*
+          files: |
+            ${{ needs.name.outputs.binary }}-*
+            SHA256SUMS

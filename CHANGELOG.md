@@ -49,6 +49,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refusal that correctly did not happen. It is now gated on the absence of the
   grammar it names.
 
+### Changed
+
+- Release assets are archives rather than raw binaries: `.tar.gz` per unix
+  target, `.zip` for Windows, each holding the binary under its plain name plus
+  `LICENSE-MIT`, with a `SHA256SUMS` over the set. A tree-sitter parse table is
+  a large array of small integers, and the `full` flavour compresses eight to
+  one: 45.4 MB becomes 5.7 MB, across five targets. The default flavour, mostly
+  code rather than tables, manages 5.5 MB to 2.0 MB.
+
+  **This renames every asset**, which is why it did not ship with the flavour
+  split. Nothing is pinned to the old names: every asset of every release from
+  v0.1.1 to v0.7.0 sits at 0-1 downloads, there is no install script, and the
+  docs link the releases page rather than any file. Releases up to v0.7.0 keep
+  their raw binaries; a script pinned to `releases/latest/download/mmz-<target>`
+  wants `mmz-<target>.tar.gz` from here on.
+
 ### Fixed
 
 - Each gate now declares the tools it runs, by flake input rather than by the

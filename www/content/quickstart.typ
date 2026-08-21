@@ -19,8 +19,11 @@ cargo install mmz
 ```
 
 Or download a pre-built binary from the
-#link("https://github.com/mlavrinenko/mmz/releases/latest")[latest release]. With
-Nix, `nix run github:mlavrinenko/mmz` runs it without installing anything.
+#link("https://github.com/mlavrinenko/mmz/releases/latest")[latest release]:
+one archive per target, `.tar.gz` everywhere but Windows, each holding the
+binary under its plain name so an extract leaves a runnable `mmz` behind.
+`SHA256SUMS` beside them covers the set. With Nix,
+`nix run github:mlavrinenko/mmz` runs it without installing anything.
 
 Check what you got:
 
