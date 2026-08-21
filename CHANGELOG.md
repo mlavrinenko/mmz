@@ -63,117 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measurement — a review, not a rebuild, because whether a dependency bump moved
   the number enough to matter is a judgement.
 
-### Changed
-
-- Release assets are archives rather than raw binaries: `.tar.gz` per unix
-  target, `.zip` for Windows, each holding the binary under its plain name plus
-  `LICENSE-MIT`, with a `SHA256SUMS` over the set. A tree-sitter parse table is
-  a large array of small integers, and the `full` flavour compresses eight to
-  one: 45.4 MB becomes 5.7 MB, across five targets. The default flavour, mostly
-  code rather than tables, manages 5.5 MB to 2.0 MB.
-
-  **This renames every asset**, which is why it did not ship with the flavour
-  split. Nothing is pinned to the old names: every asset of every release from
-  v0.1.1 to v0.7.0 sits at 0-1 downloads, there is no install script, and the
-  docs link the releases page rather than any file. Releases up to v0.7.0 keep
-  their raw binaries; a script pinned to `releases/latest/download/mmz-<target>`
-  wants `mmz-<target>.tar.gz` from here on.
-
-- The binary sizes the docs quote are measured rather than typed. The claim that
-  a grammar is not small carried four hand-written figures, and the first had
-  already rotted: no build had produced the 3.5 MB binary the page claimed since
-  the jq and ast-grep engines landed. `Cargo.toml`, `src/ast_lang.rs` and both
-  JSON Schemas now make the argument without quoting a number, because none of
-  them can read one.
-
-### Fixed
-
-- Each gate now declares the tools it runs, by flake input rather than by the
-  whole lockfile. `flake.lock` sat in the `rust` scope as a blanket stand-in,
-  which was wrong in both directions: too coarse, since bumping a transitive
-  input like `nixpkgs-lib` re-ran clippy and the full suite, and absent from
-  `just machete` entirely until the fix below.
-
-  Three probes replace it, one per flake input the dev shell draws binaries
-  from — `qahq-tools`, `tola-tools`, `nixpkgs-tools` — each reading one node's
-  `narHash` out of `flake.lock` with no subprocess. The blast radius of a
-  `nix flake update` drops accordingly: bumping `tola` re-runs one gate,
-  `qahq` two, where every one of them previously re-ran nine.
-
-  The two spellings are not the same mechanism and look identical from
-  `inputs:`. A tool that is its own flake input is pinned exactly. A tool out of
-  nixpkgs has no node of its own, so `nixpkgs-tools` is a proxy that over-busts
-  — still strictly finer than the whole file, because it does not move when
-  qahq or tola do. The manifest says which is which where a reader meets it.
-
-  `tests/gate_inputs_pin_the_toolchain.rs` (renamed from
-  `gate_inputs_close_over_flake_lock.rs`) now resolves probes as well as scopes,
-  and deliberately does not accept `rust-toolchain.toml` as satisfying it: nine
-  of ten gates name `rust`, so accepting it would pass almost everything for
-  free. Nothing here installs a compiler from that file — the dev shell does.
-
-- `just machete` now busts when the dev shell moves.
- It was the one gate rule
-  naming no toolchain pin — `[manifests, recipe-machete]`, where `manifests` is
-  the two Cargo files — while `cargo-machete` itself comes from the dev shell.
-  A `nix flake update` that changed which binary runs left its recorded pass
-  looking fresh, which is the dangerous direction: a wrongly-*fresh* gate is a
-  green build that proved nothing.
-
-  It takes a new `toolchain` scope (`rust-toolchain.toml`, `flake.lock`) rather
-  than having `flake.lock` folded into `manifests`, whose name means the Cargo
-  manifests, or naming `rust`, which would drag in every source file
-  `cargo-machete` never opens and destroy the property that made the original
-  declaration right — a source-only edit still must not bust it.
-
-  `tests/gate_inputs_close_over_flake_lock.rs` now asserts the general property
-  for every `gate`-tagged rule, resolving each rule's `inputs` through the
-  declared scopes via `mmz --dump-config=json` rather than re-parsing the
-  fragments. `docs/contributing/gates.md` has claimed this under "Getting the
-  scopes right" since it was written and nothing enforced it; `just machete` was
-  the sole rule failing it.
-
-- The gate probes in this repo's own manifest now sort their JSON
-
-  (`jq -S`). `just --dump --dump-format json` renders the same recipe with its
-  object keys in different orders across `just` versions, so hashing the
-  unsorted selection made every gate read stale whenever the `just` resolving
-  on PATH was not the dev shell's — a `mt done` outside `nix develop` reported
-  ten stale gates against a worktree whose checks had just passed. This removes
-  the accidental version dependency; the deliberate one, a probe measuring
-  whatever tool PATH offers rather than the declared toolchain, is unchanged
-  and tracked separately.
-- `mmz --is-fresh` no longer exits 0 over a selection that holds no rule. A
-  `--tag` no rule carries — a typo, a rename, a rule that quietly lost its
-  `tags:` entry — used to be indistinguishable from a passing build, which is
-  the false green the tool exists to refuse. It is now an error (exit 7,
-  never relaxable) naming the tags it filtered on and listing the ones the
-  manifest declares. Two more ways to gate nothing are refused with it: a
-  manifest that declares no `commands:` at all, and a selected rule that fans
-  over a scope resolving to no files. The code is distinct from `1` so a hook
-  branching on `$?` can tell a stale build from a gate pointed at nothing.
-- `mmz --status --tag <tag>` no longer answers a filter that kept no rule with
-  "no rules defined in …" — a sentence written for a manifest with no
-  `commands:` at all, and untrue of one whose rules simply do not carry that
-  tag. It still exits 0, because a report asserts nothing, and now names which
-  emptiness it is along with the tags the manifest declares.
-- The project root a manifest is anchored to is now canonicalized, so it agrees
-  with the canonical paths provenance records. A root reached through a symlink
-  — a library caller passing `mmz::run(&argv, path)` its own path, never having
-  touched `current_dir()` — made every source path in `--status` and
-  `--dump-config` render absolute instead of root-relative, because stripping
-  one representation off the other could not match. Globs, `outputs` and
-  `cache_dir` resolve against the same root, so they are now consistent too.
-- A composition error names a file the way a report does: relative to the
-  project root when it sits under it, absolute otherwise. Previously
-  `scope \`rust\` is declared in both …` printed two absolute paths while
-  `--status` and `--dump-config` printed the same files root-relative, because
-  the loader was never handed the root. A fragment outside the tree — a store
-  path — still prints in full, which is the only form of it a reader can act
-  on.
-
-### Added
-
 - `ast:` and `lang:` on a probe, so a rule can depend on a *structural* slice of
   a source file — one function, one type, one impl block — by parsing it in
   process and matching an [ast-grep](https://ast-grep.github.io/) pattern:
@@ -336,8 +225,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under the wrong shell is still one mmz will trust. What the key buys is that
   there need no longer be a wrong shell to be measured under.
 
-- A documentation site under `www/`,
- built from Typst sources with
+### Changed
+
+- Release assets are archives rather than raw binaries: `.tar.gz` per unix
+  target, `.zip` for Windows, each holding the binary under its plain name plus
+  `LICENSE-MIT`, with a `SHA256SUMS` over the set. A tree-sitter parse table is
+  a large array of small integers, and the `full` flavour compresses eight to
+  one: 45.4 MB becomes 5.7 MB, across five targets. The default flavour, mostly
+  code rather than tables, manages 5.5 MB to 2.0 MB.
+
+  **This renames every asset**, which is why it did not ship with the flavour
+  split. Nothing is pinned to the old names: every asset of every release from
+  v0.1.1 to v0.7.0 sits at 0-1 downloads, there is no install script, and the
+  docs link the releases page rather than any file. Releases up to v0.7.0 keep
+  their raw binaries; a script pinned to `releases/latest/download/mmz-<target>`
+  wants `mmz-<target>.tar.gz` from here on.
+
+- The binary sizes the docs quote are measured rather than typed. The claim that
+  a grammar is not small carried four hand-written figures, and the first had
+  already rotted: no build had produced the 3.5 MB binary the page claimed since
+  the jq and ast-grep engines landed. `Cargo.toml`, `src/ast_lang.rs` and both
+  JSON Schemas now make the argument without quoting a number, because none of
+  them can read one.
+
+### Fixed
+
+- Each gate now declares the tools it runs, by flake input rather than by the
+  whole lockfile. `flake.lock` sat in the `rust` scope as a blanket stand-in,
+  which was wrong in both directions: too coarse, since bumping a transitive
+  input like `nixpkgs-lib` re-ran clippy and the full suite, and absent from
+  `just machete` entirely until the fix below.
+
+  Three probes replace it, one per flake input the dev shell draws binaries
+  from — `qahq-tools`, `tola-tools`, `nixpkgs-tools` — each reading one node's
+  `narHash` out of `flake.lock` with no subprocess. The blast radius of a
+  `nix flake update` drops accordingly: bumping `tola` re-runs one gate,
+  `qahq` two, where every one of them previously re-ran nine.
+
+  The two spellings are not the same mechanism and look identical from
+  `inputs:`. A tool that is its own flake input is pinned exactly. A tool out of
+  nixpkgs has no node of its own, so `nixpkgs-tools` is a proxy that over-busts
+  — still strictly finer than the whole file, because it does not move when
+  qahq or tola do. The manifest says which is which where a reader meets it.
+
+  `tests/gate_inputs_pin_the_toolchain.rs` (renamed from
+  `gate_inputs_close_over_flake_lock.rs`) now resolves probes as well as scopes,
+  and deliberately does not accept `rust-toolchain.toml` as satisfying it: nine
+  of ten gates name `rust`, so accepting it would pass almost everything for
+  free. Nothing here installs a compiler from that file — the dev shell does.
+
+- `just machete` now busts when the dev shell moves.
+ It was the one gate rule
+  naming no toolchain pin — `[manifests, recipe-machete]`, where `manifests` is
+  the two Cargo files — while `cargo-machete` itself comes from the dev shell.
+  A `nix flake update` that changed which binary runs left its recorded pass
+  looking fresh, which is the dangerous direction: a wrongly-*fresh* gate is a
+  green build that proved nothing.
+
+  It takes a new `toolchain` scope (`rust-toolchain.toml`, `flake.lock`) rather
+  than having `flake.lock` folded into `manifests`, whose name means the Cargo
+  manifests, or naming `rust`, which would drag in every source file
+  `cargo-machete` never opens and destroy the property that made the original
+  declaration right — a source-only edit still must not bust it.
+
+  `tests/gate_inputs_close_over_flake_lock.rs` now asserts the general property
+  for every `gate`-tagged rule, resolving each rule's `inputs` through the
+  declared scopes via `mmz --dump-config=json` rather than re-parsing the
+  fragments. `docs/contributing/gates.md` has claimed this under "Getting the
+  scopes right" since it was written and nothing enforced it; `just machete` was
+  the sole rule failing it.
+
+- The gate probes in this repo's own manifest now sort their JSON
+
+  (`jq -S`). `just --dump --dump-format json` renders the same recipe with its
+  object keys in different orders across `just` versions, so hashing the
+  unsorted selection made every gate read stale whenever the `just` resolving
+  on PATH was not the dev shell's — a `mt done` outside `nix develop` reported
+  ten stale gates against a worktree whose checks had just passed. This removes
+  the accidental version dependency; the deliberate one, a probe measuring
+  whatever tool PATH offers rather than the declared toolchain, is unchanged
+  and tracked separately.
+- `mmz --is-fresh` no longer exits 0 over a selection that holds no rule. A
+  `--tag` no rule carries — a typo, a rename, a rule that quietly lost its
+  `tags:` entry — used to be indistinguishable from a passing build, which is
+  the false green the tool exists to refuse. It is now an error (exit 7,
+  never relaxable) naming the tags it filtered on and listing the ones the
+  manifest declares. Two more ways to gate nothing are refused with it: a
+  manifest that declares no `commands:` at all, and a selected rule that fans
+  over a scope resolving to no files. The code is distinct from `1` so a hook
+  branching on `$?` can tell a stale build from a gate pointed at nothing.
+- `mmz --status --tag <tag>` no longer answers a filter that kept no rule with
+  "no rules defined in …" — a sentence written for a manifest with no
+  `commands:` at all, and untrue of one whose rules simply do not carry that
+  tag. It still exits 0, because a report asserts nothing, and now names which
+  emptiness it is along with the tags the manifest declares.
+- The project root a manifest is anchored to is now canonicalized, so it agrees
+  with the canonical paths provenance records. A root reached through a symlink
+  — a library caller passing `mmz::run(&argv, path)` its own path, never having
+  touched `current_dir()` — made every source path in `--status` and
+  `--dump-config` render absolute instead of root-relative, because stripping
+  one representation off the other could not match. Globs, `outputs` and
+  `cache_dir` resolve against the same root, so they are now consistent too.
+- A composition error names a file the way a report does: relative to the
+  project root when it sits under it, absolute otherwise. Previously
+  `scope \`rust\` is declared in both …` printed two absolute paths while
+  `--status` and `--dump-config` printed the same files root-relative, because
+  the loader was never handed the root. A fragment outside the tree — a store
+  path — still prints in full, which is the only form of it a reader can act
+  on.
+
+## [0.7.0] - 2026-08-17
+
+### Added
+
+- A documentation site under `www/`, built from Typst sources with
   [tola](https://github.com/tola-rs/tola-ssg) and searchable via Pagefind,
   replacing the single hand-written `index.html` that restated the README from
   memory. Twelve pages, and the reference ones are generated rather than
