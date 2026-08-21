@@ -26,6 +26,26 @@ Check what you got:
 
 #transcript("version.txt")
 
+The count in the brackets is the languages this build can parse with an
+#link(u("/code/"))[`ast:` probe]. A grammar is not small, so which ones a binary
+carries is settled when it is built, and each release publishes two:
+
+#table(
+  columns: 2,
+  table.header([Build], [Parses]),
+  [`mmz-<target>` — also what `cargo install mmz` and a bare `nix run` give
+    you],
+  [Rust, the one grammar the suite exercises],
+
+  [`mmz-full-<target>` — also `nix build github:mlavrinenko/mmz#full`],
+  [every
+    language mmz has a grammar for, at about eight times the size],
+)
+
+Anything in between is a `cargo install mmz --features lang-python,lang-go`
+away, and a probe naming a language your build lacks fails saying so, naming
+the flag. Nothing is ever parsed as the wrong grammar to cover for it.
+
 = Scaffold a manifest
 
 Run `mmz --init` in the root of the project you want to memoize:

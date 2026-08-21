@@ -3,15 +3,15 @@ algorithm: blake3
 groups:
   cli-prose:
     source:
-      src/main.rs: 9afe1b13131888fe39eb604fcdbd965f0fcfa2bbfa4e7650d5138e5bf51a3ea8
+      src/main.rs: 6ff38766cc0fae0c7f472bbe2e7afcf6a01cd7c6ef0dd4d6a3fca3ce1d2c124d
     dependents:
-      www/utils/cli-notes.typ: 88ac2d4826dce301e37edec465769683303fd0710e06bd9ad687b21b96362da6
+      www/utils/cli-notes.typ: 1fbbf8328d34278a312c5e7acad8d9eb2e994b1fdd974e8fb4947813ea17783e
       www/utils/exit-code-notes.typ: f07969ae6ecd851de6a2c87bd325b2a43d3456829d7e7609f56a8489b0bec9e2
   dev-shell:
     source:
-      flake.nix: 12eb0e164a691a845b04ebcce3a2f7dcd07733673d2276aeb29a012f376600fd
+      flake.nix: cc4c2a0b5bccfa3567cd80db4f0f266f2b277ee17b756b73c8fc66777da7764b
     dependents:
-      docs/src/contributing.typ: 8c9610a86f49a894df1366939e7c1ed3a07a4649390aa531701a5430d5515198
+      docs/src/contributing.typ: 7c61eb29d3da37da33fd5dc2c69312446a59260eb692de8caeca72bd1c4ea845
   docs-pipeline:
     source:
       .just/scripts/check-capture-paths.sh: ef7de8ddaddbe3de6b805649ea1d29c512e7785e05fb93032133b52d4821dbee
@@ -27,7 +27,7 @@ groups:
   gates:
     source:
       .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a
-      Justfile: 8d5ab5434bbee2082a8dc5eb6b7380530385f87274117cf3ce0dc20b30a8fd0d
+      Justfile: 4d0dcbe1aeebf72797b7c75ea2a9c1dca27c2818d4f5ef3b139832094837e85a
     dependents:
       .mmz/conf.d/10-rust.yaml: ce20bfa2f797b8a8d3d4c471e1dd0ea4ad3897fb2f31e676d1a090f53824d41e
       .mmz/conf.d/20-docs.yaml: e223812349a4a172a5b319438c1aa3c84867993262ce2113475114086d46fc7b
@@ -51,7 +51,7 @@ groups:
     source:
       Cargo.toml: 8e7a574cd0b7c43216a382fb7f19ea2f0b70f7e895ee19993f841c93059db873
     dependents:
-      CHANGELOG.md: ff3dd14dd4233dc94f5ef7c4803039b4cc7ba82ceaac6a73410558e6cad3f341
+      CHANGELOG.md: cf6b77d3f7850907782761877668c5bd07e4bb5b036a399a8b964e519aa0dc18
   status-schema:
     source:
       src/status.rs: 29ace444f9fe4445081e29860ff0c427c3c6b41e6f8440d41ffe53053b0e778c

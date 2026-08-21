@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Releases now publish two binaries per target. `mmz-<target>` is unchanged —
+  default features, the Rust grammar alone, and byte-for-byte what
+  `cargo install mmz` builds. `mmz-full-<target>` is `--features lang-all`:
+  every grammar, about eight times the size, and the only build for which a
+  manifest naming a language can never be answered with "rebuild it yourself".
+
+  The people who download a prebuilt binary are the people who did not want to
+  build one, so shipping only the first left exactly them stuck — a
+  `lang: python` probe failed with an error whose fix was a Rust toolchain.
+
+  Two flavours, not three. A curated middle tier was considered and dropped:
+  `default` fails predictably and `full` never fails, but a "popular" set fails
+  for _some_ of your colleagues and not others, which is the trap the docs
+  already warn about wearing a release asset's name. It is also a taste
+  judgement that drifts, and a subset anyone actually wants is one
+  `cargo install --features` away. `nix build …#full` is the Nix spelling.
+
+- `mmz --version` now reports how many languages the build can parse —
+  `mmz 0.7.0 (1 ast lang)`, `mmz 0.7.0 (28 ast langs)`. Which grammars a binary
+  carries is a compile-time choice, so one version number describes more than
+  one binary, and as of this release it describes two published ones. Without
+  the count, "mmz 0.7.0 cannot parse Python" names a version that is true of
+  both, and the list was reachable only by provoking the error that prints it.
+
+  A count rather than the twenty-eight names, which would bury the version.
+  Twenty-eight against twenty-seven grammar crates: `typescript` and `tsx` are
+  two names a manifest may write and one crate on disk.
+
+- `just test-lang-all` runs the suite with every grammar compiled in, on its own
+  CI job. `just check` runs on default features, so `ast_lang_tests.rs`'s claim
+  that every table entry really parses covered one language out of twenty-eight
+  — and a binary whose selling point is the other twenty-seven cannot be the
+  first thing to run them. Deliberately not a `check` arm: twenty-seven C
+  compiles do not belong in front of the recipe people run in a loop.
+
+  It found its first bug immediately: `a_language_this_build_lacks_names_the_feature_to_rebuild_with`
+  hard-coded `kotlin` as the absent grammar, and under `lang-all` asserted a
+  refusal that correctly did not happen. It is now gated on the absence of the
+  grammar it names.
+
 ### Fixed
 
 - Each gate now declares the tools it runs, by flake input rather than by the

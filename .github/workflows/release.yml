@@ -56,8 +56,30 @@ jobs:
     name: Build (${{ matrix.target }})
     needs: [check, name]
     runs-on: ${{ matrix.os }}
+    # Two flavours per target, because which grammars a build carries is a
+    # compile-time choice and the two audiences want opposite answers.
+    #
+    # `default` is byte-for-byte what `cargo install mmz` gives you: Rust alone,
+    # ~5.5 MB. `full` is `lang-all` — every grammar, ~45 MB, and the only build
+    # for which a manifest naming a language can never be answered with "rebuild
+    # it yourself". The people downloading a prebuilt binary are the people who
+    # did not want to build one, so shipping only the first left exactly them
+    # stuck.
+    #
+    # No third "popular" tier. `default` fails predictably and `full` never
+    # fails; a curated middle fails for SOME of your colleagues and not others,
+    # which is the trap the docs already warn about wearing a release asset's
+    # name. Anyone wanting a specific subset has `cargo install --features`,
+    # which beats any set we could pick for them.
     strategy:
       matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-msvc
+        flavour: [default, full]
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
@@ -69,6 +91,14 @@ jobs:
             os: macos-latest
           - target: x86_64-pc-windows-msvc
             os: windows-latest
+          # The asset keeps the plain name, so the file a reader reaches for
+          # first is the one that matches `cargo install mmz`.
+          - flavour: default
+            features: ""
+            suffix: ""
+          - flavour: full
+            features: "--features lang-all"
+            suffix: "-full"
 
     steps:
       - uses: actions/checkout@v6.0.3
@@ -81,10 +111,17 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
 
+      # Keyed by flavour as well as target: the two builds share a target
+      # directory name and nothing else, and a `full` build restoring a
+      # `default` cache would recompile everything anyway.
       - uses: Swatinem/rust-cache@v2.9.1
         with:
-          key: ${{ matrix.target }}
+          key: ${{ matrix.target }}-${{ matrix.flavour }}
 
+      # Every tree-sitter scanner in the dependency set is C, none C++, so the
+      # C cross-compiler below covers all twenty-seven grammars and not just
+      # the one a default build carries. The `cc` crate finds it by the target
+      # triple's conventional prefix; only the linker has to be named.
       - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -93,20 +130,42 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.features }}
 
       - name: Rename binary (unix)
         if: runner.os != 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }} ${{ needs.name.outputs.binary }}-${{ matrix.target }}
+        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }} ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}
 
       - name: Rename binary (windows)
         if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }}.exe ${{ needs.name.outputs.binary }}-${{ matrix.target }}.exe
+        run: cp target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }}.exe ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}.exe
+
+      # The binary's own account of what it carries, checked against the
+      # flavour this leg was supposed to build. Without it a matrix wiring
+      # mistake ships two identical binaries under two names, and nothing
+      # downstream would notice — the file sizes are the only other tell, and
+      # nobody reads those. Skipped on the cross leg, which cannot run its own
+      # output.
+      - name: Verify the flavour is what it claims
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -eo pipefail
+          expected='1 ast lang'
+          if [ "${{ matrix.flavour }}" = full ]; then expected='28 ast langs'; fi
+          ext=""
+          if [ "${{ runner.os }}" = Windows ]; then ext=".exe"; fi
+          reported=$(./target/${{ matrix.target }}/release/${{ needs.name.outputs.binary }}$ext --version)
+          echo "$reported"
+          case "$reported" in
+            *"($expected)"*) ;;
+            *) echo "::error::${{ matrix.flavour }} build reports '$reported', expected '($expected)'"; exit 1 ;;
+          esac
 
       - uses: actions/upload-artifact@v7.0.1
         with:
-          name: ${{ needs.name.outputs.binary }}-${{ matrix.target }}
-          path: ${{ needs.name.outputs.binary }}-${{ matrix.target }}*
+          name: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}
+          path: ${{ needs.name.outputs.binary }}${{ matrix.suffix }}-${{ matrix.target }}*
 
   publish:
     name: Publish to crates.io

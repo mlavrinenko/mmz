@@ -178,6 +178,11 @@ cargo install mmz --features lang-python,lang-go
 cargo install mmz --features lang-all          # every grammar, ~40 MB
 ```
 
+Releases carry that last one prebuilt as `mmz-full-<target>`, for the people who
+download a binary precisely because they did not want to build one. Either way
+`mmz --version` reports the count, so a binary can be asked what it parses
+without having to be made to fail first.
+
 `lang:` says which to use. It is optional beside a `file:` whose extension mmz
 recognises, and required beside a `run:` — a command line implies no language,
 and guessing one would parse source as the wrong grammar and hash whatever fell
