@@ -10,7 +10,11 @@
     related("mmz-verify-the-lang-all-release-build-on-every-target.typ")[the
       human half, which this release's workflow run is the subject of],
   ),
-  status: wip(2026, 8, 21)[changelog repaired and dated; bumping the manifest],
+  status: done(
+    2026,
+    8,
+    21,
+  )[v0.8.0 tagged and pushed; the Release workflow is building the ten assets. The changelog repair went first, in its own commit — the 0.7.0 section is byte-identical to the tag again. outdatty's two stale groups were reviewed, not rebuilt: only the crate's own version string moved. Whether the ten archives extract on every target is the sibling verify task.],
 )
 
 == Summary
