@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-22
+
+### Changed
+
+- The eight runtime probe failures are one `Error` variant. `Error::ProbeFailed`,
+  `ProbeSpawn`, `ProbeEmpty`, `ProbeFileUnreadable`, `ProbeJsonInput`,
+  `ProbeJsonFailed`, `ProbeJsonEmpty` and `ProbeAst` are now variants of
+  `probe::ProbeFailure`, carried by `Error::Probe { name, source }`. Breaking for
+  a library caller matching any of them; matching the family is now one arm with
+  a nested match.
+
+  No message and no exit code changes — `Error::Probe` supplies the prefix naming
+  the probe that each variant used to spell out, and the family still exits `6`.
+  `Error::ProbeSource` stays where it was: a probe whose source keys are
+  malformed is a manifest defect caught at load, exits `4`, and never runs.
+
+  This is what `Error::ProbeAst` was already doing for `ast::AstFailure`, applied
+  to the family around it, and it is why `src/error.rs` no longer needs a raised
+  cap in `.linecop.yaml`: it is back under the shared 500-line Rust cap, with
+  room for the next failure mode. No text boundary splits an enum, so moving a
+  family out is the only thing that shrinks the file — which CONTRIBUTING now
+  says, beside the rule for adding an error case.
+
 ## [0.9.0] - 2026-08-22
 
 ### Removed

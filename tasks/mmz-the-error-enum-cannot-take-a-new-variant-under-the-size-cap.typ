@@ -4,7 +4,7 @@
   title: "mmz: the error enum cannot take a new variant under the size cap",
   priority: framework("ice", confidence: 0.8, ease: 4.0, impact: 4.0),
   tags: ("tooling",),
-  status: proposed(2026, 8, 21),
+  status: wip(2026, 8, 22),
   links: related(
     "mmz-an-i-o-error-while-hashing-an-input-names-no-path.typ",
   )[the fix whose size cost forced the cap raise],
