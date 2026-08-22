@@ -35,9 +35,9 @@ pub enum Error {
     /// being gone: permissions, a device error, a path that stopped being a
     /// regular file.
     ///
-    /// Named for the same reason [`Error::ProbeFileUnreadable`] is — a bare
-    /// "permission denied" leaves a reader hunting for which file it was
-    /// about.
+    /// Named for the same reason [`crate::probe::ProbeFailure::FileUnreadable`]
+    /// is — a bare "permission denied" leaves a reader hunting for which file it
+    /// was about.
     #[error("input `{path}` could not be read; no cache record was written\n  {source}")]
     InputUnreadable {
         /// The input, rendered as a report renders one.
@@ -129,46 +129,6 @@ pub enum Error {
     )]
     EmptyProbeShell,
 
-    /// A probe command exited non-zero, so its stdout is not a usable input.
-    #[error(
-        "probe `{name}` failed (exit {code}); mmz consumed no output and wrote no cache record\n  command: {run}\n  stderr: {stderr}"
-    )]
-    ProbeFailed {
-        /// Name of the offending probe.
-        name: String,
-        /// The `run` line, as the manifest spells it.
-        run: String,
-        /// The probe's exit code (1 for a signal death).
-        code: i32,
-        /// What the probe wrote to stderr, trimmed and capped.
-        stderr: String,
-    },
-
-    /// A probe command could not be spawned at all — the same hard stop as a
-    /// probe that ran and failed.
-    #[error(
-        "probe `{name}` could not be run; mmz consumed no output and wrote no cache record\n  command: {run}\n  {source}"
-    )]
-    ProbeSpawn {
-        /// Name of the offending probe.
-        name: String,
-        /// The `run` line, as the manifest spells it.
-        run: String,
-        /// Underlying spawn error.
-        source: std::io::Error,
-    },
-
-    /// A probe printed nothing and did not opt into that with `allow_empty`.
-    #[error(
-        "probe `{name}` produced no output; that is almost always a selector that matched nothing — set `allow_empty: true` on the probe if empty really is a valid input\n  command: {run}"
-    )]
-    ProbeEmpty {
-        /// Name of the offending probe.
-        name: String,
-        /// The `run` line, as the manifest spells it.
-        run: String,
-    },
-
     /// A probe's source keys do not describe one readable thing: both `run:`
     /// and `file:`, neither of them, or a `file:` with no `json:` to select
     /// from it.
@@ -184,71 +144,25 @@ pub enum Error {
         reason: String,
     },
 
-    /// A probe's `file:` could not be read, so there are no bytes to select
-    /// from. Named separately because a probe's error must name the probe: a
-    /// bare "no such file" leaves a reader hunting.
-    #[error(
-        "probe `{name}` could not read `{path}`; mmz consumed no output and wrote no cache record\n  {source}"
-    )]
-    ProbeFileUnreadable {
-        /// Name of the offending probe.
-        name: String,
-        /// The path, as the manifest spells it.
-        path: PathBuf,
-        /// Underlying I/O error.
-        source: std::io::Error,
-    },
-
-    /// The bytes a `json:` probe was pointed at are not one JSON value — an
-    /// empty file, a tool that logged a line before its JSON, a truncated
-    /// write.
-    #[error(
-        "probe `{name}` read {origin}, which is not one JSON value ({reason}); mmz consumed no output and wrote no cache record"
-    )]
-    ProbeJsonInput {
-        /// Name of the offending probe.
-        name: String,
-        /// What was read, as the manifest points at it.
-        origin: String,
-        /// What the parser objected to.
-        reason: String,
-    },
-
-    /// A `json:` program did not compile, or raised while running. One variant
-    /// for both because the fix is the same edit — the program is wrong for
-    /// the document it was pointed at — and the reason says which half broke.
-    #[error(
-        "probe `{name}` could not select from {origin} ({reason}); mmz consumed no output and wrote no cache record\n  json: {program}"
-    )]
-    ProbeJsonFailed {
-        /// Name of the offending probe.
-        name: String,
-        /// The `json:` program, as the manifest spells it.
-        program: String,
-        /// What it was run against.
-        origin: String,
-        /// What jaq objected to.
-        reason: String,
-    },
-
-    /// A `json:` selector yielded no value, or only `null`.
+    /// A probe was asked for its bytes and could not produce them: the command
+    /// failed or would not spawn, the file would not read, the document would
+    /// not parse, the selector matched nothing.
     ///
-    /// The same refusal [`Error::ProbeEmpty`] makes for stdout, at the place
-    /// the selection happens: a probe tracking `null` reports the same digest
-    /// whatever the document does, so the rule is permanently fresh against an
-    /// input nobody is measuring. `false` is a value and passes — jq's `-e`
-    /// conflates the two only because a shell exit code cannot tell them
-    /// apart, and mmz is under no such constraint.
-    #[error(
-        "probe `{name}` selected nothing from {origin}; that digest would measure nothing, so the rule would be fresh forever — fix the selector, or set `allow_empty: true` if an absent value really is a valid input\n  json: {program}"
-    )]
-    ProbeJsonEmpty {
+    /// One variant for the whole runtime family, for the reason
+    /// [`crate::ast::AstFailure`] was already one level down: they share an
+    /// exit code (`6`) and a consequence — mmz consumed no output and wrote no
+    /// cache record — so what distinguishes them is detail about a probe, which
+    /// belongs beside the code that runs one. Only the name lives here, because
+    /// only this layer knows whose failure it was.
+    ///
+    /// [`Error::ProbeSource`] stays out of it: that is a manifest defect caught
+    /// at load, before any probe runs, and exits `4`.
+    #[error("probe `{name}` {source}")]
+    Probe {
         /// Name of the offending probe.
         name: String,
-        /// The `json:` program, as the manifest spells it.
-        program: String,
-        /// What it was run against.
-        origin: String,
+        /// What the probe could not do, and the edit or flag that fixes it.
+        source: Box<crate::probe::ProbeFailure>,
     },
 
     /// A command rule has a blank `name`.
@@ -299,7 +213,7 @@ pub enum Error {
     /// asserts that work is done, and an assertion over an empty set is
     /// vacuously true — a pass nobody earned. Every other selector that
     /// resolves to nothing is loud ([`Error::NoMatch`], [`Error::NoInputs`],
-    /// [`Error::ProbeEmpty`]), so this one is too.
+    /// [`crate::probe::ProbeFailure::Empty`]), so this one is too.
     #[error(
         "the manifest at {path} declares no commands, so this gate would pass without checking anything; declare a rule under `commands:`"
     )]
@@ -523,18 +437,6 @@ pub enum Error {
         key: String,
         /// The root manifest that set it.
         path: PathBuf,
-    },
-
-    /// A probe's `ast:` key could not produce a digest. The detail — and which
-    /// refusal it is — lives with the matcher in [`crate::ast::AstFailure`],
-    /// because one of those cases is answered by a cargo feature rather than a
-    /// manifest edit and would not survive being flattened into a string here.
-    #[error("probe `{name}` {source}")]
-    ProbeAst {
-        /// Name of the offending probe.
-        name: String,
-        /// What the matcher refused, and the edit or flag that fixes it.
-        source: Box<crate::ast::AstFailure>,
     },
 }
 

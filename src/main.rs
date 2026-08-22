@@ -396,14 +396,7 @@ fn exit_for(err: &Error) -> u8 {
         | Error::ProbeSource { .. }
         | Error::EmptyProbeShell => 4,
         Error::MissingOutput { .. } => 5,
-        Error::ProbeFailed { .. }
-        | Error::ProbeSpawn { .. }
-        | Error::ProbeEmpty { .. }
-        | Error::ProbeFileUnreadable { .. }
-        | Error::ProbeJsonInput { .. }
-        | Error::ProbeJsonFailed { .. }
-        | Error::ProbeJsonEmpty { .. }
-        | Error::ProbeAst { .. } => 6,
+        Error::Probe { .. } => 6,
         Error::NoRules { .. } | Error::NoTaggedRules { .. } | Error::NoExpansions { .. } => 7,
         Error::InputVanished { .. }
         | Error::InputUnreadable { .. }

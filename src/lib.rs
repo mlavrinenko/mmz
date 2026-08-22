@@ -53,7 +53,7 @@
 //! leave it unset and mmz reads the system clock. See [`clock`].
 
 /// The in-process AST matcher a probe's `ast:` key selects with, and the
-/// failure type [`Error::ProbeAst`] carries. Public because a missing
+/// failure type [`probe::ProbeFailure::Ast`] carries. Public because a missing
 /// grammar is answered by a build flag, and a library caller matching on
 /// that case needs the variant rather than a rendered string.
 pub mod ast;

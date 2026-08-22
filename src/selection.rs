@@ -11,7 +11,7 @@
 //! assertion over an empty set is vacuously true: a typo'd tag would exit 0
 //! and read as a passing build. So [`ensure_gateable`] refuses it, in the
 //! company of every other selector in mmz that resolves to nothing and says so
-//! ([`Error::NoMatch`], [`Error::NoInputs`], [`Error::ProbeEmpty`]).
+//! ([`Error::NoMatch`], [`Error::NoInputs`], [`crate::probe::ProbeFailure::Empty`]).
 //!
 //! A report survives it fine. `--status` claims nothing about the rules it
 //! prints, so an empty report is honest — as long as the line explaining it is

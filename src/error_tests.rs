@@ -1,4 +1,5 @@
 use super::Error;
+use crate::probe::ProbeFailure;
 
 #[test]
 fn messages_are_actionable() {
@@ -60,12 +61,12 @@ fn messages_are_actionable() {
 
 #[test]
 fn probe_messages_name_the_probe_and_the_consequence() {
-    let failed = Error::ProbeFailed {
-        name: "fmt-recipe".to_owned(),
+    let failed = ProbeFailure::Failed {
         run: "just --dump | jq .recipes".to_owned(),
         code: 5,
         stderr: "jq: error: no such key".to_owned(),
-    };
+    }
+    .named("fmt-recipe");
     let text = failed.to_string();
     assert!(
         text.contains("probe `fmt-recipe`"),
@@ -78,11 +79,11 @@ fn probe_messages_name_the_probe_and_the_consequence() {
         "a failed probe never reaches the hasher, and says so: {text}"
     );
 
-    let spawn = Error::ProbeSpawn {
-        name: "toolchain".to_owned(),
+    let spawn = ProbeFailure::Spawn {
         run: "rustc -vV".to_owned(),
         source: std::io::Error::other("no such file"),
-    };
+    }
+    .named("toolchain");
     let text = spawn.to_string();
     assert!(
         text.contains("probe `toolchain`"),
@@ -93,10 +94,10 @@ fn probe_messages_name_the_probe_and_the_consequence() {
         "an unspawnable probe is the same hard stop: {text}"
     );
 
-    let empty = Error::ProbeEmpty {
-        name: "selector".to_owned(),
+    let empty = ProbeFailure::Empty {
         run: "jq -c .missing".to_owned(),
-    };
+    }
+    .named("selector");
     let text = empty.to_string();
     assert!(text.contains("probe `selector`"), "names the probe: {text}");
     assert!(

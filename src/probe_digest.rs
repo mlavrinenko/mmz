@@ -14,16 +14,16 @@ use crate::error::{Error, Result};
 use crate::hashing;
 use crate::json;
 
-use super::Probe;
+use super::{Probe, ProbeFailure};
 
 /// Hashes the bytes as they came, for a probe with no selector. Only a `run:`
 /// probe reaches this, so the empty-output message can quote its command line.
 pub(super) fn hash_raw(name: &str, probe: &Probe, bytes: &[u8]) -> Result<String> {
     if !probe.allow_empty && bytes.iter().all(u8::is_ascii_whitespace) {
-        return Err(Error::ProbeEmpty {
-            name: name.to_owned(),
+        return Err(ProbeFailure::Empty {
             run: probe.run.clone().unwrap_or_default(),
-        });
+        }
+        .named(name));
     }
     Ok(hashing::hash_bytes(bytes))
 }
@@ -41,25 +41,28 @@ pub(super) fn hash_selection(
     program: &str,
     bytes: &[u8],
 ) -> Result<String> {
-    let selected = json::select(program, bytes).map_err(|failure| match failure {
-        json::Failure::Input(reason) => Error::ProbeJsonInput {
-            name: name.to_owned(),
-            origin: probe.origin(),
-            reason,
-        },
-        json::Failure::Program(reason) | json::Failure::Run(reason) => Error::ProbeJsonFailed {
-            name: name.to_owned(),
-            program: program.to_owned(),
-            origin: probe.origin(),
-            reason,
-        },
+    let selected = json::select(program, bytes).map_err(|failure| {
+        match failure {
+            json::Failure::Input(reason) => ProbeFailure::JsonInput {
+                origin: probe.origin(),
+                reason,
+            },
+            json::Failure::Program(reason) | json::Failure::Run(reason) => {
+                ProbeFailure::JsonFailed {
+                    program: program.to_owned(),
+                    origin: probe.origin(),
+                    reason,
+                }
+            }
+        }
+        .named(name)
     })?;
     if !probe.allow_empty && selected_nothing(&selected) {
-        return Err(Error::ProbeJsonEmpty {
-            name: name.to_owned(),
+        return Err(ProbeFailure::JsonEmpty {
             program: program.to_owned(),
             origin: probe.origin(),
-        });
+        }
+        .named(name));
     }
     Ok(hash_joined(&selected))
 }
@@ -98,10 +101,7 @@ pub(super) fn hash_matches(
 /// Wraps a matcher failure in the error that names the probe it came from.
 /// [`crate::ast`] knows what went wrong; only this layer knows whose it was.
 fn ast_error(name: &str, failure: AstFailure) -> Error {
-    Error::ProbeAst {
-        name: name.to_owned(),
-        source: Box::new(failure),
-    }
+    ProbeFailure::Ast(Box::new(failure)).named(name)
 }
 
 /// Hashes a selection's values joined one per line. Shared so a probe's digest

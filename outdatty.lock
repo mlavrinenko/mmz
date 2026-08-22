@@ -9,7 +9,7 @@ groups:
       www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
     source:
-      src/main.rs: 3be5e97d3052a4158339b673c95fba0d6d985c94454263fd314fa76befe5631d
+      src/main.rs: 9b942e89705197bb47ebf6fb7e6042eaf64c141ba2cf15520b03e4207e85d391
     dependents:
       www/utils/cli-notes.typ: 1fbbf8328d34278a312c5e7acad8d9eb2e994b1fdd974e8fb4947813ea17783e
       www/utils/exit-code-notes.typ: 55d2abf58922200de1f8c8a9c08474bd77feb565c7c7e87a9491b8e4b0f0671f
@@ -17,7 +17,7 @@ groups:
     source:
       flake.nix: d20dc5029e935737d75c8ff70f0635342bdae2f4828dd3477d977e625e0f3be0
     dependents:
-      docs/src/contributing.typ: 7c61eb29d3da37da33fd5dc2c69312446a59260eb692de8caeca72bd1c4ea845
+      docs/src/contributing.typ: b152175b727b836ae222bc3ec1b2b4f49c4ada936e1e624ce4b657e4e06baec4
   docs-pipeline:
     source:
       .just/scripts/check-capture-paths.sh: ef7de8ddaddbe3de6b805649ea1d29c512e7785e05fb93032133b52d4821dbee
@@ -50,7 +50,7 @@ groups:
     source:
       src/manifest.rs: 33465376ae9420756c7a4cbc6bdace6d17c0a67901234e9cb1c6eb43764346cf
       src/manifest_strict.rs: f7e7daeb89762e4fffa246dee8cf378dae1155d1a9f8b549a8c023f3d012be76
-      src/probe.rs: 5322f311a5691a215faa593f8a08062f29bb23d4c207c769afb38e0c4e5de1f5
+      src/probe.rs: 1ce5a9a487b2913beabbd8af76422d629708fc49c6cd8f15fde10de816978e7e
     dependents:
       schema/mmz.schema.json: 496d4ac14442cc79ee6b7ec0d648224efcec0e06586941b83a0db13a0b415114
       src/schema.rs: f5418a403e8d03cc7fe963a882922610717b88d68fc95930e8e8d1f8447d739a

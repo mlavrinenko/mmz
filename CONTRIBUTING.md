@@ -49,7 +49,7 @@ Every clippy lint in `Cargo.toml`’s `[workspace.lints]` is `deny`, so the proj
 - No `unsafe`, no wildcard imports, no single-character names.
 - Bounded functions: `too_many_lines`, `cognitive_complexity` and `too_many_arguments` are all denied rather than warned.
 
-Errors are a `thiserror` enum in `src/error.rs`. A new error case needs an exit code in `src/main.rs`’s `exit_for` and an entry in `www/utils/exit-code-notes.typ`, or `just check-doc-facts` fails naming the code.
+Errors are a `thiserror` enum in `src/error.rs`; a family of related cases goes in a sub-enum beside the code that raises it (`ast::AstFailure`, `probe::ProbeFailure`), since no text boundary splits an enum. A new case needs an exit code in `src/main.rs`’s `exit_for` and an entry in `www/utils/exit-code-notes.typ`, or `just check-doc-facts` fails naming the code.
 
 ## Project structure
 
@@ -71,7 +71,6 @@ Raised, each argued in place in `.linecop.yaml`:
 | Path | Cap |
 | --- | --- |
 | `./CHANGELOG.md` | `1000 lines` |
-| `./src/error.rs` | `550 lines` |
 
 Exempt, because a line count says nothing useful about them — the generated Markdown (capped at its Typst source instead) and the files vendored verbatim from upstream:
 

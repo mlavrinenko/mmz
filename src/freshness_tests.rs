@@ -2,6 +2,7 @@ use std::path::Path;
 
 use super::evaluate;
 use crate::Error;
+use crate::probe::ProbeFailure;
 
 fn write_manifest(dir: &Path, body: &str) {
     let cfg = dir.join(".mmz");
@@ -452,7 +453,13 @@ fn a_failing_probe_stops_the_gate_rather_than_reporting_stale() {
         panic!("a broken probe is a hard error, not a verdict");
     };
     assert!(
-        matches!(err, Error::ProbeFailed { .. }),
+        matches!(
+            err,
+            Error::Probe {
+                source: ref failure,
+                ..
+            } if matches!(**failure, ProbeFailure::Failed { .. })
+        ),
         "fail closed: the gate cannot honestly answer without the probe, got {err}"
     );
 }

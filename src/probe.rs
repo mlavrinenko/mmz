@@ -227,6 +227,15 @@ mod shape;
 #[path = "probe_digest.rs"]
 mod digest_of;
 
+/// Why a running probe produced no usable bytes, split out to
+/// `probe_failure.rs` because `src/error.rs` was the file at its cap. Public
+/// through this module, not that one: the failures belong beside the code that
+/// raises them.
+#[path = "probe_failure.rs"]
+mod failure;
+
+pub use failure::ProbeFailure;
+
 /// Rejects a probe that shares a name with a scope, or whose source keys do
 /// not describe one readable thing.
 ///
@@ -310,9 +319,9 @@ impl<'a> Resolver<'a> {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::ProbeSpawn`], [`Error::ProbeFailed`], or
-    /// [`Error::ProbeEmpty`]. Each is a hard stop: the caller never reaches the
-    /// hasher, so no record is written against an output mmz could not trust.
+    /// Returns [`Error::Probe`] carrying the [`ProbeFailure`] that stopped it.
+    /// Each is a hard stop: the caller never reaches the hasher, so no record is
+    /// written against an output mmz could not trust.
     pub fn for_rule(&mut self, rule: &Command) -> Result<BTreeMap<String, String>> {
         let mut named = BTreeMap::new();
         for name in &rule.inputs {
@@ -376,21 +385,23 @@ fn stdout_of(name: &str, run: &str, base: &Path, shell: &[String]) -> Result<Vec
     if output.status.success() {
         return Ok(output.stdout);
     }
-    Err(Error::ProbeFailed {
-        name: name.to_owned(),
+    Err(ProbeFailure::Failed {
         run: run.to_owned(),
         code: output.status.code().unwrap_or(1),
         stderr: excerpt(&output.stderr),
-    })
+    }
+    .named(name))
 }
 
 /// Reads the probe's `file`, relative to the project root — the base scope
 /// globs resolve against, so the two kinds of input name a path the same way.
 fn read_file(name: &str, path: &Path, base: &Path) -> Result<Vec<u8>> {
-    std::fs::read(base.join(path)).map_err(|source| Error::ProbeFileUnreadable {
-        name: name.to_owned(),
-        path: path.to_path_buf(),
-        source,
+    std::fs::read(base.join(path)).map_err(|source| {
+        ProbeFailure::FileUnreadable {
+            path: path.to_path_buf(),
+            source,
+        }
+        .named(name)
     })
 }
 
@@ -411,10 +422,12 @@ fn capture(name: &str, run: &str, base: &Path, shell: &[String]) -> Result<Outpu
         .current_dir(base)
         .stdin(Stdio::null())
         .output()
-        .map_err(|source| Error::ProbeSpawn {
-            name: name.to_owned(),
-            run: run.to_owned(),
-            source,
+        .map_err(|source| {
+            ProbeFailure::Spawn {
+                run: run.to_owned(),
+                source,
+            }
+            .named(name)
         })
 }
 

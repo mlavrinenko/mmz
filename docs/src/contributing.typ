@@ -83,10 +83,11 @@ does not compile with a violation. The ones that shape the code most:
 - Bounded functions: `too_many_lines`, `cognitive_complexity` and
   `too_many_arguments` are all denied rather than warned.
 
-Errors are a `thiserror` enum in `src/error.rs`. A new error case needs an exit
-code in `src/main.rs`'s `exit_for` and an entry in
-`www/utils/exit-code-notes.typ`, or #just.check-doc-facts() fails naming the
-code.
+Errors are a `thiserror` enum in `src/error.rs`; a family of related cases goes
+in a sub-enum beside the code that raises it (`ast::AstFailure`,
+`probe::ProbeFailure`), since no text boundary splits an enum. A new case needs
+an exit code in `src/main.rs`'s `exit_for` and an entry in
+`www/utils/exit-code-notes.typ`, or #just.check-doc-facts() fails naming the code.
 
 = Project structure
 
@@ -111,10 +112,9 @@ nag: a file nobody can hold in their head is where the untested branch hides.
 )
 
 // An override either raises a path's cap or exempts it entirely, and the two
-// deserve different presentation: a different number is a budget decision, while
-// an exemption is a claim that the metric does not apply to that file at all.
-// Both are argued in place in .linecop.yaml; splitting them here keeps the table
-// meaning one thing.
+// deserve different presentation: a different number is a budget decision, an
+// exemption a claim that the metric does not apply to that file at all. Both are
+// argued in place in .linecop.yaml; splitting them keeps each table meaning one thing.
 #let capped = caps.overrides.filter(o => o.at("limit", default: none) != none)
 #let exempt = caps.overrides.filter(o => o.at("exclude", default: false))
 
