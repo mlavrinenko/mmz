@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-22
+
+### Removed
+
+- `Error::Io` — the bare `#[from] std::io::Error` variant — and with it the last
+  failure mmz could report without naming its subject. Breaking for a library
+  caller matching on it; every replacement carries the path.
+
+  Dropping the `From` impl is the point rather than a side effect of the
+  cleanup. A bare `?` on an `io::Result` no longer compiles inside this crate,
+  so the next I/O call site anyone adds cannot quietly inherit a pathless
+  message — which is how this class of bug survived to be found twice, once for
+  a rule's inputs in 0.8.1 and once for everything else here.
+
+### Changed
+
+- A manifest that exists but cannot be read now exits `4` rather than `70`, and
+  names the file (`Error::ManifestUnreadable`). `4` is what the exit-code table
+  already promised for it — "mmz will not memoize against a manifest it could
+  not read" — where `70` asked a reader to report a permission bit as a bug.
+  `--dump-config` reads the manifest a second time for its policy keys and now
+  answers that read the same way, rather than differently.
+
+- Exit `8` widened from "an input a rule declared could not be read" to "a file
+  mmz needed could not be read or written". The cases it gains are `mmz --init`'s
+  scaffold and the cache; all of them are one fact — the filesystem refused,
+  which is a condition of the tree and not a bug in mmz — with one consequence,
+  that nothing was recorded. Nothing that exited `8` before changes.
+
+### Fixed
+
+- `mmz --init` names the path a write failed on (`Error::InitWrite`): the `.mmz`
+  directory, the cache `.gitignore`, or the manifest. It reported
+  `i/o error: Permission denied` for all three.
+
+- `mmz --prune` names the record or directory a sweep could not list or remove,
+  and a cache write names the record it could not place (`Error::CacheIo`). The
+  write's warning already named the rule; it never named the file.
+
 ## [0.8.1] - 2026-08-21
 
 ### Added
