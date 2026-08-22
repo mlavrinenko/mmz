@@ -15,19 +15,11 @@ use thiserror::Error;
 /// which is the unambiguous form for it.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// An I/O operation failed somewhere no more specific variant covers:
-    /// reading the root manifest, writing `--init`'s template, sweeping the
-    /// cache. Reading a rule's declared inputs is deliberately not one of them
-    /// — that is [`Error::InputVanished`] or [`Error::InputUnreadable`].
-    #[error("i/o error: {0}")]
-    Io(#[from] std::io::Error),
-
     /// An input a rule declared was resolved by the walk but was gone by the
     /// time the hasher opened it.
     ///
-    /// Split from [`Error::Io`] for the two facts that message drops: which
-    /// file, and that this is a condition of the tree rather than a bug in mmz
-    /// — so it exits 8 rather than 70. Every resolve-then-hash pass has that
+    /// Carries the path, and exits 8 rather than 70: this is a condition of
+    /// the tree, not a bug in mmz. Every resolve-then-hash pass has that
     /// window by construction, and mmz's own use (gating a parallel runner,
     /// where sibling arms rewrite the tree the walk just listed) sits in front
     /// of it.
@@ -43,9 +35,9 @@ pub enum Error {
     /// being gone: permissions, a device error, a path that stopped being a
     /// regular file.
     ///
-    /// Named separately from [`Error::Io`] for the same reason
-    /// [`Error::ProbeFileUnreadable`] is — a bare "permission denied" leaves a
-    /// reader hunting for which file it was about.
+    /// Named for the same reason [`Error::ProbeFileUnreadable`] is — a bare
+    /// "permission denied" leaves a reader hunting for which file it was
+    /// about.
     #[error("input `{path}` could not be read; no cache record was written\n  {source}")]
     InputUnreadable {
         /// The input, rendered as a report renders one.
@@ -85,6 +77,17 @@ pub enum Error {
         path: PathBuf,
         /// Underlying parser error.
         source: Box<serde_yaml_ng::Error>,
+    },
+
+    /// The manifest was found but could not be read. Exits 4 rather than 70:
+    /// the table already promises mmz will not memoize against "a manifest it
+    /// could not read", and a permission bit is not a bug worth reporting.
+    #[error("failed to read manifest {path}: {source}")]
+    ManifestUnreadable {
+        /// Path of the unreadable manifest, rendered as a report renders one.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
     },
 
     /// A command rule's `{scope}` fan macro names a scope the manifest does not
@@ -182,8 +185,8 @@ pub enum Error {
     },
 
     /// A probe's `file:` could not be read, so there are no bytes to select
-    /// from. Named separately from [`Error::Io`] because a probe's error must
-    /// name the probe: a bare "no such file" leaves a reader hunting.
+    /// from. Named separately because a probe's error must name the probe: a
+    /// bare "no such file" leaves a reader hunting.
     #[error(
         "probe `{name}` could not read `{path}`; mmz consumed no output and wrote no cache record\n  {source}"
     )]
@@ -383,6 +386,17 @@ pub enum Error {
     #[error("failed to serialize cache record: {0}")]
     Serialize(Box<serde_yaml_ng::Error>),
 
+    /// A cache record could not be written, listed or removed. The cache is
+    /// mmz's own throwaway state, so a refusal here is a fact about the tree
+    /// rather than about the manifest — exit 8, beside an unreadable input.
+    #[error("failed to update the cache at {path}: {source}")]
+    CacheIo {
+        /// The record or directory the operation was on.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+
     /// The wrapped command could not be spawned.
     #[error("failed to run `{program}`: {source}")]
     Spawn {
@@ -403,6 +417,17 @@ pub enum Error {
         path: PathBuf,
     },
 
+    /// `mmz --init` could not create its scaffold. Names which of the three
+    /// paths it was writing — the `.mmz` directory, the cache `.gitignore`, or
+    /// the manifest — which "permission denied" alone never said.
+    #[error("`mmz --init` could not write {path}: {source}")]
+    InitWrite {
+        /// The path being created or written.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+
     /// An invariant that should hold by construction did not.
     #[error("internal error: {0}")]
     Internal(String),
@@ -418,9 +443,9 @@ pub enum Error {
 
     /// A path named by `imports:` exists but could not be read.
     ///
-    /// Named so this cannot be confused with [`Error::Io`]'s pathless message —
-    /// the root manifest keeps using that generic variant, since a missing or
-    /// unreadable root manifest is not a new failure mode this feature adds.
+    /// Distinct from [`Error::ManifestUnreadable`], which is the same failure
+    /// for the root manifest: the two name different files and the message
+    /// says which kind, so a chain error is never mistaken for the root.
     #[error("failed to read import {path}: {source}")]
     ImportNotReadable {
         /// The unreadable path.

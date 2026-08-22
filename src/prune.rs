@@ -18,7 +18,8 @@ use crate::{cache, parametric};
 /// # Errors
 ///
 /// Returns [`Error::NoManifest`] when none is found, a manifest error when one
-/// cannot be loaded, or [`Error::Io`] if the cache directory cannot be swept.
+/// cannot be loaded, or [`crate::error::Error::CacheIo`] if the cache directory
+/// cannot be swept.
 pub fn prune(cwd: &Path) -> Result<String> {
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;

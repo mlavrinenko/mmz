@@ -49,7 +49,8 @@
     meaning: [The manifest is missing or invalid.],
     detail: [
       Never relaxable. `mmz` will not memoize against a manifest it could not
-      read or could not validate. Shape is checked here, at load, even for a
+      read or could not validate — and the unreadable case names the file,
+      because a permission bit on a config is not an internal error. Shape is checked here, at load, even for a
       probe no rule names — a probe declaring both `run:` and `file:` is refused
       before anything runs, rather than resolved by a precedence rule.
     ],
@@ -94,18 +95,23 @@
     ],
   ),
   "8": (
-    meaning: [An input a rule declared could not be read; nothing was
+    meaning: [A file mmz needed could not be read or written; nothing was
       recorded.],
     detail: [
-      The path is always named, rendered the way `--status` renders it. Split
-      from `70` because it is a condition of the tree rather than a bug in
-      mmz: a file the walk resolved and something else removed before the
-      hasher opened it is the resolve-then-hash window, and gating a parallel
-      runner — mmz's own use — sits in front of that window by construction.
-      The message says which case it was, so a caller can tell "something
-      rewrote the tree, re-run" from "this file is unreadable, fix it". Either
-      way no record is written and the wrapped command never runs, so a
-      re-run is safe.
+      The path is always named, rendered the way `--status` renders it. Three
+      kinds of file reach this code — an input a rule declared, the scaffold
+      `mmz --init` writes, and the cache a run records into or `--prune`
+      sweeps — and they share one fact: the filesystem refused. That is a
+      condition of the tree rather than a bug in mmz, which is why it is not
+      `70`. A manifest that cannot be read is the exception, and lands at `4`
+      with the rest of the manifest failures.
+
+      An input the walk resolved and something else removed before the hasher
+      opened it says so in as many words, rather than reporting the errno: that
+      race is what gating a parallel runner sits in front of by construction,
+      and "no such file" alone reads like an accident. Either way no record is
+      written and the wrapped command never runs, so re-running once the tree
+      has settled is safe.
     ],
   ),
   "70": (

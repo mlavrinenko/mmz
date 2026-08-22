@@ -215,7 +215,10 @@ impl MergeState {
     /// merge error from [`MergeState::absorb`] or a nested
     /// [`MergeState::visit_imports`].
     fn visit_fragment(&mut self, path: &Path) -> Result<()> {
-        let canonical = fs::canonicalize(path)?;
+        let canonical = fs::canonicalize(path).map_err(|source| Error::ImportNotReadable {
+            path: Provenance::shorten(path, &self.root),
+            source,
+        })?;
         if self.stack.contains(&canonical) {
             let mut chain = self.stack.clone();
             chain.push(canonical);
@@ -267,16 +270,17 @@ impl MergeState {
 ///
 /// # Errors
 ///
-/// Returns [`Error::Io`] if `path` cannot be read, [`Error::ManifestParse`] if
+/// Returns [`Error::ManifestUnreadable`] if `path` cannot be read,
+/// [`Error::ManifestParse`] if
 /// any file in the chain fails to parse, an import error
 /// ([`Error::ImportMissing`], [`Error::ImportNotReadable`],
 /// [`Error::ImportCycle`], [`Error::DuplicateScope`], [`Error::DuplicateProbe`],
 /// [`Error::DuplicateCommandAcrossFiles`], [`Error::FragmentPolicyKey`],
 /// [`Error::NullPolicyKey`]), or a validation error from [`Manifest::validate`].
 pub(crate) fn load(path: &Path, root: &Path) -> Result<(Manifest, Provenance)> {
-    let text = fs::read_to_string(path)?;
+    let text = fs::read_to_string(path).map_err(|source| unreadable(path, root, source))?;
     let document = parse_text(&text, path, root)?;
-    let canonical = fs::canonicalize(path)?;
+    let canonical = fs::canonicalize(path).map_err(|source| unreadable(path, root, source))?;
 
     let Resolved {
         gitignore,
@@ -329,6 +333,16 @@ pub(crate) fn load(path: &Path, root: &Path) -> Result<(Manifest, Provenance)> {
             commands: command_sources,
         },
     ))
+}
+
+/// Names the manifest a failed read or canonicalize was about, rendered the
+/// way [`Provenance::display`] renders one — the rule every other path this
+/// loader's errors carry already follows.
+pub(crate) fn unreadable(path: &Path, root: &Path, source: std::io::Error) -> Error {
+    Error::ManifestUnreadable {
+        path: Provenance::shorten(path, root),
+        source,
+    }
 }
 
 /// Parses `text` (read from `path`) into a [`Document`], naming `path` on

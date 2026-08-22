@@ -136,7 +136,8 @@ pub fn digest_all(files: &[FileHash], probes: &BTreeMap<String, String>) -> Stri
 ///
 /// # Errors
 ///
-/// Returns [`crate::error::Error::Io`] if any input cannot be read.
+/// Returns [`crate::error::Error::InputVanished`] or
+/// [`crate::error::Error::InputUnreadable`] if any input cannot be read.
 pub fn digest_files(base: &Path, rel_paths: &[String]) -> Result<String> {
     Ok(digest_hashes(&hash_each(base, rel_paths)?))
 }
@@ -146,7 +147,8 @@ pub fn digest_files(base: &Path, rel_paths: &[String]) -> Result<String> {
 ///
 /// # Errors
 ///
-/// Returns [`crate::error::Error::Io`] if any input cannot be read.
+/// Returns [`crate::error::Error::InputVanished`] or
+/// [`crate::error::Error::InputUnreadable`] if any input cannot be read.
 pub fn digest_with(
     base: &Path,
     rel_paths: &[String],

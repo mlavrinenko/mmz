@@ -155,13 +155,14 @@ pub(super) fn check_no_policy_keys(document: &Document, path: &Path, root: &Path
 ///
 /// # Errors
 ///
-/// Returns [`Error::Io`] if `path` cannot be read, or [`Error::ManifestParse`]
+/// Returns [`Error::ManifestUnreadable`] if `path` cannot be read, or
+/// [`Error::ManifestParse`]
 /// if it cannot be parsed — in practice unreachable by the time a caller
 /// gets here, since [`super::load`] already parsed the same file
 /// successfully, but the signature stays honest about doing its own read
 /// rather than trusting that.
 pub(crate) fn declared_policy_keys(path: &Path, root: &Path) -> Result<BTreeSet<&'static str>> {
-    let text = fs::read_to_string(path)?;
+    let text = fs::read_to_string(path).map_err(|source| super::unreadable(path, root, source))?;
     let document = parse_text(&text, path, root)?;
     let [cache_dir, gitignore, strict, on_hit, probe_shell] = POLICY_KEYS;
     Ok([

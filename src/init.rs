@@ -121,21 +121,31 @@ on_hit: \"mmz: skipped {cache:command} (inputs unchanged)\"
 /// # Errors
 ///
 /// Returns [`Error::ManifestExists`] if a config is already present (so an
-/// existing one is never clobbered), or [`Error::Io`] on a write failure.
+/// existing one is never clobbered), or [`Error::InitWrite`] naming the path a
+/// write failed on.
 pub fn init(cwd: &Path) -> Result<PathBuf> {
     let dir = cwd.join(CONFIG_DIR);
     let path = dir.join(CONFIG_NAME);
     if path.exists() {
         return Err(Error::ManifestExists { path });
     }
-    std::fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(&dir).map_err(|source| init_write(&dir, source))?;
     // Never clobber a customized ignore file that a prior run or the user wrote.
     let ignore = dir.join(".gitignore");
     if !ignore.exists() {
-        std::fs::write(&ignore, CACHE_GITIGNORE)?;
+        std::fs::write(&ignore, CACHE_GITIGNORE).map_err(|source| init_write(&ignore, source))?;
     }
-    std::fs::write(&path, TEMPLATE)?;
+    std::fs::write(&path, TEMPLATE).map_err(|source| init_write(&path, source))?;
     Ok(path)
+}
+
+/// Names the path a scaffold write refused, so the failure says whether it was
+/// the directory, the cache ignore file, or the manifest itself.
+fn init_write(path: &Path, source: std::io::Error) -> Error {
+    Error::InitWrite {
+        path: path.to_path_buf(),
+        source,
+    }
 }
 
 #[cfg(test)]

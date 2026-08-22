@@ -181,6 +181,15 @@ pub fn write(dir: &Path, command: &str, clock: Clock, outcome: &Outcome) {
     }
 }
 
+/// Names the record or directory an operation refused, so a cache failure says
+/// which path it was about rather than only what the errno was.
+fn cache_io(path: &Path, source: std::io::Error) -> Error {
+    Error::CacheIo {
+        path: path.to_path_buf(),
+        source,
+    }
+}
+
 /// Removes records in `dir` whose stored command is not in `live`, returning the
 /// pruned command names sorted. Leftover `.tmp` files from interrupted writes
 /// are swept too. A record that cannot be read or parsed is left untouched, so
@@ -188,17 +197,17 @@ pub fn write(dir: &Path, command: &str, clock: Clock, outcome: &Outcome) {
 ///
 /// # Errors
 ///
-/// Returns [`Error::Io`] if the directory cannot be listed or a record cannot
-/// be deleted.
+/// Returns [`Error::CacheIo`] if the directory cannot be listed or a record
+/// cannot be deleted, naming the path the operation was on.
 pub fn prune(dir: &Path, live: &BTreeSet<String>) -> Result<Vec<String>> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(err.into()),
+        Err(source) => return Err(cache_io(dir, source)),
     };
     let mut pruned = Vec::new();
     for entry in entries {
-        let path = entry?.path();
+        let path = entry.map_err(|source| cache_io(dir, source))?.path();
         match path.extension().and_then(|ext| ext.to_str()) {
             Some("tmp") => {
                 let _ = fs::remove_file(&path);
@@ -206,7 +215,7 @@ pub fn prune(dir: &Path, live: &BTreeSet<String>) -> Result<Vec<String>> {
             Some("yaml") => {
                 if let Some(command) = record_command(&path) {
                     if !live.contains(command.as_str()) {
-                        fs::remove_file(&path)?;
+                        fs::remove_file(&path).map_err(|source| cache_io(&path, source))?;
                         pruned.push(command);
                     }
                 }
@@ -231,13 +240,14 @@ fn record_command(path: &Path) -> Option<String> {
 /// so a crash mid-write or a concurrent writer can never produce a truncated
 /// record that would parse wrong. A failed rename cleans up its temp file.
 fn try_write(dir: &Path, command: &str, record: &Record) -> Result<()> {
-    fs::create_dir_all(dir)?;
+    fs::create_dir_all(dir).map_err(|source| cache_io(dir, source))?;
     let text = serde_yaml_ng::to_string(record).map_err(|err| Error::Serialize(Box::new(err)))?;
     let tmp = dir.join(format!("{}.{}.tmp", slug(command), std::process::id()));
-    fs::write(&tmp, text)?;
-    if let Err(err) = fs::rename(&tmp, record_path(dir, command)) {
+    fs::write(&tmp, text).map_err(|source| cache_io(&tmp, source))?;
+    let final_path = record_path(dir, command);
+    if let Err(source) = fs::rename(&tmp, &final_path) {
         let _ = fs::remove_file(&tmp);
-        return Err(err.into());
+        return Err(cache_io(&final_path, source));
     }
     Ok(())
 }

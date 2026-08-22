@@ -49,12 +49,16 @@ impl Located {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Io`] when `config` cannot be canonicalized,
+    /// Returns [`Error::ManifestUnreadable`] when `config` cannot be
+    /// canonicalized,
     /// [`Error::Internal`] when it has no project root (it always does in
     /// practice — `<root>/.mmz/config.yaml`), or any parse, import, merge or
     /// validation error [`crate::compose::load`] raises.
     pub fn at(config: &Path) -> Result<Self> {
-        let path = std::fs::canonicalize(config)?;
+        let path = std::fs::canonicalize(config).map_err(|source| Error::ManifestUnreadable {
+            path: config.to_path_buf(),
+            source,
+        })?;
         let root = path
             .parent()
             .and_then(Path::parent)
