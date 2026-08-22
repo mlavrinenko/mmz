@@ -4,7 +4,11 @@
   title: "mmz: an i/o failure outside hashing still names no path",
   priority: framework("ice", confidence: 0.9, ease: 7.0, impact: 5.0),
   tags: ("cli",),
-  status: proposed(2026, 8, 21),
+  status: done(
+    2026,
+    8,
+    22,
+  )[0.9.0: all four sites name their path. Manifest reads exit 4 (ManifestUnreadable), --init writes and cache sweeps exit 8 (InitWrite, CacheIo). Error::Io removed outright, so a bare ? on an io::Result no longer compiles in this crate — the trapdoor that produced both this defect and the 0.8.1 one is gone. Regression tests in tests/cli\_unreadable\_state.rs, one per site.],
   links: related(
     "mmz-an-i-o-error-while-hashing-an-input-names-no-path.typ",
   )[the same defect, closed for inputs only],
