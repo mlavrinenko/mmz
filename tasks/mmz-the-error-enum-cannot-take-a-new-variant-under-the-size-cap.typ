@@ -4,7 +4,11 @@
   title: "mmz: the error enum cannot take a new variant under the size cap",
   priority: framework("ice", confidence: 0.8, ease: 4.0, impact: 4.0),
   tags: ("tooling",),
-  status: wip(2026, 8, 22),
+  status: done(
+    2026,
+    8,
+    22,
+  )[src/error.rs is 448 lines, back under the shared 500-line Rust cap with no .linecop.yaml override. Eight runtime probe variants became probe::ProbeFailure behind Error::Probe; Error::ProbeSource stayed put (load-time manifest defect, exit 4, not 6).],
   links: related(
     "mmz-an-i-o-error-while-hashing-an-input-names-no-path.typ",
   )[the fix whose size cost forced the cap raise],
