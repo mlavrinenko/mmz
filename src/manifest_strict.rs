@@ -20,7 +20,8 @@ use serde::Deserialize;
 pub enum StrictCase {
     /// No rule's name is a token-prefix of the invoked command.
     NoMatch,
-    /// A matched rule's scopes resolve to zero files on disk.
+    /// A matched rule's scopes resolve to zero files on disk. A rule with a
+    /// `ttl` and no declared `inputs` never hits this: time is its input.
     NoInputs,
 }
 

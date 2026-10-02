@@ -132,6 +132,11 @@
           "on_hit": {
             "type": "string",
             "description": "Overrides the top-level on_hit for this rule. An empty string suppresses the cache-hit notice."
+          },
+          "ttl": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*[smhd]$",
+            "description": "How long a successful record stays fresh, for a command whose verdict depends on the world as well as its inputs (an advisory database, a registry). One positive whole number and one unit: s, m, h or d — 30m, 12h, 7d; zero, compounds like 1h30m, and anything else are refused at load. A pass whose age has reached the ttl is expired: the command re-runs, --is-fresh fails, and --status reports `expired`. Age is measured from the record's ran_at against the process clock (MMZ_NOW pins it). A rule with a ttl may declare no inputs at all, making time its only input; a ttl does not excuse declared inputs that resolve to nothing. No ttl: a pass never expires."
           }
         }
       }

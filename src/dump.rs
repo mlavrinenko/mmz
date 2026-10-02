@@ -168,6 +168,8 @@ struct CommandEntry {
     tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     on_hit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ttl: Option<String>,
     source: String,
 }
 
@@ -259,6 +261,7 @@ fn collect(cwd: &Path) -> Result<Dump> {
                 .collect(),
             tags: command.tags.clone(),
             on_hit: command.on_hit.clone(),
+            ttl: command.ttl.as_ref().map(ToString::to_string),
             source: source_of(&provenance.commands, &command.name, base),
         })
         .collect();
@@ -399,6 +402,9 @@ fn render_text(dump: &Dump) -> String {
             }
             if let Some(on_hit) = &command.on_hit {
                 out.push_str(&format!("    on_hit: {on_hit}\n"));
+            }
+            if let Some(ttl) = &command.ttl {
+                out.push_str(&format!("    ttl: {ttl}\n"));
             }
         }
     }

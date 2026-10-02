@@ -347,3 +347,30 @@ fn rejects_unknown_fields_still_holds_with_tags_present() {
         "deny_unknown_fields still rejects a stray field alongside tags"
     );
 }
+
+#[test]
+fn ttl_parses_per_command_and_defaults_none() {
+    let manifest = parse("commands:\n  - name: npm audit\n    ttl: 24h\n  - name: cargo test\n");
+    let audit = manifest.commands.first().expect("first rule");
+    let test = manifest.commands.get(1).expect("second rule");
+    assert_eq!(
+        audit.ttl.as_ref().map(crate::ttl::Ttl::secs),
+        Some(24 * 3_600)
+    );
+    assert_eq!(test.ttl, None, "no ttl is today's behaviour");
+    assert!(
+        crate::ttl::time_only(audit),
+        "a ttl and no inputs is time-only"
+    );
+    assert!(!crate::ttl::time_only(test), "no ttl is never time-only");
+}
+
+#[test]
+fn a_malformed_ttl_fails_the_load_naming_the_value() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_config(dir.path(), "commands:\n  - name: sh\n    ttl: 1h30m\n");
+    let err = Manifest::load(&path).expect_err("compound ttl refused");
+    let text = err.to_string();
+    assert!(text.contains("invalid ttl `1h30m`"), "{text}");
+    assert!(text.contains("commands[0]"), "points at the rule: {text}");
+}

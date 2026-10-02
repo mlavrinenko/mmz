@@ -47,8 +47,9 @@ truncated record. Derived, throwaway state: delete the whole directory and the
 only cost is one honest re-run.
 
 A record is fresh only when its `status` is `ok`, its content digest, format,
-algorithm and command all still match, and every output its rule declares is
-still on disk. Anything else re-runs.
+algorithm and command all still match, every output its rule declares is still
+on disk, and — for a rule with a `ttl` — it is younger than that. Anything else
+re-runs.
 
 = Live resolution, every time
 
@@ -69,8 +70,36 @@ not, because nothing about a rule is read out of its record: `outputs` are
 stat-ed against the manifest in front of you, `match` is applied when the
 invocation is matched, `tags` filter at the moment a gate runs. Declare an
 artifact today and a record written yesterday is void until that artifact is
-there. Only the digest and the exit status come from the record, and those are
-what a record is for.
+there. Only the digest, the exit status and — for a rule with a `ttl` — `ran_at`
+come from the record, and those are what a record is for.
+
+= When the world is an input
+
+Some verdicts depend on more than files. `npm audit` reads an advisory database
+that changes daily; a check that every image a compose file names still exists
+asks a registry. Memoized on the lockfile alone, one pass of either is fresh for
+as long as the lockfile is — a false green on a long fuse. A `ttl` bounds how
+long such a pass is believed:
+
+```yaml
+commands:
+  - name: just audit
+    tags: [gate]
+    inputs: [web-pkg, api-pkg]
+    ttl: 24h
+```
+
+The pass is fresh while its inputs are unchanged _and_ it is younger than the
+ttl. After that it is `expired`, and the rule re-runs exactly as a stale one
+would. It is its own state rather than a kind of `stale` because nothing moved —
+a reader told "stale" would diff files that did not change — and every other
+reason to re-run outranks it.
+
+The grammar is one positive whole number and one unit, `s`, `m`, `h` or `d`;
+`1h30m`, `0h` and `1.5d` are load errors. Age runs from the record's own
+`ran_at` — mmz's stamp, not a file's timestamp — to the clock `MMZ_NOW` pins. A
+rule may carry a `ttl` and no `inputs` at all, which makes time its only input:
+the one rule `no_inputs` does not refuse.
 
 = The governing asymmetry
 
@@ -128,7 +157,9 @@ confirmed unchanged.
 `no_inputs` deserves the suspicion its default gives it. A rule that resolves to
 nothing is rarely a rule that genuinely has no inputs; it is usually a scope
 whose glob stopped matching — a directory renamed, or a path that turned out to
-be git-ignored. Left as a warning, such a rule reports fresh forever.
+be git-ignored. Left as a warning, such a rule reports fresh forever. A `ttl`
+rule with no declared `inputs` is the exception, since time is its input; a
+`ttl` does not excuse declared inputs that resolve to nothing.
 
 = Identity is the rule, not the argv
 
@@ -147,7 +178,7 @@ would conflate invocations that do genuinely different work. See
   columns: 2,
   table.header([Trusted], [Not trusted]),
   [The bytes of every file a rule's scopes resolve to],
-  [Timestamps, inode numbers, file ordering],
+  [File timestamps, inode numbers, file ordering],
 
   [The exit status of the wrapped command], [Its stdout or stderr],
   [The stdout of a declared probe], [That the probe's output _means_ anything],

@@ -17,8 +17,12 @@
 //! non-determinism the pin exists to remove — and it would surface as a diff in
 //! somebody else's build rather than as a message here.
 //!
-//! Freshness is untouched by any of this. mmz compares digests, not times, so a
-//! pinned clock changes what output SAYS, never which rules are fresh.
+//! For a rule without a `ttl`, freshness is untouched by any of this: mmz
+//! compares digests, not times, so a pinned clock changes what output SAYS,
+//! never which rules are fresh. A rule WITH a `ttl` is the one deliberate
+//! exception — its pass expires once the clock is a ttl past the record's
+//! `ran_at` (see [`crate::ttl`]) — so the same pin is what decides, and what
+//! the CLI suite drives expiry with instead of sleeping.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

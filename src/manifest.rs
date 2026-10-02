@@ -9,6 +9,7 @@ use serde::{Deserialize, Deserializer};
 use crate::error::{Error, Result};
 use crate::probe::Probe;
 use crate::resolve::GlobGroup;
+use crate::ttl::Ttl;
 
 /// Directory holding mmz's per-project state, found by walking upward. The
 /// config lives inside it so a project gains one entry, not two.
@@ -320,6 +321,12 @@ pub struct Command {
     /// suppresses the notice. Default: inherit the manifest's `on_hit`.
     #[serde(default)]
     pub on_hit: Option<String>,
+
+    /// How long a successful record stays fresh (`30m`, `12h`, `7d`), for a
+    /// command whose verdict depends on the world as well as its inputs. With
+    /// no `inputs` at all, time is the rule's only input. See [`crate::ttl`].
+    #[serde(default)]
+    pub ttl: Option<Ttl>,
 }
 
 impl Manifest {

@@ -47,6 +47,7 @@ mod tests {
             outputs: Vec::new(),
             tags: Vec::new(),
             on_hit: None,
+            ttl: None,
         }
     }
 
@@ -58,6 +59,7 @@ mod tests {
             outputs: Vec::new(),
             tags: Vec::new(),
             on_hit: None,
+            ttl: None,
         }
     }
 

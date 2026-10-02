@@ -34,8 +34,8 @@
           },
           "state": {
             "type": "string",
-            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed — a file, or a probe whose stdout moved. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files and names no probe. `missing-output`: a declared output is gone, so the record is void whatever the inputs hash — it outranks `stale`, since an input change is the assumption a reader already holds.",
-            "enum": ["fresh", "stale", "never", "failed", "no-inputs", "missing-output"]
+            "description": "Freshness verdict. `fresh`: cache hit. `stale`: inputs changed — a file, or a probe whose stdout moved. `never`: no record yet. `failed`: last run failed, so it re-runs. `no-inputs`: the rule resolves to zero files and names no probe. `missing-output`: a declared output is gone, so the record is void whatever the inputs hash — it outranks `stale`, since an input change is the assumption a reader already holds. `expired`: nothing moved, but the pass is at least the rule's `ttl` old, so it re-runs; every other non-fresh state outranks it.",
+            "enum": ["fresh", "stale", "never", "failed", "no-inputs", "missing-output", "expired"]
           },
           "digest": {
             "type": "string",
@@ -44,6 +44,15 @@
           "missing_output": {
             "type": "string",
             "description": "The declared output that voided the record, as the manifest spells it (the first one missing, in declaration order). Present exactly when state is `missing-output`."
+          },
+          "ttl": {
+            "type": "string",
+            "description": "The rule's declared `ttl`, as the manifest spells it. Absent when the rule declares none."
+          },
+          "expires_at": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unix seconds at which the recorded pass stops being fresh: `cached.ran_at` plus the ttl. At or after it the state is `expired` (unless something outranks it). Present when the rule declares a `ttl` and its record succeeded."
           },
           "cached": {
             "type": "object",

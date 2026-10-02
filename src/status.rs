@@ -25,7 +25,7 @@ use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::{Command, Manifest};
 use crate::provenance::Provenance;
-use crate::{cache, hashing, outputs, parametric, probe, resolve, selection};
+use crate::{cache, hashing, outputs, parametric, probe, resolve, selection, ttl};
 
 /// JSON Schema for the `mmz --status=json` output, emitted by
 /// `mmz --status=json-schema`.
@@ -82,6 +82,13 @@ struct RuleStatus {
     /// state is [`State::MissingOutput`].
     #[serde(skip_serializing_if = "Option::is_none")]
     missing_output: Option<String>,
+    /// The rule's declared `ttl`, as the manifest spells it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ttl: Option<String>,
+    /// Unix seconds at which the recorded pass stops being fresh: `ran_at`
+    /// plus the ttl. Present when the rule has a ttl and its record succeeded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at: Option<u64>,
     /// The stored record, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     cached: Option<CachedInfo>,
@@ -107,88 +114,10 @@ struct CachedInfo {
     probes: BTreeMap<String, String>,
 }
 
-/// A rule's freshness verdict.
-#[derive(Serialize, Clone, Copy)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum State {
-    Fresh,
-    Stale,
-    Never,
-    Failed,
-    NoInputs,
-    MissingOutput,
-}
-
-/// A verdict plus the detail behind it: the declared output that voided the
-/// record, or the probe whose output moved, when there is one. The state alone
-/// cannot carry either — a reader told only "stale" goes looking at the input
-/// files, which in both cases is the wrong place.
-pub(crate) struct Assessment {
-    pub(crate) state: State,
-    pub(crate) missing_output: Option<String>,
-    pub(crate) changed_probe: Option<String>,
-}
-
-impl State {
-    /// The label used in the human table; matches the JSON enum spelling.
-    pub(crate) const fn label(self) -> &'static str {
-        match self {
-            Self::Fresh => "fresh",
-            Self::Stale => "stale",
-            Self::Never => "never",
-            Self::Failed => "failed",
-            Self::NoInputs => "no-inputs",
-            Self::MissingOutput => "missing-output",
-        }
-    }
-
-    /// True only for [`State::Fresh`] — the sole state `mmz --is-fresh` passes.
-    pub(crate) const fn is_fresh(self) -> bool {
-        matches!(self, Self::Fresh)
-    }
-
-    /// True for the non-fresh states a recorded pass can clear: `Stale`,
-    /// `Never`, `Failed`, and `MissingOutput` — re-running the command under
-    /// mmz regenerates the artifact and records the pass. `NoInputs` never has
-    /// inputs to digest, so a wrapped run records nothing (or is refused under
-    /// the `no_inputs` strictness) and the rule stays `NoInputs` — its remedy
-    /// is fixing the manifest, not re-running under mmz.
-    pub(crate) const fn is_remediable(self) -> bool {
-        matches!(
-            self,
-            Self::Stale | Self::Never | Self::Failed | Self::MissingOutput
-        )
-    }
-
-    /// Why a non-fresh rule would re-run, for the `--is-fresh` gate's message.
-    /// `None` when the rule is fresh. The `MissingOutput` wording here is the
-    /// fallback; the caller names the path (see [`Assessment`]).
-    pub(crate) const fn reason(self) -> Option<&'static str> {
-        match self {
-            Self::Fresh => None,
-            Self::Stale => Some("inputs changed since it last passed"),
-            Self::Never => Some("never run"),
-            Self::Failed => Some("last run failed"),
-            Self::NoInputs => Some("resolved no input files"),
-            Self::MissingOutput => Some("a declared output is missing"),
-        }
-    }
-}
-
-impl Assessment {
-    /// The verdict's one-line explanation, naming the missing artifact when
-    /// that is what voided the record, or the probe when that is what moved.
-    /// `None` when the rule is fresh.
-    pub(crate) fn reason(&self) -> Option<String> {
-        if let Some(path) = self.missing_output.as_deref() {
-            return Some(format!("declared output `{path}` is missing"));
-        }
-        if let Some(name) = self.changed_probe.as_deref() {
-            return Some(format!("probe `{name}` changed since it last passed"));
-        }
-        self.state.reason().map(str::to_owned)
-    }
-}
+#[path = "status_verdict.rs"]
+mod verdict;
+use verdict::verdict;
+pub(crate) use verdict::{Assessment, State};
 
 /// Builds the human-readable status table for the manifest governing `cwd`.
 /// When `tags` is non-empty, only rules carrying every listed tag are
@@ -231,6 +160,10 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
     let base = located.root.as_path();
 
     let cache_dir = base.join(&manifest.cache_dir);
+    let records = Records {
+        dir: &cache_dir,
+        now,
+    };
     let mut matches = Vec::with_capacity(manifest.commands.len());
     let mut shared_by_rule: BTreeMap<String, Shared> = BTreeMap::new();
     let mut probes = probe::Resolver::new(manifest, base);
@@ -256,7 +189,7 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
             .get(hit.rule.name.as_str())
             .map(|path| Provenance::display(path, base))
             .expect("provenance recorded for every declared command");
-        rules.push(rule_status(hit, shared, base, &cache_dir, source)?);
+        rules.push(rule_status(hit, shared, base, records, source)?);
     }
     let manifest_path = located.path.display().to_string();
     let empty_note = if rules.is_empty() {
@@ -272,6 +205,15 @@ fn collect(cwd: &Path, tags: &[String]) -> Result<Report> {
         probes: probes.resolved().clone(),
         rules,
     })
+}
+
+/// Where an expansion's record lives and the instant it is aged against: the
+/// pair every verdict reads a record through, bundled so a `ttl` is never
+/// measured from a clock other than the one the caller resolved.
+#[derive(Clone, Copy)]
+pub(crate) struct Records<'a> {
+    pub(crate) dir: &'a Path,
+    pub(crate) now: Clock,
 }
 
 /// A rule's resolved shared inputs: the files its `inputs:` scopes expand to,
@@ -324,55 +266,93 @@ fn expansion_files(shared: &Shared, hit: &parametric::Match) -> Vec<String> {
     files
 }
 
-/// Computes one expansion's status: combine its pre-resolved shared inputs
-/// with any bound file, hash them, and compare the digest against the stored
-/// record. `source` is the rule's declaring file, already resolved by the
-/// caller — every expansion of a rule shares one source, so resolving it once
-/// per rule (rather than per expansion, like [`Shared`]) needs no memoization.
-fn rule_status(
+/// One expansion's verdict plus the detail only the report renders: the
+/// current digest (absent for `no-inputs`), the per-input hashes, and the
+/// stored record.
+struct Measured {
+    assessed: Assessment,
+    digest: Option<String>,
+    inputs: Vec<hashing::FileHash>,
+    cached: Option<CachedInfo>,
+}
+
+/// Measures one expansion: combine its pre-resolved shared inputs with any
+/// bound file, hash them, and compare the digest — and, for a rule with a
+/// `ttl`, the record's age — against the record keyed on the expansion's
+/// identity. The per-expansion core both [`rule_status`] and the
+/// `mmz --is-fresh` gate's [`expansion_state`] evaluate, keying static and
+/// parametric rules alike on [`parametric::Match`]: `parametric::expand_rule`
+/// yields a single match whose identity is the bare rule name for a static
+/// rule.
+fn measure(
     hit: &parametric::Match,
     shared: &Shared,
     base: &Path,
-    cache_dir: &Path,
-    source: String,
-) -> Result<RuleStatus> {
-    let identity = hit.exp.identity.clone();
+    records: Records,
+) -> Result<Measured> {
+    let rule = hit.rule;
     let files = expansion_files(shared, hit);
-    let cached = read_cached(cache_dir, &identity);
-    if files.is_empty() && shared.probes.is_empty() {
-        return Ok(RuleStatus {
-            name: identity,
-            source,
+    let cached = read_cached(records.dir, &hit.exp.identity);
+    if files.is_empty() && shared.probes.is_empty() && !ttl::time_only(rule) {
+        let assessed = Assessment {
             state: State::NoInputs,
-            digest: None,
             missing_output: None,
-            cached,
+            changed_probe: None,
+            expired: None,
+        };
+        return Ok(Measured {
+            assessed,
+            digest: None,
             inputs: Vec::new(),
+            cached,
         });
     }
     let inputs = hashing::hash_each(base, &files)?;
     let digest = hashing::digest_all(&inputs, &shared.probes);
-    let missing = outputs::first_missing(base, &hit.rule.outputs);
-    let assessed = verdict(cached.as_ref(), &digest, missing, &shared.probes);
-    Ok(RuleStatus {
-        name: identity,
-        source,
-        state: assessed.state,
+    let expired = cached
+        .as_ref()
+        .and_then(|record| ttl::outlived(rule.ttl.as_ref(), record.ok, record.ran_at, records.now));
+    let missing = outputs::first_missing(base, &rule.outputs);
+    let assessed = verdict(cached.as_ref(), &digest, missing, expired, &shared.probes);
+    Ok(Measured {
+        assessed,
         digest: Some(digest),
-        missing_output: assessed.missing_output,
-        cached,
         inputs,
+        cached,
     })
 }
 
-/// Computes one expansion's freshness without the per-input detail
-/// [`rule_status`] gathers: combine its pre-resolved shared inputs with any
-/// bound file, digest them, and compare to the record keyed on the
-/// expansion's identity. The per-expansion core the `mmz --is-fresh` gate
-/// evaluates, keying static and parametric rules alike on
-/// [`parametric::Match`] — `parametric::expand_rule` yields a single match
-/// whose identity is the bare rule name for a static rule, so this collapses
-/// to `rule_state`'s old behaviour there.
+/// Computes one expansion's status row from [`measure`]. `source` is the
+/// rule's declaring file, already resolved by the caller — every expansion of
+/// a rule shares one source, so resolving it once per rule (rather than per
+/// expansion, like [`Shared`]) needs no memoization.
+fn rule_status(
+    hit: &parametric::Match,
+    shared: &Shared,
+    base: &Path,
+    records: Records,
+    source: String,
+) -> Result<RuleStatus> {
+    let measured = measure(hit, shared, base, records)?;
+    let ttl = hit.rule.ttl.as_ref();
+    let passed = measured.cached.as_ref().filter(|record| record.ok);
+    Ok(RuleStatus {
+        name: hit.exp.identity.clone(),
+        source,
+        state: measured.assessed.state,
+        digest: measured.digest,
+        missing_output: measured.assessed.missing_output,
+        ttl: ttl.map(|ttl| ttl.as_str().to_owned()),
+        expires_at: ttl
+            .zip(passed)
+            .map(|(ttl, record)| ttl.expires_at(record.ran_at)),
+        cached: measured.cached,
+        inputs: measured.inputs,
+    })
+}
+
+/// One expansion's freshness without the per-input detail [`rule_status`]
+/// renders — what the `mmz --is-fresh` gate evaluates.
 ///
 /// # Errors
 ///
@@ -381,23 +361,9 @@ pub(crate) fn expansion_state(
     hit: &parametric::Match,
     shared: &Shared,
     base: &Path,
-    cache_dir: &Path,
+    records: Records,
 ) -> Result<Assessment> {
-    let files = expansion_files(shared, hit);
-    if files.is_empty() && shared.probes.is_empty() {
-        return Ok(Assessment {
-            state: State::NoInputs,
-            missing_output: None,
-            changed_probe: None,
-        });
-    }
-    let digest = hashing::digest_with(base, &files, &shared.probes)?;
-    Ok(verdict(
-        read_cached(cache_dir, &hit.exp.identity).as_ref(),
-        &digest,
-        outputs::first_missing(base, &hit.rule.outputs),
-        &shared.probes,
-    ))
+    Ok(measure(hit, shared, base, records)?.assessed)
 }
 
 /// Reads `name`'s record from `cache_dir` as the trusted view shared by the
@@ -410,46 +376,6 @@ fn read_cached(cache_dir: &Path, name: &str) -> Option<CachedInfo> {
         outputs: cached.outputs,
         probes: cached.probes,
     })
-}
-
-/// The freshness verdict for `digest` against a rule's stored record: fresh
-/// only when the record is present, succeeded, its digest matches, and every
-/// output the rule declares is still on disk (`missing` is the first one that
-/// is not).
-///
-/// A missing artifact outranks a digest mismatch. Both would re-run the rule,
-/// but only one of them is a fact a reader would otherwise never guess — an
-/// input change is the assumption they already hold — so the verdict names the
-/// gone artifact rather than sending them to diff the inputs. A stale verdict
-/// gets the same treatment for probes: when the record's stored probe digests
-/// show one moved, `probes` is compared against them and the culprit is named,
-/// because no file changed and diffing the files would find nothing.
-fn verdict(
-    cached: Option<&CachedInfo>,
-    digest: &str,
-    missing: Option<String>,
-    probes: &BTreeMap<String, String>,
-) -> Assessment {
-    let state = match cached {
-        None => State::Never,
-        Some(record) if !record.ok => State::Failed,
-        Some(_) if missing.is_some() => State::MissingOutput,
-        Some(record) if record.digest == digest => State::Fresh,
-        Some(_) => State::Stale,
-    };
-    let missing_output = match state {
-        State::MissingOutput => missing,
-        _ => None,
-    };
-    let changed_probe = match state {
-        State::Stale => cached.and_then(|record| probe::first_changed(&record.probes, probes)),
-        _ => None,
-    };
-    Assessment {
-        state,
-        missing_output,
-        changed_probe,
-    }
 }
 
 #[path = "status_table.rs"]

@@ -40,9 +40,9 @@ mmz --schema                      # the manifest schema
 ```
 
 The state vocabulary is small and total: `fresh`, `stale`, `never`, `failed`,
-`no-inputs`, `missing-output` — see #link(u("/cli/"))[the CLI reference]. Reading
-`--status=json` is the right move when a gate is red and the question is which
-input moved:
+`no-inputs`, `missing-output`, `expired` — see #link(u("/cli/"))[the CLI
+  reference]. Reading `--status=json` is the right move when a gate is red and the
+question is which input moved:
 
 ```bash
 mmz --status=json | jq '.rules[] | select(.state != "fresh") | {name, state, missing_output}'

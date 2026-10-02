@@ -13,9 +13,10 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::Manifest;
-use crate::status::{self, Assessment, Shared, expansion_state};
+use crate::status::{self, Assessment, Records, Shared, expansion_state};
 use crate::{parametric, probe, selection};
 
 /// Every kept rule's parametric matches, plus its pre-resolved shared
@@ -35,15 +36,15 @@ pub struct Verdict {
 
 impl Verdict {
     /// True when the rule is fresh — its inputs are unchanged since it last
-    /// succeeded and every artifact it declared is still on disk, so a gate
-    /// over it passes.
+    /// succeeded, every artifact it declared is still on disk, and the pass has
+    /// not outlived the rule's `ttl`, so a gate over it passes.
     #[must_use]
     pub const fn is_fresh(&self) -> bool {
         self.assessed.state.is_fresh()
     }
 
     /// The rule's freshness label (`fresh`, `stale`, `never`, `failed`,
-    /// `no-inputs`, `missing-output`), matching `mmz --status`.
+    /// `no-inputs`, `missing-output`, `expired`), matching `mmz --status`.
     #[must_use]
     pub const fn state(&self) -> &'static str {
         self.assessed.state.label()
@@ -58,8 +59,8 @@ impl Verdict {
     }
 
     /// True for the non-fresh states a recorded pass can clear (`stale`,
-    /// `never`, `failed`, `missing-output`). A gate prints its one-line
-    /// remediation hint once when any verdict is remediable; a `no-inputs`
+    /// `never`, `failed`, `missing-output`, `expired`). A gate prints its
+    /// one-line remediation hint once when any verdict is remediable; a `no-inputs`
     /// verdict is not, since a wrapped run records nothing against an empty
     /// input set.
     #[must_use]
@@ -96,13 +97,20 @@ impl Verdict {
 /// error when one cannot be loaded, [`Error::NoMatch`] when `argv` matches no
 /// rule, [`Error::NoRules`], [`Error::NoTaggedRules`] or
 /// [`Error::NoExpansions`] when the selection is empty,
-/// [`Error::CollidingIdentity`] when two expansions share a cache identity, or
-/// a resolution/hashing error when a rule's inputs cannot be read.
+/// [`Error::CollidingIdentity`] when two expansions share a cache identity,
+/// [`Error::InvalidNow`] when `MMZ_NOW` is not a Unix epoch (a rule's `ttl` is
+/// aged against it), or a resolution/hashing error when a rule's inputs cannot
+/// be read.
 pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<Vec<Verdict>> {
+    let now = Clock::resolve()?;
     let located = Manifest::locate(cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
     let cache_dir = base.join(&manifest.cache_dir);
+    let records = Records {
+        dir: &cache_dir,
+        now,
+    };
 
     if !tags.is_empty() && argv.is_some() {
         return Err(Error::TagWithCommand);
@@ -116,13 +124,13 @@ pub fn evaluate(cwd: &Path, argv: Option<&[String]>, tags: &[String]) -> Result<
         })?;
         let mut probes = probe::Resolver::new(manifest, base);
         let shared = status::shared_inputs(manifest, hit.rule, base, &mut probes)?;
-        return Ok(vec![verdict_for(hit, &shared, base, &cache_dir)?]);
+        return Ok(vec![verdict_for(hit, &shared, base, records)?]);
     }
 
     let (matches, shared) = expand_matching(manifest, base, tags)?;
     let kept: Vec<&str> = shared.keys().map(String::as_str).collect();
     selection::ensure_gateable(manifest, &located.path, tags, &kept, matches.len())?;
-    verdicts_for(&matches, &shared, base, &cache_dir)
+    verdicts_for(&matches, &shared, base, records)
 }
 
 /// Expands every rule carrying every tag in `tags` into its parametric matches
@@ -165,7 +173,7 @@ fn verdicts_for(
     matches: &[parametric::Match],
     shared: &BTreeMap<String, Shared>,
     base: &Path,
-    cache_dir: &Path,
+    records: Records,
 ) -> Result<Vec<Verdict>> {
     matches
         .iter()
@@ -173,7 +181,7 @@ fn verdicts_for(
             let inputs = shared
                 .get(hit.rule.name.as_str())
                 .expect("shared inputs resolved for every kept rule");
-            verdict_for(hit, inputs, base, cache_dir)
+            verdict_for(hit, inputs, base, records)
         })
         .collect()
 }
@@ -185,11 +193,11 @@ fn verdict_for(
     hit: &parametric::Match,
     shared: &Shared,
     base: &Path,
-    cache_dir: &Path,
+    records: Records,
 ) -> Result<Verdict> {
     Ok(Verdict {
         rule: hit.exp.identity.clone(),
-        assessed: expansion_state(hit, shared, base, cache_dir)?,
+        assessed: expansion_state(hit, shared, base, records)?,
     })
 }
 

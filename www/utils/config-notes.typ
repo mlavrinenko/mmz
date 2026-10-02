@@ -177,6 +177,14 @@
     Per-rule override of the global note. Set it to the empty string to silence
     one noisy rule without silencing the rest.
   ],
+  "commands[].ttl": [
+    For a verdict the world can change behind the inputs' back — `npm audit`
+    against an advisory database, a check that every image a compose file names
+    still exists. Without it one pass of either is fresh for as long as the
+    lockfile is. Per rule only, deliberately: a default would put every
+    input-determined rule on a timer for nothing, and a YAML anchor shares one
+    value across the few that want it.
+  ],
   gitignore: [
     On by default because an input set should never contain build output.
     Explicitly listed literal paths are always kept, `.git` is never traversed,

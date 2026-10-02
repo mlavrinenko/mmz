@@ -15,7 +15,7 @@ use std::process::{Command, ExitStatus};
 use crate::clock::Clock;
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
-use crate::{cache, hashing, notice, outputs, parametric, probe, resolve};
+use crate::{cache, hashing, notice, outputs, parametric, probe, resolve, ttl};
 
 /// A rule's resolved input digest and the probe digests that fed it.
 ///
@@ -107,13 +107,16 @@ fn memoized(
     let cache_dir = base.join(&manifest.cache_dir);
     if let Some(cached) = cache::read(&cache_dir, identity) {
         let voided = outputs::first_missing(base, &rule.outputs);
-        if cached.ok && cached.digest == digest && voided.is_none() {
+        let expired = ttl::outlived(rule.ttl.as_ref(), cached.ok, cached.ran_at, call.clock);
+        if cached.ok && cached.digest == digest && voided.is_none() && expired.is_none() {
             log::info!("mmz: skip `{identity}` (inputs unchanged)");
             announce_hit(manifest, rule, &cached);
             return Ok(0);
         }
         if let Some(path) = voided {
             log::info!("mmz: `{identity}` declared output `{path}` is missing; the record is void");
+        } else if let Some(ttl) = expired {
+            log::info!("mmz: `{identity}` last passed longer ago than its ttl `{ttl}`; re-running");
         }
     }
     let code = exec(call)?;
@@ -177,7 +180,8 @@ fn announce_hit(manifest: &Manifest, rule: &Rule, cached: &cache::Cached) {
 /// spawned and before any record is written.
 ///
 /// A rule that names only probes still has inputs: `None` means no files *and*
-/// no probes, never "no files".
+/// no probes, never "no files". So does a time-only rule (a `ttl` and no
+/// declared `inputs`), whose digest is that of the empty set.
 fn digest_inputs(
     manifest: &Manifest,
     rule: &Rule,
@@ -192,7 +196,7 @@ fn digest_inputs(
         files.sort();
         files.dedup();
     }
-    if files.is_empty() && probes.is_empty() {
+    if files.is_empty() && probes.is_empty() && !ttl::time_only(rule) {
         return Ok(None);
     }
     Ok(Some(Digested {

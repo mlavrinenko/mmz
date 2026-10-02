@@ -41,7 +41,8 @@
 //! declared artifact outputs
 //! ([`outputs`]), rule matching ([`matcher`]), glob-fanned parametric rules
 //! ([`parametric`]), the cache ([`cache`]), cache-hit notices ([`notice`]), the
-//! process clock ([`clock`]), and the orchestration engine ([`engine`]). The
+//! process clock ([`clock`]), record expiry ([`ttl`]), and the orchestration
+//! engine ([`engine`]). The
 //! `mmz --…` actions live in [`init`], [`schema`], [`status`], [`freshness`],
 //! [`prune`], and [`dump`].
 //!
@@ -50,7 +51,9 @@
 //! Anything mmz prints or stamps with a time reads one clock, resolved once per
 //! invocation and threaded down. Set `MMZ_NOW` to a Unix epoch in seconds and a
 //! record's `ran_at` and `mmz --status`'s ages become facts a build can capture;
-//! leave it unset and mmz reads the system clock. See [`clock`].
+//! leave it unset and mmz reads the system clock. A rule's `ttl` is aged against
+//! the same clock, so the pin also decides which records have expired. See
+//! [`clock`].
 
 /// The in-process AST matcher a probe's `ast:` key selects with, and the
 /// failure type [`probe::ProbeFailure::Ast`] carries. Public because a missing
@@ -78,6 +81,7 @@ pub mod prune;
 pub mod resolve;
 pub mod schema;
 pub mod status;
+pub mod ttl;
 
 /// Which grammars this build carries, and how `lang:` and a file extension
 /// reach one. Internal: the set is a build-time fact mmz reports through

@@ -32,6 +32,8 @@ groups:
       # edited in manifest.rs does.
       - src/manifest_strict.rs
       - src/probe.rs
+      # The `ttl` grammar, which the schema restates as a `pattern`.
+      - src/ttl.rs
     dependents:
       - schema/mmz.schema.json
       - src/schema.rs
@@ -51,6 +53,8 @@ groups:
   - name: status-schema
     source:
       - src/status.rs
+      # The state vocabulary, split out once status.rs hit its line cap.
+      - src/status_verdict.rs
     dependents:
       - schema/status.schema.json
 

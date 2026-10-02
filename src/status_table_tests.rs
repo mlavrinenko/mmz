@@ -13,6 +13,8 @@ fn rule(name: &str, source: &str) -> RuleStatus {
         state: State::Never,
         digest: None,
         missing_output: None,
+        ttl: None,
+        expires_at: None,
         cached: None,
         inputs: Vec::new(),
     }
@@ -53,6 +55,8 @@ fn age_is_measured_against_the_reports_own_clock() {
             state: State::Fresh,
             digest: Some("d1".to_owned()),
             missing_output: None,
+            ttl: None,
+            expires_at: None,
             cached: Some(CachedInfo {
                 digest: "d1".to_owned(),
                 ok: true,
@@ -88,6 +92,8 @@ fn single_source_table_is_byte_identical_to_before_the_source_column() {
             state: State::Fresh,
             digest: Some("d1".to_owned()),
             missing_output: None,
+            ttl: None,
+            expires_at: None,
             cached: Some(CachedInfo {
                 digest: "d1".to_owned(),
                 ok: true,
