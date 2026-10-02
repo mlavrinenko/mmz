@@ -4,7 +4,11 @@
   title: "mmz: a rule whose verdict depends on the outside world never expires",
   priority: framework("ice", confidence: 0.8, ease: 6.0, impact: 6.0),
   tags: ("cli", "docs", "tooling"),
-  status: wip(2026, 10, 2),
+  status: done(
+    2026,
+    10,
+    2,
+  )[shipped in 0.11.0: `ttl` on a rule, the `expired` state, `ttl`/`expires_at` in --status=json; tests/cli_ttl.rs drives expiry through MMZ_NOW],
   links: related(
     "mmz-pin-the-clock-for-reproducible-output.typ",
   )[`MMZ_NOW` is the clock a ttl is measured against, and the test hook],
