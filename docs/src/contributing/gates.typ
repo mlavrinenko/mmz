@@ -42,11 +42,13 @@ Each arm of `check` is #just.memo("<gate>"), and `memo` is:
 
 ```just
 memo *ARGS: _mmz
-    {{ mmz }} just {{ ARGS }}
+    chronic {{ mmz }} just {{ ARGS }}
 ```
 
 So #just.check() runs `mmz just clippy`, and the rule that decides whether
-anything happens is named `just clippy` in `.mmz/config.yaml`.
+anything happens is named `just clippy` in `.mmz/config.yaml`. `chronic` around
+it keeps a passing arm silent and replays a failing one in full, so a green
+#just.check() prints nothing.
 
 The indirection earns its keep. The alternative — inlining each gate's command
 line into `check` and naming _that_ in the manifest — is what this repo did

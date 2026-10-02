@@ -54,12 +54,16 @@ check: (memo "fmt-check") (memo "clippy") (memo "test") (memo "machete") (memo "
 # `just test <filter>` deliberately bypasses this: a filtered test run is a
 # different command from the gate's full-suite run, and memoizing it under the
 # gate's identity would record a pass the gate never earned.
+#
+# `chronic` keeps a passing arm silent and replays a failing arm's whole output,
+# so a green `just check` prints nothing and a red one prints only what failed.
+# Without it a non-memoized run printed some six hundred lines to say "ok".
 
 [doc("Run a just recipe through mmz memoization")]
 [group("workflow")]
 [no-exit-message]
 memo *ARGS: _mmz
-    {{ mmz }} just {{ ARGS }}
+    chronic {{ mmz }} just {{ ARGS }}
 
 # Build the mmz binary `check` memoizes its own arms with (dogfood).
 _mmz:
@@ -198,18 +202,31 @@ outdatty-update *ARGS:
 build *ARGS:
     cargo build --workspace -q {{ ARGS }}
 
+# A pass prints tarpaulin's one summary line, not the six hundred lines of
+# per-test log behind it; a failure (including dropping under `fail-under`)
+# replays the whole log.
+
 [doc("Run coverage with tarpaulin (also writes target/coverage/lcov.info)")]
 [group("dev")]
+[script]
 cover:
-    cargo tarpaulin --workspace --skip-clean
+    if ! log=$(cargo tarpaulin --workspace --skip-clean 2>&1); then
+        printf '%s\n' "$log"
+        exit 1
+    fi
+    printf '%s\n' "$log" | grep -E '% coverage, '
 
 # Gate complex, undertested functions via the CRAP metric. Needs the lcov `just
 # cover` writes. Threshold 30 is a sane greenfield default; tune per repo.
+# `--summary` prints the per-crate count rather than a row per function (some
+# three hundred on a pass); drop it to see every score. `tests/**` is excluded
+# because tarpaulin does not instrument the integration suite, so scoring it
+# measured nothing and warned about every file in it.
 
 [doc("Gate complex, undertested functions via the CRAP metric")]
 [group("dev")]
 crap:
-    cargo crap --lcov target/coverage/lcov.info --workspace --exclude 'src/main.rs' --threshold 30 --fail-above
+    cargo crap --lcov target/coverage/lcov.info --workspace --exclude 'src/main.rs' --exclude 'tests/**' --threshold 30 --fail-above --summary
 
 # Eject inline tests from Rust files nearing the linecop limit, so they stay
 # under it without losing the inline-test workflow. Runs as part of `fix-check`.

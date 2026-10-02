@@ -48,7 +48,7 @@ MMZ="$REPO/target/release/mmz"
 # anything held inside it is time the rest of `just check`'s parallel arms spend
 # blocked. A cold release build is minutes; the wipe-and-repopulate it precedes
 # is seconds.
-(cd "$REPO" && cargo build --release --bin mmz)
+(cd "$REPO" && cargo build -q --release --bin mmz)
 
 # Serialize every writer of www/generated/ (see www/generate-facts.sh for the
 # others). `just check` runs its arms in parallel and more than one of them
