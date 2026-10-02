@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-02
+
+### Added
+
+- `ttl` on a command rule: how long a successful record stays fresh, for a
+  command whose verdict depends on the world as well as its inputs — `npm
+  audit` against an advisory database, a check that every image a compose file
+  names still exists. Once a pass is at least `ttl` old the command re-runs,
+  `mmz --is-fresh` exits `1` naming the ttl, and `mmz --status` reports the new
+  `expired` state. Every other reason to re-run outranks it, so `expired` means
+  exactly "nothing moved, the pass is just too old". No `ttl`, no change.
+
+  The value is one positive whole number and one unit, `s`, `m`, `h` or `d`
+  (`30m`, `12h`, `7d`). Zero, compounds like `1h30m`, and anything else are a
+  load error at exit `4`. Age runs from the record's `ran_at` to the process
+  clock, so `MMZ_NOW` pins it.
+
+  A rule with a `ttl` may declare no `inputs` at all — time is its only input,
+  and `no_inputs` does not refuse it. A `ttl` does not excuse declared inputs
+  that resolve to nothing.
+
+- `mmz --status=json` reports each ttl rule's `ttl` and `expires_at`, the
+  instant its recorded pass stops being fresh; `mmz --dump-config` echoes the
+  `ttl` as written.
+
+### Changed
+
+- `mmz --is-fresh` resolves the clock, so a malformed `MMZ_NOW` is now refused
+  there (exit `2`) as it already was by `mmz --status` and a wrapped run.
+- Breaking for a library caller constructing `manifest::Command` by struct
+  literal: it has a new `ttl` field. The record format is unchanged.
+
 ## [0.10.0] - 2026-08-22
 
 ### Changed
