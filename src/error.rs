@@ -331,6 +331,23 @@ pub enum Error {
         path: PathBuf,
     },
 
+    /// `mmz --import` was pointed at a directory that holds no `.mmz/`, or at
+    /// none at all: there is no checkout to read records from.
+    #[error("`{dir}` is not an mmz checkout: it has no .mmz/ directory to import records from")]
+    ImportNotCheckout {
+        /// The directory, as the caller named it.
+        dir: PathBuf,
+    },
+
+    /// `mmz --import` was pointed at the checkout it runs in, however the path
+    /// is spelled. Importing a cache into itself would copy nothing, so the
+    /// call is a mistake rather than a no-op.
+    #[error("`{dir}` is this checkout; point --import at another one")]
+    ImportSelf {
+        /// The directory, as the caller named it.
+        dir: PathBuf,
+    },
+
     /// `mmz --init` could not create its scaffold. Names which of the three
     /// paths it was writing — the `.mmz` directory, the cache `.gitignore`, or
     /// the manifest — which "permission denied" alone never said.

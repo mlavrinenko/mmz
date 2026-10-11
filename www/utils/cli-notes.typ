@@ -97,6 +97,33 @@
       them, because mmz never deletes state it cannot prove is unclaimed.
     ],
   ),
+  "--import": (
+    summary: [Copy cache records in from another checkout of the same repo,
+      such as the worktree being landed.],
+    detail: [
+      Each checkout keeps its own gitignored cache, so work that passed the
+      gate in a sibling git worktree still reads stale in the primary one after
+      a fast-forward. Run from the primary checkout and pointed at the worktree,
+      `--import` copies the records over. A worktrunk
+      `pre-remove` hook, run from the primary checkout, does it as the
+      worktree goes away:
+
+      ```toml
+      [pre-remove]
+      mmz = "mmz --import {{ worktree_path }}"
+      ```
+
+      Only records for rules this checkout's manifest declares are taken, and a
+      record the primary already holds with a later `ran_at` is kept. mmz still
+      judges every copied record against this tree: the input digest is built
+      from repo-relative paths and content hashes, so a record for other inputs
+      imports and reads stale, never fresh. One line names each imported rule,
+      then `mmz: imported N records from <dir>`. Importing nothing is a success.
+
+      A `<dir>` with no `.mmz/` in it, or one that resolves to this checkout
+      however it is spelled, is a usage error and exits 2.
+    ],
+  ),
   "--schema": (
     summary: [Print the JSON Schema for `.mmz/config.yaml`.],
     detail: [

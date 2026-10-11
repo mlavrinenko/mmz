@@ -130,3 +130,17 @@ fn input_namespace_messages_are_actionable() {
         "the collision explains why one name cannot be both"
     );
 }
+
+#[test]
+fn import_refusals_name_the_directory() {
+    let bare = Error::ImportNotCheckout {
+        dir: std::path::PathBuf::from("../wt"),
+    };
+    let text = bare.to_string();
+    assert!(text.contains("../wt"), "names the directory: {text}");
+    assert!(text.contains("no .mmz/"), "says what is missing: {text}");
+    let own = Error::ImportSelf {
+        dir: std::path::PathBuf::from("."),
+    };
+    assert!(own.to_string().contains("this checkout"));
+}

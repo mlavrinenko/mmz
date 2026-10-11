@@ -24,6 +24,7 @@ Usage:
     mmz --is-fresh [--tag t]... [-- cmd]
                                       exit 0 if cmd's rule (or every/tagged rule) is fresh; runs nothing
     mmz --prune                       delete cache records whose rule no longer exists
+    mmz --import <dir>                copy cache records in from another checkout of this repo
     mmz --schema                      print the config JSON Schema
     mmz --schema=fragment             print the JSON Schema for an imported fragment
     mmz --dump-config                 print the merged manifest and where each entry came from
@@ -103,6 +104,7 @@ fn action(first: &str, rest: &[String]) -> Option<ExitCode> {
         }
         "--init" => Some(run_init(rest)),
         "--prune" => Some(run_prune(rest)),
+        "--import" => Some(run_import(rest)),
         "--is-fresh" => Some(run_is_fresh(rest)),
         status if status == "--status" || status.starts_with("--status=") => {
             Some(run_status(status, rest))
@@ -144,6 +146,21 @@ fn run_prune(rest: &[String]) -> ExitCode {
         Err(code) => return code,
     };
     match mmz::prune::prune(&cwd) {
+        Ok(text) => emit(&text),
+        Err(err) => report_error(&err),
+    }
+}
+
+/// Handles `mmz --import <dir>`: exactly one directory, another checkout.
+fn run_import(rest: &[String]) -> ExitCode {
+    let [dir] = rest else {
+        return usage("`--import` takes exactly one directory");
+    };
+    let cwd = match current_dir() {
+        Ok(dir) => dir,
+        Err(code) => return code,
+    };
+    match mmz::import_records::import(&cwd, std::path::Path::new(dir)) {
         Ok(text) => emit(&text),
         Err(err) => report_error(&err),
     }
@@ -370,7 +387,9 @@ fn exit_for(err: &Error) -> u8 {
         Error::EmptyCommand
         | Error::ManifestExists { .. }
         | Error::TagWithCommand
-        | Error::InvalidNow { .. } => 2,
+        | Error::InvalidNow { .. }
+        | Error::ImportNotCheckout { .. }
+        | Error::ImportSelf { .. } => 2,
         Error::NoMatch { .. } | Error::NoInputs { .. } => 3,
         Error::NoManifest { .. }
         | Error::ManifestParse { .. }

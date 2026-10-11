@@ -43,7 +43,7 @@ enum Status {
 /// field existed (or by a rule declaring neither) means, so neither needs a
 /// [`FORMAT`] bump: freshness is decided against the manifest's current
 /// declaration, never against the stored lists.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Record {
     format: u32,
     algorithm: String,
@@ -103,9 +103,8 @@ pub struct Cached {
 /// worst case is an unnecessary re-run, never a wrongful skip.
 #[must_use]
 pub fn read(dir: &Path, command: &str) -> Option<Cached> {
-    let text = fs::read_to_string(record_path(dir, command)).ok()?;
-    let record = serde_yaml_ng::from_str::<Record>(&text).ok()?;
-    if record.format != FORMAT || record.algorithm != ALGORITHM || record.command != command {
+    let record = load(&record_path(dir, command))?;
+    if record.command != command {
         return None;
     }
     let fields = record_fields(&record);
@@ -117,6 +116,15 @@ pub fn read(dir: &Path, command: &str) -> Option<Cached> {
         probes: record.probes,
         fields,
     })
+}
+
+/// Parses the record file at `path`, or `None` when it is unreadable,
+/// unparseable, or written by a different format or algorithm — the part of
+/// trust that does not depend on which command is asking.
+fn load(path: &Path) -> Option<Record> {
+    let text = fs::read_to_string(path).ok()?;
+    let record = serde_yaml_ng::from_str::<Record>(&text).ok()?;
+    (record.format == FORMAT && record.algorithm == ALGORITHM).then_some(record)
 }
 
 /// Flattens a record into a `field -> string` map for notice macro expansion.
@@ -225,6 +233,46 @@ pub fn prune(dir: &Path, live: &BTreeSet<String>) -> Result<Vec<String>> {
     }
     pruned.sort();
     Ok(pruned)
+}
+
+/// Copies into `dir` each trusted record of `from` whose command is in `live`,
+/// unless `dir` already holds a record of the same command with a later
+/// `ran_at` or an identical one. Returns the imported command names sorted.
+///
+/// The record is copied as stored: its input digest is left for the next
+/// freshness check to judge against this tree, so a record for other inputs
+/// imports and still reads stale. A record that cannot be read or parsed is
+/// skipped, like [`prune`] leaves it. A missing `from` is empty.
+///
+/// # Errors
+///
+/// Returns [`Error::CacheIo`] if `from` cannot be listed or a record cannot be
+/// written into `dir`, naming the path the operation was on.
+pub fn import(from: &Path, dir: &Path, live: &BTreeSet<String>) -> Result<Vec<String>> {
+    let entries = match fs::read_dir(from) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => return Err(cache_io(from, source)),
+    };
+    let mut imported = Vec::new();
+    for entry in entries {
+        let path = entry.map_err(|source| cache_io(from, source))?.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Some(record) = load(&path) else { continue };
+        if !live.contains(record.command.as_str()) {
+            continue;
+        }
+        let local = load(&record_path(dir, &record.command));
+        if local.is_some_and(|held| held.ran_at > record.ran_at || held == record) {
+            continue;
+        }
+        try_write(dir, &record.command, &record)?;
+        imported.push(record.command);
+    }
+    imported.sort();
+    Ok(imported)
 }
 
 /// Reads just the stored command name from a record file, or `None` when the

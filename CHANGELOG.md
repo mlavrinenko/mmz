@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `mmz --import <dir>`: copy cache records in from another checkout of the same
+  repo, usually the git worktree you are landing. Each checkout keeps its own
+  gitignored cache, so a gate that passed in a worktree read as stale in the
+  primary checkout after the fast-forward, and the next commit waited on a full
+  re-run. Run from the primary checkout (`mmz --import ../wt`, or in a
+  worktrunk hook, `pre-remove = "mmz --import {{ worktree_path }}"`), it takes
+  each record whose rule this checkout's manifest declares, unless the record
+  held here has a later `ran_at`. mmz still judges every copied record: the
+  input digest is built from repo-relative paths and content hashes, so a
+  record for other inputs imports and reads stale. One line names each
+  imported rule, then `mmz: imported N records from <dir>`; importing nothing
+  exits 0. A `<dir>` with no `.mmz/`, or one that resolves to this checkout,
+  exits 2.
+
 ## [0.11.0] - 2026-10-02
 
 ### Added

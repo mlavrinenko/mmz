@@ -201,3 +201,69 @@ fn prune_on_missing_dir_is_empty() {
     let pruned = prune(&dir.path().join("absent"), &BTreeSet::new()).expect("prune");
     assert!(pruned.is_empty(), "missing cache dir prunes nothing");
 }
+
+/// Writes a record stamped `ran_at`, so a test can say which side is newer.
+fn write_at(dir: &Path, command: &str, digest: &str, ran_at: u64) {
+    write_record(
+        dir,
+        command,
+        Clock::pinned(ran_at),
+        &Outcome {
+            digest,
+            ok: true,
+            ..Outcome::default()
+        },
+    );
+}
+
+fn live(names: &[&str]) -> BTreeSet<String> {
+    names.iter().map(|name| (*name).to_owned()).collect()
+}
+
+#[test]
+fn import_copies_live_records_and_keeps_newer_local_ones() {
+    let from = tempfile::tempdir().expect("tempdir");
+    let to = tempfile::tempdir().expect("tempdir");
+    write_at(from.path(), "new", "theirs", 20);
+    write_at(from.path(), "kept", "theirs", 10);
+    write_at(from.path(), "dead", "theirs", 10);
+    write_at(to.path(), "new", "ours", 10);
+    write_at(to.path(), "kept", "ours", 20);
+
+    let names = live(&["new", "kept"]);
+    let imported = super::import(from.path(), to.path(), &names).expect("import");
+
+    assert_eq!(imported, ["new"], "only the newer live record moves");
+    assert!(
+        is_fresh(to.path(), "new", "theirs"),
+        "newer record replaced"
+    );
+    assert!(is_fresh(to.path(), "kept", "ours"), "newer local survives");
+    assert!(read(to.path(), "dead").is_none(), "unknown rule skipped");
+}
+
+#[test]
+fn import_skips_an_identical_record_and_a_missing_source() {
+    let from = tempfile::tempdir().expect("tempdir");
+    let to = tempfile::tempdir().expect("tempdir");
+    write_at(from.path(), "sh", "same", 10);
+    write_at(to.path(), "sh", "same", 10);
+    let names = live(&["sh"]);
+
+    let none = super::import(from.path(), to.path(), &names).expect("import");
+    assert!(none.is_empty(), "an identical record needs no import");
+
+    let gone = from.path().join("absent");
+    let none = super::import(&gone, to.path(), &names).expect("import");
+    assert!(none.is_empty(), "a missing source directory is empty");
+}
+
+#[test]
+fn import_leaves_unparseable_files_alone() {
+    let from = tempfile::tempdir().expect("tempdir");
+    let to = tempfile::tempdir().expect("tempdir");
+    std::fs::write(from.path().join("junk.yaml"), "not: [a record").expect("junk");
+    std::fs::write(from.path().join("note.txt"), "hi").expect("note");
+    let imported = super::import(from.path(), to.path(), &live(&["sh"])).expect("import");
+    assert!(imported.is_empty(), "nothing parseable, nothing imported");
+}

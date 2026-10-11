@@ -17,7 +17,7 @@
     detail: [
       Also the exit for a satisfied `--is-fresh` gate, and for the read-only
       actions (`--status`, `--schema`, `--dump-config`, `--version`, `--help`,
-      `--prune`).
+      `--prune`, `--import`).
     ],
   ),
   "1": (
@@ -30,7 +30,8 @@
   ),
   "2": (
     meaning: [Usage error: an empty invocation, an unknown option, `--init` over
-      an existing manifest, or a `MMZ_NOW` that is not a Unix epoch.],
+      an existing manifest, an `--import` directory that is not another checkout, or
+      a `MMZ_NOW` that is not a Unix epoch.],
     detail: [
       The clock case is the one that is not about argv: a malformed pin is
       refused rather than ignored, so the misconfiguration surfaces here instead
@@ -100,8 +101,8 @@
     detail: [
       The path is always named, rendered the way `--status` renders it. Three
       kinds of file reach this code — an input a rule declared, the scaffold
-      `mmz --init` writes, and the cache a run records into or `--prune`
-      sweeps — and they share one fact: the filesystem refused. That is a
+      `mmz --init` writes, and the cache a run records into, `--prune`
+      sweeps or `--import` fills — and they share one fact: the filesystem refused. That is a
       condition of the tree rather than a bug in mmz, which is why it is not
       `70`. A manifest that cannot be read is the exception, and lands at `4`
       with the rest of the manifest failures.

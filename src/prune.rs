@@ -25,14 +25,24 @@ pub fn prune(cwd: &Path) -> Result<String> {
     let manifest = &located.manifest;
     let base = located.root.as_path();
     let cache_dir = base.join(&manifest.cache_dir);
-    let mut live: BTreeSet<String> = BTreeSet::new();
+    let live = live_identities(manifest, base)?;
+    let pruned = cache::prune(&cache_dir, &live)?;
+    Ok(render(&pruned))
+}
+
+/// The cache identity of every rule `manifest` declares, with each parametric
+/// rule expanded to the per-file identities its scope resolves to today.
+///
+/// What counts as a rule that exists: a record is orphaned to `--prune`, and
+/// importable to `--import`, by exactly this set.
+pub(crate) fn live_identities(manifest: &Manifest, base: &Path) -> Result<BTreeSet<String>> {
+    let mut live = BTreeSet::new();
     for rule in &manifest.commands {
         for hit in parametric::expand_rule(manifest, base, rule)? {
             live.insert(hit.exp.identity);
         }
     }
-    let pruned = cache::prune(&cache_dir, &live)?;
-    Ok(render(&pruned))
+    Ok(live)
 }
 
 /// Summarizes a prune: the count and each removed rule name, or a no-op line.

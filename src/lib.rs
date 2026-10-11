@@ -44,7 +44,7 @@
 //! process clock ([`clock`]), record expiry ([`ttl`]), and the orchestration
 //! engine ([`engine`]). The
 //! `mmz --…` actions live in [`init`], [`schema`], [`status`], [`freshness`],
-//! [`prune`], and [`dump`].
+//! [`prune`], [`import_records`], and [`dump`].
 //!
 //! # Reproducible output
 //!
@@ -69,6 +69,7 @@ pub mod error;
 pub mod freshness;
 pub mod hashing;
 pub mod import_paths;
+pub mod import_records;
 pub mod init;
 pub mod manifest;
 pub mod matcher;
