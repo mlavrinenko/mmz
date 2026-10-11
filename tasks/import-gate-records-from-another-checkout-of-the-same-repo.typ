@@ -4,7 +4,7 @@
   title: "Import gate records from another checkout of the same repo",
   priority: framework("ice", confidence: 0.8, ease: 6.0, impact: 6.0),
   tags: ("cli", "cache"),
-  status: wip(2026, 10, 11),
+  status: done(2026, 10, 11),
 )
 
 == Summary
