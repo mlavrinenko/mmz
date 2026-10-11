@@ -2,10 +2,16 @@
 
 #show: task.with(
   title: "Migrate the MindTape config to the current mt",
+  priority: ice(
+    impact: 7,
+    confidence: 0.9,
+    ease: 9,
+  ),
+  tags: ("tooling",),
   status: proposed(2026, 10, 10),
 )
 
-== Problem
+== Summary
 
 `mt check` fails under mt built from mindtape main (382711d9, installed 2026-10-10):
 
@@ -22,8 +28,8 @@ Every `mt` command that loads the config refuses, so the backlog is unreadable u
 
 == Changes
 
-- `.mindtape/config.toml`: rename or drop the keys the current schema rejects; `mt config show --origin` and `mt init --full` show the current shape.
-- Task files or templates the new rules refuse (a list in a single-valued field, a template slot with no `example`).
+- `.mindtape/config.toml`: drop `[handle] check-len`. A handle is now the task's stem hash, which grows only where two stems share a prefix, so it has no width to set and no ordinal to go stale.
+- `.mindtape/templates/task.typ`: `mt check` now checks templates too, and the built-in one carries no Summary section, so it breached this backlog's Summary rule. The project template supplies one, so `mt add` files a task the rules accept.
 
 == Out of scope
 
