@@ -4,7 +4,7 @@
   title: "Link the integration tests into one binary",
   priority: framework("ice", confidence: 0.8, ease: 7.0, impact: 5.0),
   tags: ("tests", "build", "efficiency"),
-  status: proposed(2026, 10, 11),
+  status: wip(2026, 10, 11),
 )
 
 == Summary
