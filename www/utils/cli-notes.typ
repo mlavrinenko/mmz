@@ -105,12 +105,12 @@
       gate in a sibling git worktree still reads stale in the primary one after
       a fast-forward. Run from the primary checkout and pointed at the worktree,
       `--import` copies the records over. A worktrunk
-      `pre-remove` hook, run from the primary checkout, does it as the
-      worktree goes away:
+      `pre-remove` hook does it as the worktree goes away. The hook runs inside
+      that worktree, so it steps into the primary first:
 
       ```toml
       [pre-remove]
-      mmz = "mmz --import {{ worktree_path }}"
+      mmz = "cd {{ primary_worktree_path }} && mmz --import {{ worktree_path }}"
       ```
 
       Only records for rules this checkout's manifest declares are taken, and a

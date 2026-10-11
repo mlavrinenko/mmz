@@ -45,10 +45,10 @@ mmz --prune               # drop records whose rule no longer exists
 mmz --import ../wt        # take the gate passes recorded in another checkout of this repo
 ```
 
-A git worktree keeps its own cache, so a gate that passed there reads stale in the primary checkout after you land it. `--import` fixes that without trusting anything: records for rules you still have are copied, and the input digest is checked against _this_ tree as usual, so a stale one stays stale. Run it from the primary checkout, pointed at the worktree you are landing. With \[worktrunk\]([https://worktrunk.dev](https://worktrunk.dev)) that is one hook line in the primary’s `.config/wt.toml`, firing as the worktree goes away.
+A git worktree keeps its own cache, so a gate that passed there reads stale in the primary checkout after you land it. `--import` fixes that without trusting anything: records for rules you still have are copied, and the input digest is checked against _this_ tree as usual, so a stale one stays stale. Run it from the primary checkout, pointed at the worktree you are landing. With \[worktrunk\]([https://worktrunk.dev](https://worktrunk.dev)) that is one hook line in the primary’s `.config/wt.toml`, firing as the worktree goes away. The hook runs inside that worktree, so it steps into the primary first.
 
 ```toml
-pre-remove = "mmz --import {{ worktree_path }}"
+pre-remove = "cd {{ primary_worktree_path }} && mmz --import {{ worktree_path }}"
 ```
 
 ## The trade

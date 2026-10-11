@@ -122,10 +122,11 @@ trusting anything: records for rules you still have are copied, and the input
 digest is checked against _this_ tree as usual, so a stale one stays stale.
 Run it from the primary checkout, pointed at the worktree you are landing.
 With [worktrunk](https://worktrunk.dev) that is one hook line in the
-primary's `.config/wt.toml`, firing as the worktree goes away.
+primary's `.config/wt.toml`, firing as the worktree goes away. The hook runs
+inside that worktree, so it steps into the primary first.
 
 ```toml
-pre-remove = "mmz --import {{ worktree_path }}"
+pre-remove = "cd {{ primary_worktree_path }} && mmz --import {{ worktree_path }}"
 ```
 
 = The trade
