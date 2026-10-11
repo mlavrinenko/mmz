@@ -8,7 +8,7 @@
     ease: 9,
   ),
   tags: ("tooling",),
-  status: proposed(2026, 10, 10),
+  status: done(2026, 10, 11)[config loads, mt check clean, just check green],
 )
 
 == Summary
