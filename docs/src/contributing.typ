@@ -226,9 +226,9 @@ watermark: a human looked, no tool verified.
 
 - #link("https://www.conventionalcommits.org/")[Conventional Commits] for the
   subject line, in English, matching this repo's history.
-- Add a `Refs: tasks/<stem>.typ` footer naming the MindTape task the commit
-  closes or advances. File a task first if none exists; never guess a stem. Add
-  no other trailers.
+- Add a `Refs: <stem>` footer naming the MindTape task the commit closes or
+  advances, the bare stem: `mt check --commits` refuses a path. File a task
+  first if none exists; never guess a stem. Add no other trailers.
 
 Task tracking is #link("https://github.com/mlavrinenko/mindtape")[MindTape]: one
 Typst file per task under `tasks/`, ruled by `.mindtape/config.toml`. Drive it
