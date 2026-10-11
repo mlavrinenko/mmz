@@ -50,7 +50,7 @@ Versions above are read from `www/generated/crate-map.json`, never hand-written.
 - **Gate membership is derived and cross-checked.** A gate carries `[group("gate")]` AND appears in `check`’s dependency list. Tagging one without the other fails the docs build naming both sides, so wire both or neither.
 - **Never hand-edit a generated Markdown file.** `README.md`, `AGENTS.md` (this file), `CONTRIBUTING.md` and `docs/contributing/*.md` are rendered from `docs/src/*.typ`. Edit the source, then `just docs md`. `just docs md-check` fails on drift.
 - **Closing a task asserts the build passed.** `mt flip done` runs `mmz --is-fresh --tag gate` via `.mindtape/config.toml`. Run `just check` first to record a pass; `--force` waives it and records the waiver.
-- **Tests:** inline `#[cfg(test)]` units beside the code, CLI and integration tests in `tests/` driving the real binary with `assert_cmd` and `predicates`. `just fix-check` auto-ejects inline tests from oversized files.
+- **Tests:** inline `#[cfg(test)]` units beside the code, CLI and integration tests in `tests/it/` driving the real binary with `assert_cmd` and `predicates`. The suite is one binary: a new file is `tests/it/<name>.rs` plus a `mod <name>;` line in `tests/it/main.rs`. `just fix-check` auto-ejects inline tests from oversized files.
 - **Be careful with context.** Omit non-essential command output; the gate runners are quiet by design.
 
 ## Where a change belongs

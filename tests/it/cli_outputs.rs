@@ -7,8 +7,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// A rule keyed on `*.txt` that declares the artifact it produces.
 const PRODUCER: &str = concat!(

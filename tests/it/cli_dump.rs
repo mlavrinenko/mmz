@@ -8,8 +8,7 @@
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 #[test]
 fn dump_config_prints_sources_and_entries() {

@@ -8,8 +8,7 @@ use std::time::Duration;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// A rule keyed on `a.txt` plus a probe that prints the contents of
 /// `pinned.txt` — so the probe's output moves without any input file moving.

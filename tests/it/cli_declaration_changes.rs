@@ -15,8 +15,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// The rule before the edit: inputs and nothing else. Every case below appends
 /// one field to it, so the edit under test is the only difference on disk.

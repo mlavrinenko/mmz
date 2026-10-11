@@ -7,8 +7,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 const MANIFEST: &str = "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n";
 

@@ -17,8 +17,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// Sets `path`'s mode, returning false when it does not bite — running as
 /// root, where there is no refusal to observe and nothing to assert.

@@ -171,7 +171,7 @@ so they cost no process at all — the granularity is free, unlike the recipe
 probes above.
 
 The property that every gate names one of them is enforced by
-`tests/gate_inputs_pin_the_toolchain.rs`, because it was claimed here and
+`tests/it/gate_inputs_pin_the_toolchain.rs`, because it was claimed here and
 violated in practice: `just machete` shipped depending on the Cargo manifests
 and its own recipe body, and on nothing that moved when `cargo-machete` was
 swapped underneath it.

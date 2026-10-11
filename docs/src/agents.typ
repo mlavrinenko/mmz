@@ -113,8 +113,9 @@ Versions above are read from `www/generated/crate-map.json`, never hand-written.
   `mmz --is-fresh --tag gate` via `.mindtape/config.toml`. Run #just.check()
   first to record a pass; `--force` waives it and records the waiver.
 - #strong[Tests:] inline `#[cfg(test)]` units beside the code, CLI and
-  integration tests in `tests/` driving the real binary with `assert_cmd` and
-  `predicates`. #just.fix-check() auto-ejects inline tests from oversized files.
+  integration tests in `tests/it/` driving the real binary with `assert_cmd` and
+  `predicates`. The suite is one binary: a new file is `tests/it/<name>.rs` plus
+  a `mod <name>;` line in `tests/it/main.rs`. #just.fix-check() auto-ejects inline tests from oversized files.
 - #strong[Be careful with context.] Omit non-essential command output; the gate
   runners are quiet by design.
 

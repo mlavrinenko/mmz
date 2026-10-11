@@ -19,8 +19,7 @@ use std::time::Duration;
 
 use predicates::prelude::predicate;
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// Longest a probe may take before the test calls it hung rather than slow.
 const PATIENCE: Duration = Duration::from_secs(30);

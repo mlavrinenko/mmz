@@ -139,16 +139,17 @@ nag: a file nobody can hold in their head is where the untested branch hides.
 As a Rust file approaches its cap, #just.eject() moves its inline
 `#[cfg(test)]` module into a sibling `_tests.rs` file via
 #link("https://github.com/mlavrinenko/ejectest")[ejectest], driven by
-`linecop --baseline`. That keeps sources under the cap without giving up the
-inline-test workflow. It runs as part of #just.fix-check().
+`linecop --baseline`, as part of #just.fix-check(). Sources stay under the cap
+and keep the inline-test workflow.
 
 = Testing
 
-- Unit tests live inline in a `#[cfg(test)] mod tests` block next to
-  the code they exercise.
-- CLI and integration tests live in `tests/` and drive the built binary with
+- Unit tests live inline in a `#[cfg(test)] mod tests` block beside their code.
+- CLI and integration tests live in `tests/it/` and drive the built binary with
   #link("https://docs.rs/assert_cmd")[assert_cmd] and
-  #link("https://docs.rs/predicates")[predicates].
+  #link("https://docs.rs/predicates")[predicates]. The suite is one binary: a
+  new file is `tests/it/<name>.rs` plus a `mod <name>;` line in
+  `tests/it/main.rs`.
 - Every bug fix gets a regression test. The bug is evidence that the case was
   reachable; the test is what stops it being reachable twice.
 
@@ -217,10 +218,9 @@ key a root-only policy key.
 must stay in sync with them. #just.outdatty-check() (part of the gate) fails when
 a source changed but its dependents were not re-confirmed.
 
-After editing a source, review the listed dependents, update them as needed, then
-run #just.outdatty-update() to record the new state into `outdatty.lock`, and
-commit it. A recorded hash is a review watermark — it means a human looked, not
-that a tool verified.
+After editing a source, review the listed dependents, update them as needed, run
+#just.outdatty-update() and commit `outdatty.lock`. A recorded hash is a review
+watermark: a human looked, no tool verified.
 
 = Commits
 

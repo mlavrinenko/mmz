@@ -1,8 +1,6 @@
-//! Shared helpers for the integration suite under `tests/`. Living in a
-//! `support/mod.rs` subdirectory keeps Cargo's test autodiscovery from
-//! treating this as its own integration test binary — only files directly
-//! under `tests/` become one — so each test file can `mod support;` it
-//! without duplicating the boilerplate.
+//! Shared helpers for the integration suite. The suite is one binary
+//! (`tests/it/main.rs`), and this module is declared there once, so each test
+//! module reaches it as `crate::support`.
 
 use std::fs;
 use std::path::Path;

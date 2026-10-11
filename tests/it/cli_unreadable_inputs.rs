@@ -19,8 +19,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// Writes a project whose `sh` rule hashes every `*.txt`, with one input the
 /// running user cannot read.

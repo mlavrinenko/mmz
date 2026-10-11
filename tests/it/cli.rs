@@ -4,8 +4,7 @@ use std::path::Path;
 use assert_cmd::Command;
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// Writes a manifest whose `sh` rule depends on every `*.txt` file, plus one
 /// such input file.

@@ -12,8 +12,7 @@ use std::path::Path;
 
 use predicates::prelude::predicate;
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// An arbitrary but fixed pin: 2023-11-14T22:13:20Z.
 const PIN: u64 = 1_700_000_000;

@@ -12,8 +12,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// Two rules on their own scopes, tagged `gate` and `bench` respectively, so a
 /// filter can select one, the other, both, or (with both tags at once) neither.

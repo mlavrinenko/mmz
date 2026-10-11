@@ -55,25 +55,12 @@
 //! test's job (`compose_tests.rs`, `compose_merge_tests.rs`); this one only
 //! asks whether the *declared* inputs, once resolved, reach the lockfile.
 //!
-//! This is the only file under `tests/` that runs `mmz` against the repo's own
-//! manifest instead of a synthetic one in a tempdir, so it does not
-//! `mod support;` — every other integration test that does also calls
-//! `support::write_manifest`, and this one has no fixture to write, which would
-//! leave that helper dead code in this binary alone.
+//! This is the only module of the `it` binary that runs `mmz` against the
+//! repo's own manifest instead of a synthetic one in a tempdir, so it uses
+//! `crate::support::mmz` and never `crate::support::write_manifest`.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-
-use assert_cmd::Command;
-
-/// An `mmz` invocation rooted at `dir`. A trimmed copy of
-/// `tests/support::mmz` — see the module doc for why this file does not pull
-/// in `mod support` instead.
-fn mmz(dir: &Path) -> Command {
-    let mut cmd = Command::cargo_bin("mmz").expect("binary should build");
-    cmd.current_dir(dir);
-    cmd
-}
+use std::path::PathBuf;
 
 /// How many `gate`-tagged rules `.mmz/conf.d/` is expected to declare. A
 /// floor, not an exact count, so a new gate does not need to bump this — but
@@ -158,7 +145,7 @@ fn is_gate(command: &serde_json::Value) -> bool {
 /// The merged manifest of the repo this test is compiled from.
 fn dump_this_repo() -> serde_json::Value {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let out = mmz(&root)
+    let out = crate::support::mmz(&root)
         .arg("--dump-config=json")
         .output()
         .expect("mmz --dump-config=json should run");

@@ -6,8 +6,7 @@ use std::fs;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 #[test]
 fn parametric_rule_fans_over_a_scope_end_to_end() {

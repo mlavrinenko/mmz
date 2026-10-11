@@ -7,8 +7,7 @@ use std::path::Path;
 
 use predicates::prelude::{PredicateBooleanExt, predicate};
 
-mod support;
-use support::{mmz, write_manifest};
+use crate::support::{mmz, write_manifest};
 
 /// A scope naming the artifact tree, opting out of the gitignore filter.
 const OPTED_OUT: &str = concat!(
