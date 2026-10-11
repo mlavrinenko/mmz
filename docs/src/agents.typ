@@ -116,6 +116,12 @@ Versions above are read from `www/generated/crate-map.json`, never hand-written.
   integration tests in `tests/it/` driving the real binary with `assert_cmd` and
   `predicates`. The suite is one binary: a new file is `tests/it/<name>.rs` plus
   a `mod <name>;` line in `tests/it/main.rs`. #just.fix-check() auto-ejects inline tests from oversized files.
+- #strong[Delegated work forks and lands through worktrunk.] `just fork <slug>`
+  makes a sibling worktree on a new branch (`../mmz.<slug>` by default, dev shell
+  allowed); `just land`, run in that worktree, gates it, checks its commits
+  against the MindTape rules, fast-forwards main and removes the worktree.
+  `.config/wt.toml` holds the hooks. Never run a bare `wt merge`: it squashes
+  away the `Refs:` footers.
 - #strong[Be careful with context.] Omit non-essential command output; the gate
   runners are quiet by design.
 

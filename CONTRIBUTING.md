@@ -30,7 +30,7 @@ just check      # the full gate, memoized
 | `docs-check` | `tola build && pagefind --site public/mmz --silent && tola validate` | Builds the docs site and validates every internal link and asset reference. A cross-page link is a string until something resolves it; this is the something. |
 | `docs-md-check` | Fail if generated Markdown has drifted from docs/src | Fails when a committed `README.md`, `AGENTS.md`, `CONTRIBUTING.md` or `docs/contributing/*.md` has drifted from the `docs/src/*.typ` source it is rendered from — which is what a hand-edit of a generated file looks like. The regenerate goes to a temp directory precisely so a hand-corrupted committed file cannot be healed by the check that is supposed to catch it. |
 
-Gate membership is not a list anyone maintains: a gate carries `[group("gate")]` in the Justfile AND appears in `check`’s own dependency list, and the docs build fails naming both sides when those two disagree. That dependency list is also this table’s row order, so reordering the table is an edit to the `check` line rather than to any document.
+Gate membership is derived: a gate carries `[group("gate")]` AND appears in `check`’s dependency list, or the docs build fails naming both sides. That list is also this table’s row order, so reordering rows is an edit to the `check` line.
 
 Individual gates run on their own, unmemoized, when you want the output:
 
@@ -126,6 +126,10 @@ The step list lives on `Manifest`’s own doc comment, next to the field you are
 `outdatty.yaml` declares groups coupling `source` files to the `dependents` that must stay in sync with them. `just outdatty-check` (part of the gate) fails when a source changed but its dependents were not re-confirmed.
 
 After editing a source, review the listed dependents, update them as needed, run `just outdatty-update` and commit `outdatty.lock`. A recorded hash is a review watermark: a human looked, no tool verified.
+
+## Worktrees
+
+`just fork <slug>` makes a sibling worktree, `just land` merges it back; see [docs/contributing/worktrees.md](docs/contributing/worktrees.md).
 
 ## Commits
 

@@ -51,6 +51,7 @@ Versions above are read from `www/generated/crate-map.json`, never hand-written.
 - **Never hand-edit a generated Markdown file.** `README.md`, `AGENTS.md` (this file), `CONTRIBUTING.md` and `docs/contributing/*.md` are rendered from `docs/src/*.typ`. Edit the source, then `just docs md`. `just docs md-check` fails on drift.
 - **Closing a task asserts the build passed.** `mt flip done` runs `mmz --is-fresh --tag gate` via `.mindtape/config.toml`. Run `just check` first to record a pass; `--force` waives it and records the waiver.
 - **Tests:** inline `#[cfg(test)]` units beside the code, CLI and integration tests in `tests/it/` driving the real binary with `assert_cmd` and `predicates`. The suite is one binary: a new file is `tests/it/<name>.rs` plus a `mod <name>;` line in `tests/it/main.rs`. `just fix-check` auto-ejects inline tests from oversized files.
+- **Delegated work forks and lands through worktrunk.** `just fork <slug>` makes a sibling worktree on a new branch (`../mmz.<slug>` by default, dev shell allowed); `just land`, run in that worktree, gates it, checks its commits against the MindTape rules, fast-forwards main and removes the worktree. `.config/wt.toml` holds the hooks. Never run a bare `wt merge`: it squashes away the `Refs:` footers.
 - **Be careful with context.** Omit non-essential command output; the gate runners are quiet by design.
 
 ## Where a change belongs

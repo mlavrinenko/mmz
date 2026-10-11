@@ -1,0 +1,30 @@
+# Worktrunk (`wt`) project hooks: everything a fresh clone needs to fork work
+# and land it, so no user-level hook has to exist. `just fork` and `just land`
+# run the commands that set the merge defaults, which project config cannot.
+# Hooks run through `direnv exec .` because the dev shell, not the user profile,
+# holds `just` and `mt`. Docs: https://worktrunk.dev/hook/
+
+# A new worktree gets its `.envrc` allowed, so its dev shell loads.
+[[pre-start]]
+allow = "direnv allow"
+
+# The gate, then the commit rules. `just check` is memoized by mmz, so a gate
+# that already passed is a no-op. The range check refuses a branch whose commits
+# break `mt`'s rules, e.g. a `Refs:` footer that names a path or a task still
+# `wip` at the tip, so it cannot land without its `mt done` flip.
+[[pre-merge]]
+gate = "direnv exec . just check"
+
+[[pre-merge]]
+tasks = "direnv exec . mt check --commits {{ target }}..HEAD"
+
+# Runs inside the worktree being removed, so the gate records step into the
+# primary checkout and import from here (`mmz --import` refuses its own
+# checkout). mmz is the crate under development and not on the dev shell's PATH,
+# so the import runs the binary the worktree's own `just check` built
+# (`target/debug/mmz`); a worktree that never built one makes this a no-op. A
+# copied record is still judged against the primary's tree, so a branch that did
+# not land cannot make a gate read fresh there. It may not fail the merge, which
+# has already landed.
+[[pre-remove]]
+records = "cd {{ primary_worktree_path }} && {{ worktree_path }}/target/debug/mmz --import {{ worktree_path }} || true"

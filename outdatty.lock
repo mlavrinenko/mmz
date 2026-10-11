@@ -15,9 +15,11 @@ groups:
       www/utils/exit-code-notes.typ: 135797116c530857572fcf1ca2d14e2113e392493e7e20b678963aa90fa2305b
   dev-shell:
     source:
-      flake.nix: d20dc5029e935737d75c8ff70f0635342bdae2f4828dd3477d977e625e0f3be0
+      .config/wt.toml: 326ece11a99b6e0e03333d52732862c0390a4afb9678bf99c8e63756c25b5d85
+      flake.nix: 568972a680c018f7f902cd4cbe4053e4bddbeb90220c23271510c16c6abb2b72
     dependents:
-      docs/src/contributing.typ: b152175b727b836ae222bc3ec1b2b4f49c4ada936e1e624ce4b657e4e06baec4
+      docs/src/contributing.typ: 345bd79bfc1f51f20d86c32b4cac798b1abeb6e4ea14a17f6c2db3f8cf8de52f
+      docs/src/contributing/worktrees.typ: e45d3231ab7eb6cb4d56ffffa43c4fcdd7ce706a514fc98a6a8e1b6e76c5a954
   docs-pipeline:
     source:
       .just/scripts/check-capture-paths.sh: ef7de8ddaddbe3de6b805649ea1d29c512e7785e05fb93032133b52d4821dbee
@@ -34,12 +36,12 @@ groups:
   gates:
     source:
       .just/docs.just: 0cf0b64e18a0c7485638c67e7bf364cb18e8e12a54b3fa53ba982150dae8110a
-      Justfile: 3aba0834d68c9cd9b220c310cae4d1ee70319b1caf97587862625b8d35547773
+      Justfile: 5234a520d147d3d5b96b9f3771c9f5c502ef140e0aa4b885644c98661deef193
     dependents:
       .mmz/conf.d/10-rust.yaml: ce20bfa2f797b8a8d3d4c471e1dd0ea4ad3897fb2f31e676d1a090f53824d41e
       .mmz/conf.d/20-docs.yaml: 398c05e57b2c48e5085242abb8b4ea730d46958542410479b9da021447820d53
       .mmz/conf.d/30-repo.yaml: 34e1fafbc9aedb345bc767510c651608ecc49cf09e9355704e031bdb750b70d2
-      docs/src/contributing/gates.typ: 6bd4add0f3eb1828dab6dd022e08176af342f131ffd72332f2a49cdd776df180
+      docs/src/contributing/gates.typ: f3d6f42737dc50a40bbd2a6e9588ec6149d80e8ed5ed7e4585f42d271618a693
       www/utils/gate-notes.typ: d4a5b0e3c9c7e0b5051178e40179792eed4329d260c6a9f7562a86d68ecc434d
   manifest-prose:
     source:

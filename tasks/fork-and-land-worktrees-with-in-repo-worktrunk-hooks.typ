@@ -4,7 +4,7 @@
   title: "Fork and land worktrees with in-repo worktrunk hooks",
   tags: ("tooling", "gating"),
   priority: framework("ice", confidence: 0.85, ease: 7.0, impact: 6.0),
-  status: proposed(2026, 10, 11),
+  status: wip(2026, 10, 11),
 )
 
 == Summary

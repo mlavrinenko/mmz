@@ -32,6 +32,24 @@ default:
 [group("workflow")]
 fix-check: eject fmt clippy-fix check
 
+# `wt` places it at `../mmz.<slug>` unless the user configures otherwise. Extra
+# flags go to `wt switch`, e.g. `--base=@` to branch from HEAD, not main.
+[doc("Fork a sibling worktree on a new branch")]
+[group("workflow")]
+[positional-arguments]
+fork SLUG *ARGS:
+    wt switch --create --yes "$@"
+
+# Run in the worktree. `--no-squash --no-commit` keeps each commit's `Refs:`
+# footer and refuses a dirty tree instead of committing it; the `pre-merge`
+# hooks in .config/wt.toml run the gate and the commit rules before the
+# fast-forward.
+[doc("Gate, fast-forward the branch onto main and remove its worktree")]
+[group("workflow")]
+[positional-arguments]
+land *ARGS:
+    wt merge --no-squash --no-commit --yes "$@"
+
 # Every arm is `just memo <gate>`, so a no-op re-run skips each gate whose
 # declared inputs are unchanged. Gate membership is derived from the
 # `[group("gate")]` tags below and cross-checked against THIS dependency list

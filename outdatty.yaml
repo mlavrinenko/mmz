@@ -135,9 +135,13 @@ groups:
       - docs/src/contributing/generated-docs.typ
 
   # The dev shell defines what a contributor is told to install, and the
-  # setup/tooling prose in CONTRIBUTING.md's source tracks it.
+  # setup/tooling prose in CONTRIBUTING.md's source tracks it. The worktrunk
+  # hooks ride the same group: docs/src/contributing/worktrees.typ narrates
+  # what they run.
   - name: dev-shell
     source:
       - flake.nix
+      - .config/wt.toml
     dependents:
       - docs/src/contributing.typ
+      - docs/src/contributing/worktrees.typ

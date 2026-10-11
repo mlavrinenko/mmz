@@ -85,6 +85,9 @@
             # The Typst formatter `just fmt` runs after `cargo fmt`, so
             # editor-on-save and `just fmt-check` stay byte-identical.
             typstyle
+            # `wt` forks and lands worktrees: `just fork` and `just land` run
+            # it, and .config/wt.toml holds the hooks it fires.
+            worktrunk
             # flock, for the www/generated/ writers (see www/generate.sh).
             util-linux
             yq

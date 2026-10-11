@@ -1,17 +1,14 @@
-// docs/src/contributing.typ — source for the repo-root CONTRIBUTING.md.
-// Rendered to Markdown by `docs/generate-md.sh` via typlite; see docs/src/lib.typ
-// for what that render path can and cannot do.
+// docs/src/contributing.typ — source for the repo-root CONTRIBUTING.md,
+// rendered to Markdown by `docs/generate-md.sh` via typlite (see
+// docs/src/lib.typ for what that render path can and cannot do).
 //
-// This file is the process document: how to run the gates, what each one is for,
-// and what a commit owes. Every fact with a machine source is READ, not retyped
-// — the gate table from `just --dump` (www/gates.jq), the caps from
-// .linecop.yaml, the recipe names through the generated `just` module. The
-// hand-written half is the reasoning, which has no machine source and belongs
-// nowhere else.
-//
-// Material too long for this document lives in docs/contributing/*.md, each
-// rendered from its own docs/src/contributing/*.typ source, and is linked from
-// here rather than inlined.
+// The process document: how to run the gates, what each is for, what a commit
+// owes. Every fact with a machine source is READ, not retyped — the gate table
+// from `just --dump` (www/gates.jq), the caps from .linecop.yaml, the recipe
+// names through the generated `just` module. The hand-written half is the
+// reasoning, which belongs nowhere else. Material too long for it lives in
+// docs/contributing/*.md, each rendered from its own docs/src/contributing/*.typ
+// source and linked from here rather than inlined.
 #import "lib.typ": doc-title, fact, just, num-word, www-link
 // The per-gate prose the docs site already requires for every gate (see
 // .just/scripts/check-doc-facts.sh) — imported rather than duplicated, so one
@@ -58,11 +55,9 @@ the memoization itself: what it buys, what it costs, and how to record a pass.
     .flatten(),
 )
 
-Gate membership is not a list anyone maintains: a gate carries `[group("gate")]`
-in the Justfile AND appears in `check`'s own dependency list, and the docs build
-fails naming both sides when those two disagree. That dependency list is also
-this table's row order, so reordering the table is an edit to the `check` line
-rather than to any document.
+Gate membership is derived: a gate carries `[group("gate")]` AND appears in
+`check`'s dependency list, or the docs build fails naming both sides. That list
+is also this table's row order, so reordering rows is an edit to the `check` line.
 
 Individual gates run on their own, unmemoized, when you want the output:
 
@@ -221,6 +216,11 @@ a source changed but its dependents were not re-confirmed.
 After editing a source, review the listed dependents, update them as needed, run
 #just.outdatty-update() and commit `outdatty.lock`. A recorded hash is a review
 watermark: a human looked, no tool verified.
+
+= Worktrees
+
+`just fork <slug>` makes a sibling worktree, `just land` merges it back; see
+#link("docs/contributing/worktrees.md")[docs/contributing/worktrees.md].
 
 = Commits
 
