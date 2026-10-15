@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adds one line to the caller's context, not dozens. The count agrees with its
   noun: `imported 1 record`.
 
+### Fixed
+
+- The hint `mmz --is-fresh` prints after a failing run gave `mmz just check` as
+  its example, which mmz itself refuses in a repo with no rule for `just check`.
+  The example is now the first listed rule's own name (`mmz just crap`), so it
+  is always a command mmz accepts.
+
 ## [0.12.0] - 2026-10-11
 
 ### Added

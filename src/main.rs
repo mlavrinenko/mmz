@@ -310,7 +310,7 @@ fn strip_separator(rest: &[String]) -> &[String] {
 /// not tracked and leaves the rule stale or `never`.
 fn report_freshness(verdicts: &[mmz::freshness::Verdict]) -> ExitCode {
     let mut fresh = true;
-    let mut any_remediable = false;
+    let mut example: Option<&str> = None;
     for verdict in verdicts {
         if verdict.is_fresh() {
             continue;
@@ -318,14 +318,16 @@ fn report_freshness(verdicts: &[mmz::freshness::Verdict]) -> ExitCode {
         fresh = false;
         let reason = verdict.reason().unwrap_or_else(|| "not fresh".to_owned());
         eprintln!("mmz: `{}` is {} ({reason})", verdict.rule, verdict.state());
-        any_remediable |= verdict.is_remediable();
+        if example.is_none() && verdict.is_remediable() {
+            example = Some(&verdict.rule);
+        }
     }
     if fresh {
         return ExitCode::SUCCESS;
     }
-    if any_remediable {
+    if let Some(rule) = example {
         eprintln!(
-            "mmz: re-run each listed command under mmz (e.g. `mmz just check`) to record a pass — a standalone run is not tracked"
+            "mmz: re-run each listed command under mmz (e.g. `mmz {rule}`) to record a pass; a standalone run is not tracked"
         );
     }
     ExitCode::from(1)

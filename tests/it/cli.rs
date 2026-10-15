@@ -324,6 +324,17 @@ fn is_fresh_non_fresh_output_hints_to_run_under_mmz_once() {
         stderr.contains("`sh` is never"),
         "per-rule lines precede the hint:\n{stderr}"
     );
+    // The example is the first listed rule's own command, so mmz accepts it
+    // whatever the manifest holds; and the line carries no em dash.
+    let line = stderr
+        .lines()
+        .find(|l| l.contains(hint))
+        .expect("hint line");
+    assert!(
+        line.contains("(e.g. `mmz sh`)"),
+        "names a real rule:\n{line}"
+    );
+    assert!(!line.contains('\u{2014}'), "no em dash:\n{line}");
 }
 
 /// A `no-inputs` rule cannot be cleared by wrapping a run — the engine records
