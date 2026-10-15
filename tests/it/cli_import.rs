@@ -45,8 +45,7 @@ fn a_record_fresh_in_the_other_checkout_reads_fresh_here_when_the_trees_match() 
 
     import(here.path(), other.path())
         .success()
-        .stdout(predicate::str::contains("sh\n"))
-        .stdout(predicate::str::contains("mmz: imported 1 records from"));
+        .stdout(predicate::str::starts_with("mmz: imported 1 record from"));
 
     is_fresh(here.path()).success();
 }
@@ -59,7 +58,7 @@ fn a_record_for_different_inputs_stays_stale() {
 
     import(here.path(), other.path())
         .success()
-        .stdout(predicate::str::contains("mmz: imported 1 records from"));
+        .stdout(predicate::str::contains("mmz: imported 1 record from"));
 
     is_fresh(here.path()).code(1);
 }
@@ -89,7 +88,7 @@ fn an_older_local_record_is_replaced() {
 
     import(here.path(), other.path())
         .success()
-        .stdout(predicate::str::contains("mmz: imported 1 records from"));
+        .stdout(predicate::str::contains("mmz: imported 1 record from"));
 
     is_fresh(here.path()).success();
 }

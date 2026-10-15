@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `mmz --import` prints only `mmz: imported N records from <dir>`, no longer a
+  line per imported rule first, so a landing hook that imports a whole gate
+  adds one line to the caller's context, not dozens. The count agrees with its
+  noun: `imported 1 record`.
+
 ## [0.12.0] - 2026-10-11
 
 ### Added

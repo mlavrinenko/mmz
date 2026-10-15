@@ -117,8 +117,9 @@
       record the primary already holds with a later `ran_at` is kept. mmz still
       judges every copied record against this tree: the input digest is built
       from repo-relative paths and content hashes, so a record for other inputs
-      imports and reads stale, never fresh. One line names each imported rule,
-      then `mmz: imported N records from <dir>`. Importing nothing is a success.
+      imports and reads stale, never fresh. It prints one line,
+      `mmz: imported N records from <dir>`, and no rule names. Importing nothing
+      is a success.
 
       A `<dir>` with no `.mmz/` in it, or one that resolves to this checkout
       however it is spelled, is a usage error and exits 2.

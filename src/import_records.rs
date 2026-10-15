@@ -16,8 +16,9 @@ use crate::manifest::Manifest;
 use crate::{cache, prune};
 
 /// Imports into the checkout governing `cwd` the cache records of the checkout
-/// at `from` (absolute, or relative to `cwd`), returning a human-readable
-/// summary: one line per imported rule, then the count.
+/// at `from` (absolute, or relative to `cwd`), returning a one-line summary of
+/// how many records moved. The rules are not listed: a landing hook runs this
+/// on every land, and a line per rule is noise in the caller's context.
 ///
 /// A record is taken when its rule exists in this checkout's merged manifest
 /// and the record held here is not newer. Everything else is skipped silently.
@@ -39,17 +40,12 @@ pub fn import(cwd: &Path, from: &Path) -> Result<String> {
         &base.join(&manifest.cache_dir),
         &live,
     )?;
-    let mut out = String::new();
-    for rule in &imported {
-        out.push_str(rule);
-        out.push('\n');
-    }
-    out.push_str(&format!(
-        "mmz: imported {} records from {}\n",
-        imported.len(),
+    let count = imported.len();
+    let noun = if count == 1 { "record" } else { "records" };
+    Ok(format!(
+        "mmz: imported {count} {noun} from {}\n",
         from.display()
-    ));
-    Ok(out)
+    ))
 }
 
 /// Resolves `from` to the canonical directory of another checkout.
@@ -105,15 +101,15 @@ mod tests {
     }
 
     #[test]
-    fn lists_each_imported_rule_then_the_count() {
+    fn prints_only_the_count_with_a_plural_that_agrees() {
         let here = checkout(None);
         let other = checkout(Some(10));
         let text = import(here.path(), other.path()).expect("import");
-        assert!(text.starts_with("sh\n"), "the rule is named: {text}");
-        assert!(text.contains("imported 1 records from"), "counted: {text}");
+        assert!(text.starts_with("mmz: imported 1 record from"), "{text}");
+        assert_eq!(text.lines().count(), 1, "no per-rule line: {text}");
         let again = import(here.path(), other.path()).expect("import");
         assert!(
-            again.starts_with("mmz: imported 0"),
+            again.starts_with("mmz: imported 0 records from"),
             "nothing left: {again}"
         );
     }
@@ -126,7 +122,7 @@ mod tests {
         let name = other.path().file_name().expect("tempdir name");
         let relative = Path::new("..").join(name);
         let text = import(here.path(), &relative).expect("import");
-        assert!(text.contains("imported 1 records"), "resolved: {text}");
+        assert!(text.contains("imported 1 record from"), "resolved: {text}");
     }
 
     #[test]
