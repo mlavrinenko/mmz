@@ -4,7 +4,7 @@
   title: "Name a real rule in the is-fresh re-run hint",
   tags: ("cli",),
   priority: framework("ice", confidence: 0.9, ease: 9.0, impact: 4.0),
-  status: wip(2026, 10, 15),
+  status: done(2026, 10, 15),
 )
 
 == Summary
