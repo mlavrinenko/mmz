@@ -4,7 +4,7 @@
   title: "Fill task bodies as raw markup and unescape the filed ones",
   tags: ("docs",),
   priority: framework("ice", confidence: 0.9, ease: 7.0, impact: 5.0),
-  status: wip(2026, 10, 15),
+  status: done(2026, 10, 15),
 )
 
 == Summary
