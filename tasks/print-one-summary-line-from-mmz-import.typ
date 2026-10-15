@@ -4,7 +4,7 @@
   title: "Print one summary line from mmz --import",
   tags: ("cli", "tooling"),
   priority: framework("ice", confidence: 0.9, ease: 8.0, impact: 5.0),
-  status: wip(2026, 10, 15),
+  status: done(2026, 10, 15),
 )
 
 == Summary
