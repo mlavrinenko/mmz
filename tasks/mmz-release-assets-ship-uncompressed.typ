@@ -14,13 +14,13 @@
     2026,
     8,
     21,
-  )[Archives, not raw binaries: \`.tar.gz\` per unix target, \`.zip\` for Windows, each flat and holding the binary under its plain name beside \`LICENSE-MIT\` — so an extract leaves a runnable \`mmz\` in the current directory, and the licence finally travels with the binary it covers. \`SHA256SUMS\` over the set, because an archive is where "did this download intact" stops being answerable by running the file.
+  )[Archives, not raw binaries: `.tar.gz` per unix target, `.zip` for Windows, each flat and holding the binary under its plain name beside `LICENSE-MIT` — so an extract leaves a runnable `mmz` in the current directory, and the licence finally travels with the binary it covers. `SHA256SUMS` over the set, because an archive is where "did this download intact" stops being answerable by running the file.
 
-    Measured rather than estimated: the \`full\` flavour goes 45.4 MB -> 5.7 MB, eight to one, well past the three-to-four the estimate assumed — a parse table is a large array of small integers and gzip eats it. The default flavour manages 5.5 MB -> 2.0 MB.
+    Measured rather than estimated: the `full` flavour goes 45.4 MB -> 5.7 MB, eight to one, well past the three-to-four the estimate assumed — a parse table is a large array of small integers and gzip eats it. The default flavour manages 5.5 MB -> 2.0 MB.
 
     The rename was the whole cost and the download counts settled it: every asset of every release from v0.1.1 to v0.7.0 sits at 0-1 downloads, there is no install script, and the docs link the releases page rather than any file. Releases up to v0.7.0 keep their raw assets.
 
-    Packaging is one bash step for every runner rather than a unix/windows pair. The Windows half archives through \`7z\` and is unproven until a real run — Git Bash ships GNU tar, which cannot write a zip, so there is no fallback in the step. That is the sibling verify task, not this one.],
+    Packaging is one bash step for every runner rather than a unix/windows pair. The Windows half archives through `7z` and is unproven until a real run — Git Bash ships GNU tar, which cannot write a zip, so there is no fallback in the step. That is the sibling verify task, not this one.],
 )
 
 == Summary

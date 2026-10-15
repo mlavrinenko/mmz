@@ -13,7 +13,7 @@
 
 #slot(
   "summary",
-  kind: "text",
+  kind: "raw",
   prompt: "The problem, stated once",
   example: "What is wrong today, and why it matters.",
 )

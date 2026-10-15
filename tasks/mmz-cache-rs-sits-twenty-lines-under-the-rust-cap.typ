@@ -8,7 +8,7 @@
     2026,
     8,
     21,
-  )[Ran \`just eject\`, which is what \`just fix-check\` does anyway: 480 lines became 277 in \`cache.rs\` and 203 in \`cache\_tests.rs\`, wired by the \`\#\[path\]\` module the other ejected files use. No test moved, changed or was added — this is the file split, nothing else.],
+  )[Ran `just eject`, which is what `just fix-check` does anyway: 480 lines became 277 in `cache.rs` and 203 in `cache_tests.rs`, wired by the `#[path]` module the other ejected files use. No test moved, changed or was added — this is the file split, nothing else.],
 )
 
 == Summary
