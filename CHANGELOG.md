@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-20
+
 ### Added
 
 - `exclude:` leaves paths out of a rule's inputs. Put it beside `globs` in a
