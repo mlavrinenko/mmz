@@ -46,6 +46,13 @@
     instead would drag every sibling scope through `target/` and any other
     ignored tree, which is both slow and a source of spurious cache busts.
   ],
+  "scopes[].exclude": [
+    For a tree a broad glob reaches but the rule must not depend on, such as a
+    cache another gate rewrites. Matching a directory drops everything under it,
+    and the walk never enters it, so a file deleted there mid-run cannot fail
+    the hash. Reach for it over a `.gitignore` line when git should still track
+    the path.
+  ],
   probes: [
     How a rule depends on something that is not a whole file. Read the trade
     before reaching for one — a wrong scope costs time, a wrong probe can lie —
@@ -156,6 +163,11 @@
     guess which kind a name is, and an entry that is neither is refused at load.
     A rule whose only input is a probe still has inputs: it is memoized, not
     `no-inputs`.
+  ],
+  "commands[].exclude": [
+    The rule-level twin of a scope's `exclude`, for a path one rule must not
+    hash while the other rules naming the same scope still do. Probes are not
+    affected.
   ],
   "commands[].outputs": [
     Declare these for a rule that _produces_ something. A verdict command

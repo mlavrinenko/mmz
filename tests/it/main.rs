@@ -13,6 +13,7 @@ mod cli_declaration_changes;
 mod cli_dump;
 mod cli_empty_selection;
 mod cli_import;
+mod cli_input_exclude;
 mod cli_json_probes;
 mod cli_outputs;
 mod cli_parametric;

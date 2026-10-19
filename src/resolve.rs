@@ -1,6 +1,6 @@
 //! Expansion of scope patterns into concrete input paths.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, Walk, WalkBuilder};
@@ -13,15 +13,20 @@ pub fn is_glob(pattern: &str) -> bool {
     pattern.chars().any(|ch| matches!(ch, '*' | '?' | '['))
 }
 
-/// A set of patterns and the ignore setting they expand under.
+/// A set of patterns, the patterns left out of them, and the ignore setting
+/// they expand under.
 ///
-/// A scope can override the manifest's `gitignore`, so one rule's patterns no
-/// longer share a single filter; callers hand [`expand_groups`] the patterns
-/// already bucketed by effective setting.
+/// A scope can override the manifest's `gitignore` and carry its own
+/// `exclude`, so one rule's patterns no longer share a single filter; callers
+/// hand [`expand_groups`] the patterns already bucketed by both.
 #[derive(Debug, Clone)]
 pub struct GlobGroup {
     /// Patterns to expand — globs and literal paths, as in [`expand`].
     pub globs: Vec<String>,
+    /// Patterns to leave out. A path is excluded when it, or any directory
+    /// above it, matches one, so an excluded directory is pruned during the
+    /// walk and nothing under it is listed or hashed. Empty excludes nothing.
+    pub exclude: Vec<String>,
     /// Whether git-ignored paths are skipped while expanding these patterns.
     pub gitignore: bool,
 }
@@ -34,19 +39,20 @@ pub struct GlobGroup {
 /// prunes directories *during* traversal — an ignored tree is never descended
 /// into — so it cannot be re-applied per pattern after one shared walk; this
 /// runs a walk per group instead, which [`crate::manifest::Manifest::glob_groups`]
-/// caps at two by bucketing scopes rather than emitting one group each. A
-/// single group costs exactly what [`expand`] always did.
+/// keeps to one per distinct setting and exclusion by bucketing scopes rather
+/// than emitting one group each. A single group with no `exclude` costs
+/// exactly what [`expand`] always did.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Pattern`] if a glob pattern is invalid.
+/// Returns [`Error::Pattern`] if a glob or exclude pattern is invalid.
 pub fn expand_groups(groups: &[GlobGroup], base: &Path) -> Result<Vec<String>> {
     if let [only] = groups {
-        return expand(&only.globs, base, only.gitignore);
+        return expand_group(only, base);
     }
     let mut out: Vec<String> = Vec::new();
     for group in groups {
-        out.extend(expand(&group.globs, base, group.gitignore)?);
+        out.extend(expand_group(group, base)?);
     }
     out.sort();
     out.dedup();
@@ -69,21 +75,69 @@ pub fn expand_groups(groups: &[GlobGroup], base: &Path) -> Result<Vec<String>> {
 ///
 /// Returns [`Error::Pattern`] if a glob pattern is invalid.
 pub fn expand(patterns: &[String], base: &Path, gitignore: bool) -> Result<Vec<String>> {
+    expand_with(patterns, &Exclusion::default(), base, gitignore)
+}
+
+fn expand_group(group: &GlobGroup, base: &Path) -> Result<Vec<String>> {
+    let exclusion = Exclusion::new(&group.exclude)?;
+    expand_with(&group.globs, &exclusion, base, group.gitignore)
+}
+
+fn expand_with(
+    patterns: &[String],
+    exclusion: &Exclusion,
+    base: &Path,
+    gitignore: bool,
+) -> Result<Vec<String>> {
     let mut out: Vec<String> = Vec::new();
     let mut globs: Vec<&str> = Vec::new();
     for pattern in patterns {
         if is_glob(pattern) {
             globs.push(pattern);
-        } else {
+        } else if !exclusion.covers(&normalize(pattern)) {
             expand_literal(pattern, base, &mut out);
         }
     }
     if !globs.is_empty() {
-        expand_globs(&globs, base, gitignore, &mut out)?;
+        expand_globs(&globs, exclusion, base, gitignore, &mut out)?;
     }
     out.sort();
     out.dedup();
     Ok(out)
+}
+
+/// The compiled `exclude` patterns of one [`GlobGroup`]. The default excludes
+/// nothing and compiles nothing.
+#[derive(Debug, Clone, Default)]
+struct Exclusion {
+    set: Option<GlobSet>,
+}
+
+impl Exclusion {
+    fn new(patterns: &[String]) -> Result<Self> {
+        if patterns.is_empty() {
+            return Ok(Self::default());
+        }
+        let patterns: Vec<&str> = patterns.iter().map(String::as_str).collect();
+        Ok(Self {
+            set: Some(build_globset(&patterns)?),
+        })
+    }
+
+    /// Whether `rel` itself matches an exclude pattern. The walker prunes a
+    /// matching directory, so for a walked path this is the whole question.
+    fn matches(&self, rel: &str) -> bool {
+        self.set.as_ref().is_some_and(|set| set.is_match(rel))
+    }
+
+    /// Whether `rel` or any directory above it matches, for a literal path
+    /// that never went through the walk's pruning.
+    fn covers(&self, rel: &str) -> bool {
+        rel.match_indices('/')
+            .filter_map(|(end, _)| rel.get(..end))
+            .chain(std::iter::once(rel))
+            .any(|path| self.matches(path))
+    }
 }
 
 fn expand_literal(pattern: &str, base: &Path, out: &mut Vec<String>) {
@@ -95,12 +149,19 @@ fn expand_literal(pattern: &str, base: &Path, out: &mut Vec<String>) {
 }
 
 /// Compiles `globs` into a matcher, then walks `base` once (honouring the
-/// gitignore chain when `gitignore` is set) and collects every file that
-/// matches at least one pattern. Patterns matching nothing are warned about.
-fn expand_globs(globs: &[&str], base: &Path, gitignore: bool, out: &mut Vec<String>) -> Result<()> {
+/// gitignore chain when `gitignore` is set, and pruning whatever `exclusion`
+/// matches) and collects every file that matches at least one pattern.
+/// Patterns matching nothing are warned about.
+fn expand_globs(
+    globs: &[&str],
+    exclusion: &Exclusion,
+    base: &Path,
+    gitignore: bool,
+    out: &mut Vec<String>,
+) -> Result<()> {
     let set = build_globset(globs)?;
     let mut matched = vec![false; globs.len()];
-    for entry in build_walker(base, gitignore) {
+    for entry in build_walker(base, gitignore, exclusion) {
         let Ok(entry) = entry else { continue };
         let path = entry.path();
         // `follow_links(false)` keeps the walker from descending into a
@@ -160,7 +221,11 @@ fn build_globset(globs: &[&str]) -> Result<GlobSet> {
 /// ignore rules filter), the `.git` directory is always pruned, and when
 /// `gitignore` is set the full gitignore chain applies — `.gitignore` is also
 /// added as a custom ignore file so it is honoured outside a git repository.
-fn build_walker(base: &Path, gitignore: bool) -> Walk {
+/// An entry `exclusion` matches is pruned before it is read, so nothing under
+/// an excluded directory is ever listed, stat-ed or hashed.
+fn build_walker(base: &Path, gitignore: bool, exclusion: &Exclusion) -> Walk {
+    let exclusion = exclusion.clone();
+    let root: PathBuf = base.to_path_buf();
     let mut builder = WalkBuilder::new(base);
     builder
         .hidden(false)
@@ -170,7 +235,7 @@ fn build_walker(base: &Path, gitignore: bool) -> Walk {
         .git_global(gitignore)
         .git_exclude(gitignore)
         .parents(gitignore)
-        .filter_entry(skip_git_dir);
+        .filter_entry(move |entry| skip_git_dir(entry) && !excluded(entry, &root, &exclusion));
     if gitignore {
         builder.add_custom_ignore_filename(".gitignore");
     }
@@ -179,6 +244,14 @@ fn build_walker(base: &Path, gitignore: bool) -> Walk {
 
 fn skip_git_dir(entry: &DirEntry) -> bool {
     entry.file_name() != ".git"
+}
+
+fn excluded(entry: &DirEntry, root: &Path, exclusion: &Exclusion) -> bool {
+    let Ok(rel) = entry.path().strip_prefix(root) else {
+        return false;
+    };
+    let rel = normalize(&rel.to_string_lossy());
+    !rel.is_empty() && exclusion.matches(&rel)
 }
 
 fn normalize(path: &str) -> String {
@@ -198,6 +271,7 @@ mod tests {
     fn group(pattern: &str, gitignore: bool) -> GlobGroup {
         GlobGroup {
             globs: vec![pattern.to_owned()],
+            exclude: Vec::new(),
             gitignore,
         }
     }

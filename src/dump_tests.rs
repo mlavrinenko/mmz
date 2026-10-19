@@ -360,3 +360,48 @@ fn an_invalid_manifest_errors_from_both_forms_instead_of_dumping_partially() {
         "both renderings surface the same merge error"
     );
 }
+
+/// `exclude` changes what a rule hashes, so a dump that dropped it would leave
+/// a reader auditing a composed manifest unable to see why a path is missing.
+#[test]
+fn a_scope_s_and_a_rule_s_exclude_are_echoed_in_both_forms() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    write(base, "a.txt", "one");
+    manifest(
+        base,
+        concat!(
+            "scopes:\n",
+            "  src:\n",
+            "    globs: [\"*.txt\"]\n",
+            "    exclude: [\"b.txt\"]\n",
+            "commands:\n",
+            "  - name: sh\n",
+            "    inputs: [src]\n",
+            "    exclude: [\"**/*.log\"]\n",
+        ),
+    );
+
+    let text = dump(base).expect("dump");
+    assert!(
+        text.contains("    globs: [*.txt]\n    exclude: [b.txt]\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("    inputs: [src]\n    exclude: [**/*.log]\n"),
+        "{text}"
+    );
+
+    let json: serde_json::Value =
+        serde_json::from_str(&dump_json(base).expect("json")).expect("valid json");
+    assert_eq!(
+        json.pointer("/scopes/0/exclude/0")
+            .and_then(serde_json::Value::as_str),
+        Some("b.txt")
+    );
+    assert_eq!(
+        json.pointer("/commands/0/exclude/0")
+            .and_then(serde_json::Value::as_str),
+        Some("**/*.log")
+    );
+}

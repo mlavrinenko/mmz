@@ -241,7 +241,8 @@ pub fn detect_collision(matches: &[Match]) -> Result<()> {
 }
 
 /// Resolves a macro scope to its file set, honouring the gitignore filter —
-/// the scope's own override when it carries one, else the manifest's.
+/// the scope's own override when it carries one, else the manifest's — and
+/// leaving out what the scope's and the rule's `exclude` match.
 fn resolve_domain(
     manifest: &Manifest,
     base: &Path,
@@ -255,11 +256,7 @@ fn resolve_domain(
             command: rule.name.clone(),
             scope: scope.to_owned(),
         })?;
-    resolve::expand(
-        &declared.globs,
-        base,
-        declared.honours_gitignore(manifest.gitignore),
-    )
+    resolve::expand_groups(&[manifest.scope_group(declared, rule)], base)
 }
 
 /// Normalizes an argv file token to a `base`-relative, forward-slash path so it
@@ -280,6 +277,7 @@ mod tests {
         Command {
             name: name.to_owned(),
             inputs: Vec::new(),
+            exclude: Vec::new(),
             match_mode: mode,
             outputs: Vec::new(),
             tags: Vec::new(),

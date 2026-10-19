@@ -12,7 +12,7 @@
       "items": { "type": "string" }
     },
     "scopes": {
-      "description": "Named glob sets, each referenced by command rules. A scope is either an array of patterns, or an object naming those patterns under globs alongside a per-scope gitignore override.",
+      "description": "Named glob sets, each referenced by command rules. A scope is either an array of patterns, or an object naming those patterns under globs alongside an exclude list and a per-scope gitignore override.",
       "type": "object",
       "additionalProperties": {
         "oneOf": [
@@ -23,7 +23,7 @@
           },
           {
             "type": "object",
-            "description": "The scope's patterns plus an optional per-scope gitignore override.",
+            "description": "The scope's patterns plus an optional exclude list and per-scope gitignore override.",
             "additionalProperties": false,
             "required": ["globs"],
             "properties": {
@@ -31,6 +31,11 @@
                 "type": "array",
                 "description": "The scope's patterns. At least one is required; use the array form when there is no override to declare.",
                 "minItems": 1,
+                "items": { "type": "string" }
+              },
+              "exclude": {
+                "type": "array",
+                "description": "Patterns left out of this scope's globs and literals. A path is excluded when it, or any directory above it, matches one, so an excluded directory is pruned during the walk: nothing under it is listed, hashed or read. Same glob syntax as globs. Applies to this scope only; a sibling scope in the same rule still sees the path.",
                 "items": { "type": "string" }
               },
               "gitignore": {
@@ -111,6 +116,11 @@
           "inputs": {
             "type": "array",
             "description": "Input names, each either a scope (whose globs union into this rule's file set) or a probe (whose stdout hash joins its digest) — one namespace, written identically. For a parametric rule these are the shared pins added to every per-file record; keep the fan scope out of them.",
+            "items": { "type": "string" }
+          },
+          "exclude": {
+            "type": "array",
+            "description": "Patterns left out of every file this rule's scopes resolve to, its {file:scope} domain included, on top of each scope's own exclude. A path is excluded when it, or any directory above it, matches one, so an excluded directory is never walked, listed or hashed. Probes are untouched.",
             "items": { "type": "string" }
           },
           "outputs": {

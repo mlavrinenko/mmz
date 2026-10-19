@@ -6,7 +6,7 @@
   route: "/inputs/",
   label: "Inputs",
   title: "Inputs: scopes and probes",
-  summary: "Named glob sets, the gitignore filter and how to opt one scope out of it, and probes for the inputs that are not files.",
+  summary: "Named glob sets, the gitignore filter and how to opt one scope out of it, leaving paths out with exclude, and probes for the inputs that are not files.",
 )
 #metadata(meta) <page-meta>
 
@@ -35,21 +35,16 @@ commands:
 
 Globs follow the common convention: `*` stays within a directory, `**` crosses
 directories. A rule's file set is the union of its scopes' globs, resolved fresh
-on every invocation.
-
-Scopes exist so a shared input path lives in one place. When `rust` grows a
-`build.rs`, every rule that pins it gets the fix at once.
+on every invocation, so when `rust` grows a `build.rs`, every rule naming it gets
+the fix at once.
 
 = The gitignore filter
 
-Glob expansion skips git-ignored paths by default. This is not a convenience —
-it is what keeps build output out of an input set. Without it, a scope like
-`["**/*.rs"]` would sweep up generated sources under `target/`, and every rule
-naming it would bust on its own output.
-
-Alongside it: `.git` is never traversed, and symlinks are not followed.
-Explicitly listed literal paths are always kept, so naming one file directly
-works even when a broad ignore rule would have covered it.
+Glob expansion skips git-ignored paths by default, which keeps build output out
+of an input set: without it, `["**/*.rs"]` would sweep up generated sources
+under `target/`, and every rule naming it would bust on its own output. `.git`
+is never traversed and symlinks are not followed. A literal path is always kept,
+even when a broad ignore rule covers it.
 
 #callout("note")[
   A scope that resolves to _zero_ files is an error by default (`no_inputs`),
@@ -58,14 +53,10 @@ works even when a broad ignore rule would have covered it.
 
 = Artifact scopes
 
-Which raises the case the filter gets wrong. Sometimes a rule genuinely depends
-on a build artifact — a coverage report feeding a threshold check, a compiled
-bundle feeding a size gate. Artifacts live in git-ignored paths by definition, so
-under the default filter such a scope expands to nothing, and a rule whose inputs
-resolve to nothing is not an error you notice: it is a rule that reports fresh
-forever.
-
-Spell that one scope as an object and pin `gitignore` for it alone:
+Sometimes a rule depends on a build artifact: a coverage report feeding a
+threshold check, a bundle feeding a size gate. Artifacts live in git-ignored
+paths, so under the filter such a scope expands to nothing, and the rule reports
+fresh forever. Spell that one scope as an object and pin `gitignore` for it:
 
 ```yaml
 scopes:
@@ -75,16 +66,28 @@ scopes:
     globs: ["target/coverage/lcov.info"]
 ```
 
-Now the artifact is a tracked input: regenerate it, and the rule goes stale.
+Regenerate the artifact and the rule goes stale. Each scope expands under its
+own setting, so its siblings keep filtering, where flipping the manifest-level
+`gitignore` would drag them all through `target/`. An object without `globs`, or
+with an empty list, is a manifest error.
 
-Keep the override at the scope that names the artifact. Flipping the
-manifest-level `gitignore` instead would drag every sibling scope through
-`target/` and any other ignored tree — slow, and a source of spurious cache
-busts. There is no per-glob override: one knob, at the level a reader can see it.
+= Leaving paths out
 
-A rule may mix both kinds freely; each scope is expanded under its own setting,
-so the siblings keep filtering. Absent means inherit. An object without `globs`,
-or with an empty `globs` list, is a manifest error.
+A glob can also sweep up a tree the rule must not depend on, such as a cache
+another gate rewrites. List it under `exclude`, beside `globs`:
+
+```yaml
+scopes:
+  examples:
+    globs: ["examples/**"]
+    exclude: ["**/.cache"]     # and everything under it
+```
+
+A path is out when it, or a directory above it, matches a pattern. The walk
+prunes an excluded directory, so nothing under it is listed in `--status=json`,
+read or hashed, and a file deleted there mid-run cannot fail the rule. A sibling
+scope naming the path keeps it. `exclude` on a rule, beside `inputs`, drops it
+from every scope the rule names and from its `{file:scope}` domain.
 
 = Probes: inputs that are not files
 
@@ -111,10 +114,8 @@ commands:
 A real `flake.lock` holds a hundred nodes, so a scope naming it makes every rule
 depend on every input. The probe above depends on one, and reaching it costs a
 file read: no shell, nothing on `PATH`, no process per rule on an
-`mmz --is-fresh` that gates the whole manifest at once. `json:` is jq — a
-compatibility choice rather than a power one, since probes written before this
-key existed already use `,` and `with_entries(select(…))`, and a manifest key
-must not change meaning in a later version.
+`mmz --is-fresh` that gates the whole manifest at once. `json:` is jq, which
+the probes written before this key already relied on.
 
 `run:` is the other source — a command line whose stdout is the bytes — and it
 may carry a `json:` too, selecting out of that stdout instead of a file:

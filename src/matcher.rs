@@ -43,6 +43,7 @@ mod tests {
         Command {
             name: name.to_owned(),
             inputs: Vec::new(),
+            exclude: Vec::new(),
             match_mode: MatchMode::Prefix,
             outputs: Vec::new(),
             tags: Vec::new(),
@@ -55,6 +56,7 @@ mod tests {
         Command {
             name: name.to_owned(),
             inputs: Vec::new(),
+            exclude: Vec::new(),
             match_mode: MatchMode::Exact,
             outputs: Vec::new(),
             tags: Vec::new(),

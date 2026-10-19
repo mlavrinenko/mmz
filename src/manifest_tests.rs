@@ -374,3 +374,48 @@ fn a_malformed_ttl_fails_the_load_naming_the_value() {
     assert!(text.contains("invalid ttl `1h30m`"), "{text}");
     assert!(text.contains("commands[0]"), "points at the rule: {text}");
 }
+
+#[test]
+fn glob_groups_without_exclude_carry_no_exclusion() {
+    let manifest = parse(
+        "scopes:\n  rust: [\"**/*.rs\"]\ncommands:\n  - name: cargo test\n    inputs: [rust]\n",
+    );
+    let command = manifest.commands.first().expect("command");
+    let groups = manifest.glob_groups(command).expect("groups");
+    assert!(
+        groups.iter().all(|group| group.exclude.is_empty()),
+        "a manifest naming no `exclude` resolves as it always did"
+    );
+}
+
+#[test]
+fn glob_groups_split_a_scope_by_its_exclude_and_add_the_rule_s() {
+    let manifest = parse(concat!(
+        "scopes:\n",
+        "  src: [\"src/**\"]\n",
+        "  pins: [\"Cargo.toml\"]\n",
+        "  examples:\n",
+        "    globs: [\"examples/**\"]\n",
+        "    exclude: [\"**/.cache\"]\n",
+        "commands:\n",
+        "  - name: cargo test\n",
+        "    inputs: [src, pins, examples]\n",
+        "    exclude: [\"**/*.log\"]\n",
+    ));
+    let command = manifest.commands.first().expect("command");
+    let groups = manifest.glob_groups(command).expect("groups");
+    assert_eq!(groups.len(), 2, "scopes sharing an exclusion share a walk");
+    let plain = groups.first().expect("plain group");
+    let excluded = groups.get(1).expect("excluding group");
+    assert_eq!(
+        plain.globs,
+        vec!["src/**".to_owned(), "Cargo.toml".to_owned()]
+    );
+    assert_eq!(plain.exclude, vec!["**/*.log".to_owned()], "the rule's own");
+    assert_eq!(excluded.globs, vec!["examples/**".to_owned()]);
+    assert_eq!(
+        excluded.exclude,
+        vec!["**/.cache".to_owned(), "**/*.log".to_owned()],
+        "the scope's exclusion, then the rule's"
+    );
+}

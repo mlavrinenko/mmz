@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `exclude:` leaves paths out of a rule's inputs. Put it beside `globs` in a
+  scope's object form, or beside `inputs` on a command rule:
+
+  ```yaml
+  scopes:
+    examples:
+      globs: ["examples/**"]
+      exclude: ["**/.cache"]
+  ```
+
+  A path is out when it, or a directory above it, matches an exclude pattern.
+  The walk prunes an excluded directory, so nothing under it is listed in
+  `--status=json`, read or hashed, and a file another gate deletes there
+  mid-run can no longer fail the rule. A scope's `exclude` covers that scope
+  alone, literals included; a rule's covers every scope it names and its
+  `{file:scope}` domain. A manifest without `exclude` resolves exactly as
+  before. `--dump-config` echoes both.
+
+### Changed
+
+- Library: `resolve::GlobGroup`, `manifest::Scope` and `manifest::Command`
+  each gained a public `exclude: Vec<String>` field, so code building one with
+  a struct literal has to set it.
+
 ## [0.12.1] - 2026-10-15
 
 ### Changed

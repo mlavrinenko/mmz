@@ -98,10 +98,13 @@ list every file the command could read.
 - The recipe or script body that defines the command, if it lives in a file. If
   it lives in _part_ of a file, use a #link(u("/inputs/"))[probe] rather than
   hashing the whole file.
+- Not a tree another command writes while the rule is checked, such as a cache
+  a sibling gate rewrites. A glob over it hashes a moving target, so leave it
+  out with #link(u("/inputs/"))[`exclude`] rather than narrowing the glob.
 
 Then check your work with `mmz --status=json`: if the rule's resolved input list
 is shorter than you expected, a glob is not matching — very often because the
-path is git-ignored.
+path is git-ignored or excluded.
 
 #callout("note")[
   When in doubt, over-declare. An unnecessary re-run costs time. A missing input

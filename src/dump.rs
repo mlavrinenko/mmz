@@ -112,6 +112,8 @@ struct Policy {
 struct ScopeEntry {
     name: String,
     globs: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    exclude: Vec<String>,
     /// The scope's own override of the manifest-level `gitignore` filter;
     /// omitted when the scope does not set one and inherits it instead.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,6 +164,8 @@ struct CommandEntry {
     match_mode: &'static str,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     inputs: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    exclude: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     outputs: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -223,6 +227,7 @@ fn collect(cwd: &Path) -> Result<Dump> {
         .map(|(name, scope)| ScopeEntry {
             name: name.clone(),
             globs: scope.globs.clone(),
+            exclude: scope.exclude.clone(),
             gitignore: scope.gitignore,
             source: source_of(&provenance.scopes, name, base),
         })
@@ -254,6 +259,7 @@ fn collect(cwd: &Path) -> Result<Dump> {
                 MatchMode::Exact => "exact",
             },
             inputs: command.inputs.clone(),
+            exclude: command.exclude.clone(),
             outputs: command
                 .outputs
                 .iter()
@@ -378,6 +384,9 @@ fn render_text(dump: &Dump) -> String {
         for scope in &dump.scopes {
             out.push_str(&format!("  {}:  # {}\n", scope.name, scope.source));
             out.push_str(&format!("    globs: [{}]\n", scope.globs.join(", ")));
+            if !scope.exclude.is_empty() {
+                out.push_str(&format!("    exclude: [{}]\n", scope.exclude.join(", ")));
+            }
             if let Some(gitignore) = scope.gitignore {
                 out.push_str(&format!("    gitignore: {gitignore}\n"));
             }
@@ -393,6 +402,9 @@ fn render_text(dump: &Dump) -> String {
             out.push_str(&format!("    match: {}\n", command.match_mode));
             if !command.inputs.is_empty() {
                 out.push_str(&format!("    inputs: [{}]\n", command.inputs.join(", ")));
+            }
+            if !command.exclude.is_empty() {
+                out.push_str(&format!("    exclude: [{}]\n", command.exclude.join(", ")));
             }
             if !command.outputs.is_empty() {
                 out.push_str(&format!("    outputs: [{}]\n", command.outputs.join(", ")));

@@ -45,17 +45,17 @@ groups:
       www/utils/gate-notes.typ: d4a5b0e3c9c7e0b5051178e40179792eed4329d260c6a9f7562a86d68ecc434d
   manifest-prose:
     source:
-      schema/mmz.schema.json: 873e29666ffdd1607ecc2ebb50369cdf705eb8bc4199e765c1be9c3b6c0c422c
+      schema/mmz.schema.json: 38a0c545639642c0ba8cdae96b2c5d4b6467ae224ecbdadfadaa2f87481a06c8
     dependents:
-      www/utils/config-notes.typ: e325061a00358df232c1d935bc30b3aee4c8251255dec7aa14d7890097d57341
+      www/utils/config-notes.typ: 7c58f19d00b467bda0ebc073ed430dc881aced7a6a280ff942ff09bc596b914d
   manifest-schema:
     source:
-      src/manifest.rs: 31e681c01ad98dc970ecc818791155ca8b1118e82ea192773f5e5262f8586502
+      src/manifest.rs: 3ed95e4eb844862930b9a8400ffcb0c74f1f078f9a41eec9254bfae726ea0a63
       src/manifest_strict.rs: 2df53b9f9af36c2c643814fe4c3564ed3ac3bce6c15344eddf6b2af48c7c33e2
       src/probe.rs: 1ce5a9a487b2913beabbd8af76422d629708fc49c6cd8f15fde10de816978e7e
       src/ttl.rs: d3fb9ba6aeca55c4df2468194b28e7b9812bf97955e41a5088ab5b59e18affa6
     dependents:
-      schema/mmz.schema.json: 873e29666ffdd1607ecc2ebb50369cdf705eb8bc4199e765c1be9c3b6c0c422c
+      schema/mmz.schema.json: 38a0c545639642c0ba8cdae96b2c5d4b6467ae224ecbdadfadaa2f87481a06c8
       src/schema.rs: 68716847cae4573712e77898eeb07da8c1e2a298034bc82a71dc25cd10bb5522
   release-notes:
     source:

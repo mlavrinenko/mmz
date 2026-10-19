@@ -57,34 +57,32 @@ where
         .collect())
 }
 
-/// A named input scope: the patterns it contributes, plus an optional
-/// per-scope override of the manifest's `gitignore` filter.
+/// A named input scope: its patterns, the patterns it leaves out, and an
+/// optional override of the manifest's `gitignore` filter.
 ///
-/// The array form is the common spelling and inherits the manifest-level
-/// setting:
+/// The array form inherits the manifest-level setting. The object form names
+/// the patterns under `globs`, may pin `gitignore` for a scope naming build
+/// artifacts (which resolve empty under the filter, so the rule would read fresh
+/// forever), and may list `exclude`:
 ///
 /// ```yaml
 /// scopes:
 ///   src: ["src/**"]
-/// ```
-///
-/// The object form names the patterns under `globs` and may pin `gitignore` for
-/// this scope alone. That is the escape hatch for a scope naming build
-/// artifacts: they live in git-ignored paths by definition, so under the
-/// default filter the scope resolves empty and every rule referencing it is
-/// fresh forever.
-///
-/// ```yaml
-/// scopes:
 ///   lcov:
 ///     gitignore: false
 ///     globs: ["target/coverage/lcov.info"]
+///   examples:
+///     globs: ["examples/**"]
+///     exclude: ["**/.cache"]
 /// ```
 #[derive(Debug, Clone, Deserialize)]
 #[serde(try_from = "ScopeSpelling")]
 pub struct Scope {
     /// Glob patterns and literal paths this scope contributes.
     pub globs: Vec<String>,
+    /// Patterns this scope leaves out of its own `globs`; empty in the array
+    /// form. See [`GlobGroup::exclude`] for how a path is matched.
+    pub exclude: Vec<String>,
     /// Per-scope override of [`Manifest::gitignore`]; `None` inherits it.
     pub gitignore: Option<bool>,
 }
@@ -104,7 +102,8 @@ impl Scope {
 enum ScopeSpelling {
     /// The array form — patterns only, inheriting the manifest's `gitignore`.
     Patterns(Vec<String>),
-    /// The object form — `globs` plus an optional per-scope `gitignore`.
+    /// The object form — `globs` plus an optional `exclude` and per-scope
+    /// `gitignore`.
     Object(ScopeObject),
 }
 
@@ -117,6 +116,8 @@ struct ScopeObject {
     #[serde(default)]
     globs: Option<Vec<String>>,
     #[serde(default)]
+    exclude: Vec<String>,
+    #[serde(default)]
     gitignore: Option<bool>,
 }
 
@@ -128,6 +129,7 @@ impl TryFrom<ScopeSpelling> for Scope {
             ScopeSpelling::Patterns(globs) => {
                 return Ok(Self {
                     globs,
+                    exclude: Vec::new(),
                     gitignore: None,
                 });
             }
@@ -141,6 +143,7 @@ impl TryFrom<ScopeSpelling> for Scope {
         }
         Ok(Self {
             globs,
+            exclude: object.exclude,
             gitignore: object.gitignore,
         })
     }
@@ -173,61 +176,44 @@ pub use strict::{StrictCase, StrictPolicy};
 ///
 /// # Adding a key here is not a one-file change
 ///
-/// `deny_unknown_fields` means this struct is the manifest's whole surface,
-/// and several things downstream are derived from that surface rather than
-/// discovering it — so a field added here and nowhere else fails a gate rather
-/// than shipping half-wired. Every site below is enforced by a test or a gate,
-/// which is deliberate: the list rots, the failures do not. It is here rather
-/// than in a contributing doc because this is the struct you are editing when
-/// you need it.
+/// `deny_unknown_fields` makes this struct the manifest's whole surface, and
+/// several sites are derived from it, so a field added here alone fails a test
+/// or a gate rather than shipping half-wired:
 ///
-/// 1. The field, with `#[serde(default …)]` and a doc comment. A default that
-///    is not a literal needs a `default_*` helper above, and `pub(crate)` on it
-///    so [`crate::compose`] can apply the same one.
-/// 2. `schema/mmz.schema.json`, with a `description`. `src/schema.rs`'s
-///    `schema_documents_every_manifest_field` fails without it, and the
-///    fragment schema is derived by removing the policy keys — so a non-policy
-///    key needs nothing there, and a policy key needs the removal to still
-///    hold.
-/// 3. `www/utils/config-notes.typ`, keyed exactly as the reference renders it
-///    (bare at top level, `commands[].`/`probes[].`/`scopes[].` below).
-///    `just check-doc-facts` asserts the schema's key set and the notes' key
-///    set match in *both* directions.
-/// 4. If it can be validated, [`Manifest::validate`] — and the error in
-///    [`crate::error::Error`] plus its arm in `main.rs`'s `exit_for`, which is
-///    non-exhaustive and will not compile without one. Prefer an existing exit
-///    code; a new one is a documented CLI surface (`www/utils/exit-code-notes.typ`).
+/// 1. The field, with `#[serde(default …)]` and a doc comment. A non-literal
+///    default needs a `pub(crate)` `default_*` helper above, for
+///    [`crate::compose`] to apply too.
+/// 2. `schema/mmz.schema.json`, with a `description`, or `src/schema.rs`'s
+///    `schema_documents_every_manifest_field` fails. The fragment schema is the
+///    config schema minus the policy keys.
+/// 3. `www/utils/config-notes.typ`, keyed as the reference renders it (bare at
+///    top level, `commands[].`/`probes[].`/`scopes[].` below);
+///    `just check-doc-facts` matches the two key sets both ways.
+/// 4. If it can be validated, [`Manifest::validate`], an [`crate::error::Error`]
+///    variant and its arm in `main.rs`'s exhaustive `exit_for`. Prefer an
+///    existing exit code; a new one is documented CLI surface
+///    (`www/utils/exit-code-notes.typ`).
 ///
-/// A key that governs the whole run is additionally a *policy* key, which is a
-/// second wiring path: add it to [`crate::compose::POLICY_KEYS`] (a fixed-size
-/// array, so the destructurings in `compose_policy.rs` fail to compile until
-/// updated), resolve it in `compose_policy::resolve`, add it to
+/// A key that governs the whole run is also a *policy* key: add it to
+/// [`crate::compose::POLICY_KEYS`] (fixed-size, so `compose_policy.rs` stops
+/// compiling until updated), resolve it in `compose_policy::resolve`, add it to
 /// [`crate::compose::Document`] as `Option<Option<T>>` so an explicit `null` is
-/// caught, and render it in `dump.rs`'s `Policy` and `render_policy` — which is
-/// what makes `mmz --dump-config` able to say whether it was written or
-/// defaulted.
+/// caught, and render it in `dump.rs`'s `Policy` and `render_policy`.
 ///
-/// Editing any of `src/manifest.rs`, `src/probe.rs` or `src/main.rs` also puts
-/// an `outdatty` group out of date. That is the gate asking you to confirm you
-/// looked at the dependents, not a failure to fix — `outdatty update --group
-/// <name>` after reviewing them.
+/// Editing this file, `src/probe.rs` or `src/main.rs` puts an `outdatty` group
+/// out of date: review its dependents, then `outdatty update --group <name>`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
-    /// Reusable named glob sets. A scope is defined once and referenced by any
-    /// number of commands, so a shared input path is declared in one place.
-    /// Each value is either an array of patterns or an object carrying a
-    /// per-scope `gitignore` override (see [`Scope`]).
+    /// Reusable named glob sets, each an array of patterns or an object with a
+    /// per-scope `exclude` and `gitignore` (see [`Scope`]).
     #[serde(default)]
     pub scopes: BTreeMap<String, Scope>,
 
-    /// Named commands whose stdout is an input. A rule's `inputs:` references a
-    /// probe by name exactly as it references a scope, and the probe's stdout
-    /// hash joins that rule's input digest — which is how a rule depends on
-    /// part of a file, or on something that is not a file at all. One
-    /// namespace: a probe sharing a name with a scope is a load error. See
-    /// [`crate::probe`], including what a probe can get wrong that a file hash
-    /// cannot.
+    /// Named sources of input bytes. A rule's `inputs:` names a probe as it
+    /// names a scope, and the probe's hash joins its digest, so a rule can
+    /// depend on part of a file or on something that is not a file. A probe
+    /// sharing a scope's name is a load error; see [`crate::probe`].
     #[serde(default)]
     pub probes: BTreeMap<String, Probe>,
 
@@ -254,17 +240,10 @@ pub struct Manifest {
     pub strict: StrictPolicy,
 
     /// The argv a probe's `run` line is executed by, with the line appended as
-    /// one final argument. Defaults to `["sh", "-c"]`, which is what every
-    /// probe ran under before the key existed.
-    ///
-    /// A probe measures whatever the ambient `PATH` resolves, so a manifest
-    /// whose probes read project tooling can pin the environment they are
-    /// measured in — `["direnv", "exec", ".", "sh", "-c"]`, or
-    /// `["nix", "develop", "--command", "sh", "-c"]` — instead of inheriting
-    /// whichever shell the caller happened to be in. The `run:` lines are
-    /// untouched by this: only the process interpreting them changes.
-    ///
-    /// Must name at least a program; an empty list is a load error, since
+    /// one final argument. Defaults to `["sh", "-c"]`. A probe measures
+    /// whatever the ambient `PATH` resolves, so pinning this, as
+    /// `["direnv", "exec", ".", "sh", "-c"]` does, stops a probe's answer
+    /// depending on the caller's shell. An empty list is a load error, since
     /// there would be nothing to spawn. See [`crate::probe`].
     #[serde(default = "default_probe_shell")]
     pub probe_shell: Vec<String>,
@@ -291,16 +270,19 @@ pub struct Command {
     #[serde(default)]
     pub inputs: Vec<String>,
 
+    /// Patterns left out of every file this rule's scopes resolve to, its
+    /// `{file:scope}` domain included, on top of each scope's own `exclude`.
+    /// A path is excluded when it or a directory above it matches one, so an
+    /// excluded tree is never listed, hashed or walked. Probes are untouched.
+    #[serde(default)]
+    pub exclude: Vec<String>,
+
     /// Literal paths a successful run of this command is expected to produce,
     /// relative to the project root. The rule is fresh only when its inputs
-    /// still hash the same AND every declared output exists, so an artifact
-    /// deleted out from under a record (a `cargo clean`, a fresh clone, a
-    /// pruned `target/`) voids that record instead of leaving the rule fresh
-    /// with nothing to show for it.
-    ///
-    /// Existence only — an output is never hashed — and each path is stat-ed,
-    /// never walked, so the `gitignore` filter never applies to it. Patterns
-    /// are rejected at load; see [`crate::outputs`].
+    /// hash the same AND every declared output exists, so a `cargo clean` or a
+    /// fresh clone voids the record. Existence only: an output is stat-ed,
+    /// never hashed or walked, so `gitignore` never applies. Patterns are
+    /// rejected at load; see [`crate::outputs`].
     #[serde(default)]
     pub outputs: Vec<PathBuf>,
 
@@ -396,12 +378,13 @@ impl Manifest {
     }
 
     /// Returns the glob patterns a command draws from, bucketed by the
-    /// gitignore setting they expand under: one group for the scopes honouring
-    /// the filter and one for the scopes that opted out, each deduplicated and
-    /// omitted when no scope feeds it.
+    /// gitignore setting they expand under and the patterns they exclude: the
+    /// scopes honouring the filter come first, and scopes sharing both a
+    /// setting and an exclusion share one deduplicated group.
     ///
     /// Bucketing rather than one group per scope keeps the filesystem walk
-    /// count at two in the worst case, however many scopes a rule references.
+    /// count at one per distinct setting and exclusion, so a manifest with no
+    /// `exclude` walks at most twice however many scopes a rule references.
     ///
     /// An `inputs` entry naming a probe contributes no patterns and is skipped
     /// here; [`crate::probe::Resolver`] owns that half of the input set.
@@ -411,8 +394,7 @@ impl Manifest {
     /// Returns [`Error::UnknownInput`] if an entry is neither a declared scope
     /// nor a declared probe.
     pub fn glob_groups(&self, command: &Command) -> Result<Vec<GlobGroup>> {
-        let mut honoured: Vec<String> = Vec::new();
-        let mut opted_out: Vec<String> = Vec::new();
+        let mut groups: Vec<GlobGroup> = Vec::new();
         for name in &command.inputs {
             let Some(scope) = self.scopes.get(name) else {
                 if self.probes.contains_key(name) {
@@ -423,22 +405,33 @@ impl Manifest {
                     input: name.clone(),
                 });
             };
-            let bucket = if scope.honours_gitignore(self.gitignore) {
-                &mut honoured
-            } else {
-                &mut opted_out
-            };
-            for glob in &scope.globs {
-                if !bucket.contains(glob) {
-                    bucket.push(glob.clone());
-                }
+            let wanted = self.scope_group(scope, command);
+            let shared = groups.iter_mut().find(|group| {
+                group.gitignore == wanted.gitignore && group.exclude == wanted.exclude
+            });
+            match shared {
+                Some(group) => push_unique(&mut group.globs, &wanted.globs),
+                None => groups.push(wanted),
             }
         }
-        Ok([(true, honoured), (false, opted_out)]
-            .into_iter()
-            .filter(|(_, globs)| !globs.is_empty())
-            .map(|(gitignore, globs)| GlobGroup { globs, gitignore })
-            .collect())
+        groups.sort_by_key(|group| !group.gitignore);
+        Ok(groups)
+    }
+
+    /// The group one scope expands as under `command`: its globs, its own
+    /// `exclude` followed by the rule's, and its effective gitignore setting.
+    #[must_use]
+    pub fn scope_group(&self, scope: &Scope, command: &Command) -> GlobGroup {
+        let mut globs = Vec::new();
+        push_unique(&mut globs, &scope.globs);
+        let mut exclude = Vec::new();
+        push_unique(&mut exclude, &scope.exclude);
+        push_unique(&mut exclude, &command.exclude);
+        GlobGroup {
+            globs,
+            exclude,
+            gitignore: scope.honours_gitignore(self.gitignore),
+        }
     }
 
     /// Walks up from `start` to the filesystem root, returning the first
@@ -471,6 +464,15 @@ impl Manifest {
             start: cwd.to_path_buf(),
         })?;
         Located::at(&discovered)
+    }
+}
+
+/// Appends each of `items` to `into` unless it is already there, keeping order.
+fn push_unique(into: &mut Vec<String>, items: &[String]) {
+    for item in items {
+        if !into.contains(item) {
+            into.push(item.clone());
+        }
     }
 }
 
