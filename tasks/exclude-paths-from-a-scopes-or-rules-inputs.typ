@@ -4,7 +4,7 @@
   title: "Exclude paths from a scope's or rule's inputs",
   tags: ("config", "cache"),
   priority: framework("ice", confidence: 0.8, ease: 6.0, impact: 7.0),
-  status: wip(2026, 10, 20),
+  status: done(2026, 10, 20),
 )
 
 == Summary
