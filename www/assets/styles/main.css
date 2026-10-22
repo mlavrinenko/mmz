@@ -197,6 +197,13 @@ pre {
   font-size: 0.82rem; line-height: 1.55;
 }
 pre code { background: none; padding: 0; font-size: inherit; }
+/* Output has no indentation to protect, so on a narrow screen it wraps instead
+   of scrolling out of sight: a long path in an error is the line that matters,
+   and a hidden scroll is where it goes. A labelled sample (`data-lang`, which
+   is every YAML, TOML and shell listing) keeps its shape and its scroll. */
+@media (max-width: 52rem) {
+  pre code:not([data-lang]) { white-space: pre-wrap; overflow-wrap: anywhere; }
+}
 
 /* On-this-page index (see the _toc-script in layout.typ) ------------------ */
 .page-toc { margin: 0 0 1.8rem; border: var(--rule) solid var(--ink); padding: 0 1rem; }
