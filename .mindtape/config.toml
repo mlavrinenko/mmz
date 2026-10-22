@@ -175,8 +175,9 @@ severity = "error"
 
 [tasks.tags]
 # Area labels for the mmz backlog. `mmz` is the derived root tag on every task.
-# `decision` marks a call settled in the body with no code of its own, which
-# `flip-with-work` lets close in a task-only commit. `found` marks a task
+# `decision` marks a call settled in the body with no code of its own, and
+# `verified` a task whose proof is an external run, such as a release; both
+# may close in a task-only commit. `found` marks a task
 # filed with `mt add -t finding`, an out-of-scope observation. `tweak` is
 # written by `mt add -t tweak` alone.
 allowed = [
@@ -193,6 +194,7 @@ allowed = [
   "decision",
   "found",
   "tweak",
+  "verified",
 ]
 
 # What kind of work a task is. The leaf kinds are commit types, so a task names
@@ -258,6 +260,22 @@ assert = { max-words = 120 }
 when = "!terminal"
 message = "cut this section to under 120 words, or split the task in two"
 
+# A `verified` task that is done says what proved it. Open, it has no proof
+# yet, so the section is required only once it closes.
+[[tasks.body.headers.rules]]
+name = "verification-for-verified"
+path = ["Verification"]
+action = "unique"
+when = 'has_tag("verified") && status == "done"'
+message = "add one Verification section linking the run that proved the task"
+
+[[tasks.body.content.rules]]
+name = "verification-links-the-run"
+path = ["Verification"]
+assert = { must-match = "https?://" }
+when = 'has_tag("verified")'
+message = "link the run that proved the task, by its URL"
+
 # What counts as a source file for the estimate. Excluded is what every task
 # touches by process (a docs page, a test, CHANGELOG.md, its own task file) and
 # what no one hand-edits (generated Markdown, captured output, lockfiles).
@@ -303,6 +321,17 @@ scope = "task"
 when = 'into("done") && staged(has_tag("tweak"))'
 assert = 'count(files, "@source") <= 1'
 message = "file a planned task for the rest, since a tweak changes one source file"
+severity = "error"
+
+# The pack's rule, with one more escape: a `verified` task closes once an
+# external run proves it, in a commit that holds only its flip and the
+# Verification section linking that run.
+[[commits.rules]]
+name = "flip-with-work"
+scope = "task"
+when = 'into("wip") || into("done")'
+assert = 'named && (!tasks_only || retires_other || staged(has_tag("decision")) || staged(has_tag("verified")))'
+message = "start or close a task in a commit that carries its work"
 severity = "error"
 
 # Work names a task only once the committed tree holds it started or finished.

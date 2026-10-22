@@ -16,6 +16,6 @@ mt add -t fix "<title>"   # file one
 mt ls @agent              # open work an agent can take
 ```
 
-Filing is a task-only commit, `chore(tasks): file …`. After that the status rides with the work: `mt wip <stem>` goes in the first commit that names the task, and `mt done <stem>` in the last. A one-file change too small to plan is a tweak, filed done in the commit that makes it.
+Filing is a task-only commit, `chore(tasks): file …`. After that the status rides with the work: `mt wip <stem>` goes in the first commit that names the task, and `mt done <stem>` in the last. A one-file change too small to plan is a tweak, filed done in the commit that makes it. A task whose proof is an external run, such as a release, carries the `verified` tag: it closes in a commit of its own once the run passes, with a `Verification` section linking that run.
 
 Closing a task runs `mmz --is-fresh --tag gate`, so run `just check` to record a pass, then flip. `--force` waives the gate and records the waiver in the note. That is mmz dogfooding its headline feature on its own backlog.

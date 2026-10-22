@@ -26,7 +26,7 @@
       cheap-delegation: neutral,
     ),
   ),
-  status: wip(2026, 10, 23),
+  status: accepted(2026, 10, 23)[waits on the v0.14.0 release run],
   links: related(
     "mmz-verify-the-lang-all-release-build-on-every-target.typ",
   )[found by this verification],
