@@ -230,3 +230,18 @@ the wrong thing when you are trying to see an error message. Reach for
 Note that #just.test("<filter>") deliberately bypasses memoization: a filtered
 run is a different command from the gate's full-suite run, and recording it under
 the gate's identity would claim a pass the gate never earned.
+
+= Forcing every arm
+
+A record you no longer trust is not a reason to delete `.mmz/cache`, which also
+drops the records of rules outside the gate. Export the switch instead:
+
+```bash
+MMZ_DISABLE=1 just check     # every arm runs and re-records
+```
+
+Each arm still goes through `mmz`, which reads the variable, so every gate runs
+whether or not its inputs moved. Each one records its outcome as usual, so the
+pass this leaves is the pass closing a task asserts. The suite and
+`www/generate.sh` pin the switch off for the `mmz` runs they make, since they
+exist to show mmz skipping.

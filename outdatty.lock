@@ -31,10 +31,10 @@ groups:
       docs/generate-md.sh: fcebb5efa2271a4137c1bc30087fd2d2cc853a2e74569297511898557245ec87
       www/generate-facts.sh: 23925bcd590a5368d2c57aa9bb7b12c6ddd50c59761941fc4b0ebd2409e6d2fe
       www/generate-site-pages.sh: 7200a107f5b83e68573e1e4b3ac623d51e34ec7a5e171dc3877794aba55f80db
-      www/generate.sh: 1ff09a9bb3a2b36d52aee3e325d54be5099caaf69e49c2605f146e347908140a
+      www/generate.sh: 5e1d857371a0519c5684c3c5234bf0cd8ebd3f4c30e2ce39c1fe2b5bdfb30912
       www/measure-sizes.sh: 0aa069471002f805c819e6bba6013ac8d08e726705a65f20608079afc1ff62d6
     dependents:
-      docs/src/contributing/generated-docs.typ: 7aba15f244dae690b28b341cf7ddefbdc43ec890dd098dcf743a2bd5b113b637
+      docs/src/contributing/generated-docs.typ: 45d9e2a4de089cb4ea17dc3b3af8faaa63761c452a8522423706f06e463572b9
   gates:
     source:
       .just/docs.just: 3573f518fa948e54bdd2dabb263335d830aa75bb505838495710b06fded2b3fa

@@ -80,11 +80,12 @@ the same critical section; and the page manifest is a full page compile, so it
 needs both the facts and the captures already in place.
 
 A capture must be the same bytes on every build, and the way there is to pin
-the input, not to correct the output. `generate.sh` exports
-`MMZ_NOW`, so a record's `ran_at` and the ages in a `--status` table are the
-binary's own stdout and still identical run to run. Reach for post-processing
-only when nothing can be pinned instead: a normalized capture is a place where
-the docs and the binary are allowed to disagree.
+the input, not to correct the output. `generate.sh` exports `MMZ_NOW`, so a
+record's `ran_at` and the ages in a `--status` table are the binary's own stdout
+and still identical run to run. It also pins `MMZ_DISABLE` off, so a forced gate
+cannot turn a warm capture cold. Reach for post-processing only when nothing can
+be pinned instead: a normalized capture is a place where the docs and the binary
+are allowed to disagree.
 
 The fixture's location is the one input that cannot be pinned. The mutating
 captures run against a copy under `$TMPDIR`, so a command that prints a path

@@ -28,13 +28,15 @@
 # docs/src/contributing/generated-docs.typ has both.
 set -eo pipefail
 
-# The clock every capture below is taken against: 2026-08-17T17:00:00Z. mmz
-# resolves it once per invocation and both stamps and renders from it, so a
-# record's `ran_at` and a `--status` table's ages are fixed by this line, not by
-# when the build ran. A run and the `--status` after it share the pin, which is
-# why every AGE reads `0s ago`; a capture wanting a genuinely aged record would
-# run `MMZ_NOW=$((PINNED + 7200))` for that one command.
+# The clock every capture is taken against: 2026-08-17T17:00:00Z. mmz resolves it
+# once per invocation, so a record's `ran_at` and a `--status` table's ages come
+# from this line, not from when the build ran. A run and the `--status` after it
+# share the pin, hence every AGE reads `0s ago`; an aged record would run
+# `MMZ_NOW=$((PINNED + 7200))` for that one command.
 export MMZ_NOW=1786986000
+# Pinned off too: a forced `just check` exports MMZ_DISABLE=1, and the captures
+# must show mmz skipping, not a second cold run.
+export MMZ_DISABLE=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -42,11 +44,10 @@ FIX="$REPO/examples/demo"
 OUT="$SCRIPT_DIR/generated"
 MMZ="$REPO/target/release/mmz"
 
-# The release build runs BEFORE the lock is taken, deliberately. Every reader of
-# www/generated/ holds this lock for its whole run (docs/generate-md.sh does), so
-# anything held inside it is time the rest of `just check`'s parallel arms spend
-# blocked. A cold release build is minutes; the wipe-and-repopulate it precedes
-# is seconds.
+# The release build runs BEFORE the lock, deliberately: every reader of
+# www/generated/ (docs/generate-md.sh too) holds the lock for its whole run, so
+# time spent inside it blocks `just check`'s parallel arms. A cold release build
+# is minutes; the wipe-and-repopulate it precedes is seconds.
 (cd "$REPO" && cargo build -q --release --bin mmz)
 
 # Serialize every writer of www/generated/ (see www/generate-facts.sh for the
@@ -179,16 +180,13 @@ COMPOSED_TMP="$(mktemp -d)"
 bash "$SCRIPT_DIR/generate-composition.sh" "$MMZ" "$REPO/examples/composed" "$OUT" "$COMPOSED_TMP"
 rm -rf "$COMPOSED_TMP"
 
-# Restore the derived facts inside the same critical section that deleted them.
-# Splitting the wipe and the restore across two lock acquisitions would leave a
-# window where www/generated/ exists with no facts in it, which is the exact
-# state a concurrent reader must never see.
+# Restore the derived facts inside the critical section that deleted them: split
+# across two lock acquisitions, a reader could see www/generated/ with no facts.
 bash "$SCRIPT_DIR/generate-facts.sh"
 
-# Then the page manifest — after generate-facts.sh, never before, and inside the
-# SAME lock: querying a page's `<page-meta>` block is a full compile, which
-# imports layout.typ -> site.typ -> crate-map.json (PKG_VERSION) plus every
-# capture written above. Its own file because this one is already long enough.
+# Then the page manifest, after generate-facts.sh and inside the SAME lock: a
+# page's `<page-meta>` query is a full compile, which reads crate-map.json
+# (PKG_VERSION) and every capture written above. Its own file to keep this short.
 bash "$SCRIPT_DIR/generate-site-pages.sh"
 
 # Last, over everything the three scripts wrote: no capture may name a directory

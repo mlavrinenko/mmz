@@ -38,7 +38,7 @@ Three scripts, run in a fixed order, all writing to the gitignored `www/generate
 
 The order is not negotiable, and each script’s header says why. In short: `generate.sh` wipes the directory on entry, so the facts must be restored inside the same critical section; and the page manifest is a full page compile, so it needs both the facts and the captures already in place.
 
-A capture must be the same bytes on every build, and the way there is to pin the input, not to correct the output. `generate.sh` exports `MMZ_NOW`, so a record’s `ran_at` and the ages in a `--status` table are the binary’s own stdout and still identical run to run. Reach for post-processing only when nothing can be pinned instead: a normalized capture is a place where the docs and the binary are allowed to disagree.
+A capture must be the same bytes on every build, and the way there is to pin the input, not to correct the output. `generate.sh` exports `MMZ_NOW`, so a record’s `ran_at` and the ages in a `--status` table are the binary’s own stdout and still identical run to run. It also pins `MMZ_DISABLE` off, so a forced gate cannot turn a warm capture cold. Reach for post-processing only when nothing can be pinned instead: a normalized capture is a place where the docs and the binary are allowed to disagree.
 
 The fixture’s location is the one input that cannot be pinned. The mutating captures run against a copy under `$TMPDIR`, so a command that prints a path (`--status=json` names the manifest) carries that build’s `mktemp` directory verbatim, which is neither reproducible nor readable. A capture that names it is marked `rel` at its call site in `generate.sh`, which rewrites the copy’s path to a project-relative one; every other byte is stdout as written.
 
