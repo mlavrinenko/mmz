@@ -50,6 +50,15 @@ fork SLUG *ARGS:
 land *ARGS:
     wt merge --no-squash --no-commit --yes "$@"
 
+# The hooks are tracked in .githooks/ and committed executable, so pointing git
+# at them is the whole install. The dev shell runs this on every entry, which
+# is how a fresh clone gets them without a step to remember.
+[doc("Point git at .githooks; the dev shell does it on entry")]
+[group("workflow")]
+install-hooks:
+    git config core.hooksPath .githooks
+    @echo "installed .githooks"
+
 # Every arm is `just memo <gate>`, so a no-op re-run skips each gate whose
 # declared inputs are unchanged. Gate membership is derived from the
 # `[group("gate")]` tags below and cross-checked against THIS dependency list

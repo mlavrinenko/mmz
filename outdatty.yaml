@@ -137,11 +137,13 @@ groups:
   # The dev shell defines what a contributor is told to install, and the
   # setup/tooling prose in CONTRIBUTING.md's source tracks it. The worktrunk
   # hooks ride the same group: docs/src/contributing/worktrees.typ narrates
-  # what they run.
+  # what they run. So do the git hooks, whose checks the Commits section names.
   - name: dev-shell
     source:
       - flake.nix
       - .config/wt.toml
+      - .githooks/commit-msg
+      - .githooks/pre-commit
     dependents:
       - docs/src/contributing.typ
       - docs/src/contributing/worktrees.typ

@@ -92,6 +92,12 @@
             util-linux
             yq
           ]);
+          # Wire the tracked hooks (.githooks/) on every shell entry, so a
+          # fresh clone's first `nix develop` or direnv load installs them.
+          # Quiet: it would otherwise print on every shell a contributor opens.
+          shellHook = ''
+            just install-hooks > /dev/null 2>&1
+          '';
         };
       }
     );

@@ -53,7 +53,7 @@ Errors are a `thiserror` enum in `src/error.rs`; a family of related cases goes 
 
 ## Project structure
 
-Keep `src/main.rs` a thin entry point: argv parsing, logger init, and a call into the library. `main.rs` is excluded from coverage, so anything that lands there is untested by default — which is the argument for keeping it empty of logic, not for lowering the bar.
+Keep `src/main.rs` a thin entry point: argv parsing, logger init, and a call into the library. It is excluded from coverage, so logic there goes untested; keep the logic out rather than lower the bar.
 
 File size is capped per language, and a cap is a design constraint rather than a nag: a file nobody can hold in their head is where the untested branch hides.
 
@@ -81,7 +81,7 @@ Exempt, because a line count says nothing useful about them — the generated Ma
 - `./www/templates/tola.typ`
 - `./www/utils/tola.typ`
 
-As a Rust file approaches its cap, `just eject` moves its inline `#[cfg(test)]` module into a sibling `_tests.rs` file via [ejectest](https://github.com/mlavrinenko/ejectest), driven by `linecop --baseline`, as part of `just fix-check`. Sources stay under the cap and keep the inline-test workflow.
+As a Rust file nears its cap, `just eject` (part of `just fix-check`) moves its inline `#[cfg(test)]` module into a sibling `_tests.rs` via [ejectest](https://github.com/mlavrinenko/ejectest), so sources stay under the cap and keep their inline tests.
 
 ## Testing
 
@@ -97,7 +97,7 @@ just crap           # CRAP metric, fails above 30 — needs the lcov `just cover
 just test-lang-all  # the suite with every tree-sitter grammar compiled in
 ```
 
-`just check` runs on default features, which is the Rust grammar and nothing else — so `ast_lang_tests.rs`’s claim that every language in the table really parses covers one of twenty-eight. `just test-lang-all` covers the rest, on its own CI job, because the release publishes a `lang-all` binary and an untested grammar set is not something to put a version number on. It is deliberately not a gate arm: twenty-seven C compiles do not belong in front of the recipe you run in a loop. Run it after touching `src/ast_lang.rs` or the `lang-*` features.
+`just check` runs on default features, the Rust grammar alone, so `ast_lang_tests.rs` proves one of twenty-eight languages parses. `just test-lang-all` covers the rest on its own CI job, since the release ships a `lang-all` binary. It is no gate arm: twenty-seven C compiles do not belong in the loop you rerun. Run it after touching `src/ast_lang.rs` or a `lang-*` feature.
 
 `just crap` exists because a global coverage threshold can stay green while one branchy, untested function rots. When it flags a function, add tests or reduce its branching — never raise the threshold to dodge it.
 
@@ -136,9 +136,11 @@ After editing a source, review the listed dependents, update them as needed, run
 - [Conventional Commits](https://www.conventionalcommits.org/) for the subject line, in English, matching this repo’s history.
 - Add a `Refs: <stem>` footer naming the MindTape task the commit closes or advances, the bare stem: `mt check --commits` refuses a path. File a task first if none exists; never guess a stem. Add no other trailers.
 
-Task tracking is [MindTape](https://github.com/mlavrinenko/mindtape): one Typst file per task under `tasks/`, ruled by `.mindtape/config.toml`. Drive it with the `mt` CLI (`mt ls`, `mt add`, `mt flip`, `mt check`) rather than by hand-editing task files. Not to be confused with `.mmz/`, which is mmz’s own command cache.
+`git commit` enforces both: `.githooks/commit-msg` runs `mt check --commit-msg`, and `.githooks/pre-commit` refuses a tree `just check` has not passed or an unstaged `outdatty.lock`. The dev shell installs them on entry, through `just install-hooks`.
 
-Closing a task runs `mmz --is-fresh --tag gate`, which passes only when every gate-tagged rule last succeeded with its inputs unchanged. Run `just check` to record a pass, then flip; `--force` waives the gate and records the waiver in the note. This is mmz dogfooding its headline feature on its own backlog — see [Gating with tags](https://mlavrinenko.github.io/mmz/gating/).
+Task tracking is [MindTape](https://github.com/mlavrinenko/mindtape): one Typst file per task under `tasks/`, ruled by `.mindtape/config.toml` and driven by the `mt` CLI (`mt ls`, `mt add`, `mt flip`, `mt check`), never by hand. `.mmz/` is unrelated: it is mmz’s own command cache.
+
+Closing a task runs `mmz --is-fresh --tag gate` too, so run `just check` to record a pass, then flip. `--force` waives the gate and records the waiver in the note. That is mmz dogfooding its headline feature on its own backlog, see [Gating with tags](https://mlavrinenko.github.io/mmz/gating/).
 
 ## Submitting
 

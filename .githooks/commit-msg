@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The commit rules from CONTRIBUTING.md, as `mt check --commit-msg` enforces
+# them: a `Refs: <stem>` footer names a task that exists, by its bare stem
+# (`tasks/<stem>.typ` is a path and is refused). Catching it here beats
+# catching it in `just land`'s range check, after the commit already exists.
+set -eo pipefail
+root="$(git rev-parse --show-toplevel)"
+if command -v mt >/dev/null 2>&1; then
+  exec mt -w "$root" check --commit-msg "$1"
+fi
+exec direnv exec "$root" mt -w "$root" check --commit-msg "$1"

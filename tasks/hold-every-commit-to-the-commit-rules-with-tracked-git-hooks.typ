@@ -4,7 +4,7 @@
   title: "Hold every commit to the commit rules with tracked git hooks",
   tags: ("tooling", "gating"),
   priority: framework("ice", confidence: 0.9, ease: 7.0, impact: 6.0),
-  status: proposed(2026, 10, 11),
+  status: wip(2026, 10, 22),
 )
 
 == Summary
