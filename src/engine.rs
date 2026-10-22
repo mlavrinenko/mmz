@@ -16,7 +16,7 @@ use crate::clock::Clock;
 use crate::disable::{self, Disable};
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
-use crate::{cache, hashing, notice, outputs, parametric, probe, resolve, ttl};
+use crate::{cache, hashing, notice, outputs, parametric, probe, resolve, signals, ttl};
 
 /// A rule's resolved input digest and the probe digests that fed it.
 ///
@@ -140,7 +140,8 @@ fn memoized(
             log::info!("mmz: `{identity}` last passed longer ago than its ttl `{ttl}`; re-running");
         }
     }
-    let code = exec(call)?;
+    let ran = exec_watched(call)?;
+    let code = exit_code(ran.status);
     confirm_outputs(rule, identity, base, code)?;
     cache::write(
         &cache_dir,
@@ -148,7 +149,9 @@ fn memoized(
         call.clock,
         &cache::Outcome {
             digest: &digest,
-            ok: code == 0,
+            // A run a signal cut short is no pass, even if the command's trap
+            // exited 0, so a failure is recorded and the next run re-runs it.
+            ok: code == 0 && !ran.interrupted,
             outputs: &rule.outputs,
             probes: resolved.probes,
         },
@@ -228,18 +231,21 @@ fn digest_inputs(
 
 /// Spawns the command with inherited stdio and returns its exit code.
 fn exec(call: &Invocation) -> Result<u8> {
+    exec_watched(call).map(|ran| exit_code(ran.status))
+}
+
+/// Spawns the command with inherited stdio and waits for it, passing on a
+/// signal sent to mmz meanwhile (see [`signals`]).
+fn exec_watched(call: &Invocation) -> Result<signals::Ran> {
     let Some((program, rest)) = call.argv.split_first() else {
         return Err(Error::EmptyCommand);
     };
-    let status = Command::new(program)
-        .args(rest)
-        .current_dir(call.cwd)
-        .status()
-        .map_err(|source| Error::Spawn {
+    signals::run(Command::new(program).args(rest).current_dir(call.cwd)).map_err(|source| {
+        Error::Spawn {
             program: program.clone(),
             source,
-        })?;
-    Ok(exit_code(status))
+        }
+    })
 }
 
 /// Maps an [`ExitStatus`] to a propagatable code. A death by signal `N` becomes

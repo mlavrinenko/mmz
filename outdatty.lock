@@ -3,15 +3,15 @@ algorithm: blake3
 groups:
   binary-size:
     source:
-      Cargo.lock: 2d92b9fb13f2e1d0c08902087d099097efe1c37ab27ad26660428b3899f824ed
-      Cargo.toml: 551c69f3f513b556283cd6beaeb723c8257ef5c0a0b7e8e42f31c0e44a639ab0
+      Cargo.lock: 220f261b2752c7465b14e7ff4508530271b499071ff43b46590a1953d6464c7d
+      Cargo.toml: 2756e467c3b4eb0723eb6122cd0b2e4fd2116b829ebcbc0450600902508f0e85
     dependents:
       www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
     source:
       src/main.rs: 27bfa06809df661d7beae261b78d7fbe86aedafc514dc0c60c01e521915c3a34
     dependents:
-      www/utils/cli-notes.typ: cf779ef4956c37bd71d34c7b55d1e0b63c59f506d2aec3fe601975a60c362274
+      www/utils/cli-notes.typ: eba32865ff9829a573cb1172d505b4c3255641a62e8c875014ffe3ef394fbba7
       www/utils/exit-code-notes.typ: e2b7811e399aba766934cac7eb25c3d262894cb73969a4bac1825ff965f38a13
   dev-shell:
     source:
@@ -43,7 +43,7 @@ groups:
       .mmz/conf.d/10-rust.yaml: ce20bfa2f797b8a8d3d4c471e1dd0ea4ad3897fb2f31e676d1a090f53824d41e
       .mmz/conf.d/20-docs.yaml: ae01274105daacf30a390d3c84df3764c8f5a6b62b63ef1139a8691fc727a2a8
       .mmz/conf.d/30-repo.yaml: 34e1fafbc9aedb345bc767510c651608ecc49cf09e9355704e031bdb750b70d2
-      docs/src/contributing/gates.typ: f3d6f42737dc50a40bbd2a6e9588ec6149d80e8ed5ed7e4585f42d271618a693
+      docs/src/contributing/gates.typ: 448f4dafc2045765681fb48adbc83a28829789e19b2a404027a3244a708ec9e2
       www/utils/gate-notes.typ: d4a5b0e3c9c7e0b5051178e40179792eed4329d260c6a9f7562a86d68ecc434d
   manifest-prose:
     source:
@@ -61,9 +61,9 @@ groups:
       src/schema.rs: 9c410b09548146beb3fd7f289a9ee4f49f8e67b7fd6108faf2ee3dc0a17fc437
   release-notes:
     source:
-      Cargo.toml: 551c69f3f513b556283cd6beaeb723c8257ef5c0a0b7e8e42f31c0e44a639ab0
+      Cargo.toml: 2756e467c3b4eb0723eb6122cd0b2e4fd2116b829ebcbc0450600902508f0e85
     dependents:
-      CHANGELOG.md: 56397c1c68873b39de59c4045140a1d62fcb06a35911341c1a4234515004e4a6
+      CHANGELOG.md: 9292c10f59582c7b1855b907f3969b38a556f4ce221a2b3f79e9de977b24b8b2
   status-schema:
     source:
       src/status.rs: b58219d9166c678712b20b14c3340038b886fa7378a6c5476e4481fd0a2f9f13

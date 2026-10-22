@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asked to force.
 - Library: `mmz::disable` resolves the variable, and `Error::InvalidDisable`
   is the new error case, so an exhaustive `match` on `Error` needs an arm.
+- SIGTERM and SIGHUP sent to mmz reach the wrapped command, and mmz waits for
+  it, then exits with its status. A `timeout` or a CI cancel used to kill mmz
+  alone and leave the command running unseen. Ctrl-C reaches the command
+  through the process group as before, and mmz now waits for it too. A run any
+  of the three interrupted records a failure, even when the command's trap
+  exits 0, so the next run executes it again. A signal the caller ignores, as
+  under `nohup`, stays ignored for the command. Unix only.
 
 ### Fixed
 

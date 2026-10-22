@@ -37,6 +37,13 @@ jaq-json = "2.0.2"
 ast-grep-core = { version = "0.45.1", features = ["tree-sitter"] }
 ast-grep-language = { version = "0.45.1", default-features = false }
 
+# Unix only: a signal sent to mmz while the wrapped command runs is caught by
+# signal-hook and passed on to the command's pid by rustix, both safe APIs, as
+# the lints deny `unsafe`.
+[target.'cfg(unix)'.dependencies]
+signal-hook = { version = "0.4", default-features = false, features = ["iterator"] }
+rustix = { version = "1", features = ["process"] }
+
 
 # One tree-sitter grammar per feature, because a grammar is not small — the full
 # set outweighs the binary carrying it many times over. No figure is quoted

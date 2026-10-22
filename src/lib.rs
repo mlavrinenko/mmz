@@ -104,6 +104,11 @@ mod json;
 /// error and of one report line, neither of which a library caller composes.
 mod selection;
 
+/// What mmz does with a signal it receives while the wrapped command runs.
+/// Internal: [`run`] applies it to every command it spawns, and no signal type
+/// reaches a library caller's signature.
+mod signals;
+
 pub use engine::run;
 pub use error::{Error, Result};
 pub use manifest::Manifest;
