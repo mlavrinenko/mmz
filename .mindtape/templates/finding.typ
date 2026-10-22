@@ -1,0 +1,195 @@
+#import "@local/mindtape:0.2.0": *
+#import "/.mindtape/lib.typ": *
+
+#show: task.with(
+  title: slot(
+    "title",
+    prompt: "what should change, imperative verb first",
+    example: "Silence the cargo machete banner in the machete gate",
+  ),
+  kind: "dev",
+  priority: ice(
+    impact: slot(
+      "impact",
+      kind: "int",
+      prompt: "1-10, rises with what staying unfiled costs",
+      example: 4,
+    ),
+    confidence: slot(
+      "confidence",
+      kind: "float",
+      prompt: "0-1, high: the evidence below is quoted, not recalled",
+      example: 0.9,
+    ),
+    ease: slot(
+      "ease",
+      kind: "int",
+      prompt: "1-10, falls with how far the fix reaches",
+      example: 7,
+    ),
+  ),
+  difficulty: slot(
+    "difficulty",
+    kind: "int",
+    prompt: "0-9 on the judgment scale",
+    example: 1,
+  ),
+  estimate: slot(
+    "estimate",
+    kind: "text",
+    prompt: "(src-files: N)",
+    example: "(src-files: 1)",
+  ),
+  tags: slot("tags", kind: "list", prompt: "found, plus an area tag", example: (
+    "found",
+    "tooling",
+  )),
+  x-goals: (
+    product: (
+      no-false-green: slot(
+        "no-false-green",
+        kind: "raw",
+        default: "neutral",
+      ),
+      exact-inputs: slot(
+        "exact-inputs",
+        kind: "raw",
+        default: "neutral",
+      ),
+      cheap-gates: slot(
+        "cheap-gates",
+        kind: "raw",
+        default: "neutral",
+      ),
+      agent-drivable: slot(
+        "agent-drivable",
+        kind: "raw",
+        default: "neutral",
+      ),
+      composable-manifest: slot(
+        "composable-manifest",
+        kind: "raw",
+        default: "neutral",
+      ),
+      ready-binaries: slot(
+        "ready-binaries",
+        kind: "raw",
+        default: "neutral",
+      ),
+      docs-teach-judgement: slot(
+        "docs-teach-judgement",
+        kind: "raw",
+        default: "neutral",
+      ),
+    ),
+    process: (
+      mmz-gates-mmz: slot(
+        "mmz-gates-mmz",
+        kind: "raw",
+        default: "neutral",
+      ),
+      docs-read-facts: slot(
+        "docs-read-facts",
+        kind: "raw",
+        default: "neutral",
+      ),
+      rules-not-memory: slot(
+        "rules-not-memory",
+        kind: "raw",
+        default: "neutral",
+      ),
+      cheap-delegation: slot(
+        "cheap-delegation",
+        kind: "raw",
+        default: "neutral",
+        example: "helps[a quiet gate leaves its failures readable]",
+      ),
+    ),
+  ),
+)
+
+== Problem
+
++ #slot(
+    "context",
+    kind: "raw",
+    prompt: "what you were doing when you noticed this, one line",
+    example: "Running `just check` while fixing a probe",
+  )
++ 🔴 #raw(slot("path", prompt: "repo-relative path the finding is about", example: "Justfile")): #slot(
+    "observation",
+    kind: "raw",
+    prompt: "what is wrong, stated as one fact",
+    example: "the `machete` recipe prints two banner lines on every clean run",
+  )
+
+#slot(
+  "evidence",
+  kind: "raw",
+  prompt: "the evidence, quoted verbatim from what it printed — command output, a grep hit, a line count",
+  example: ````typ
+  ```
+  Analyzing dependencies of crates in this directory...
+  cargo-machete didn't find any unused dependencies in this directory. Good job!
+  ```
+  ````,
+)
+
+This fell outside the task that surfaced it, so it is filed here rather than
+left in a closing report no one rereads. It belongs in
+#raw(slot("carrier", prompt: "the file that would carry the fix", example: "Justfile")).
+
+== TO-BE
+
+#slot(
+  "to-be",
+  kind: "raw",
+  prompt: "Bullets opening with 🟢: how it should work, behave and feel once this lands",
+  example: ```typ
+  - 🟢 A clean `just lint::machete` prints nothing, and a dirty one prints the unused crates.
+  ```,
+)
+
+== Changes
+
+#slot(
+  "changes",
+  kind: "raw",
+  prompt: "One bullet per file: `path`, then what changes there",
+  example: ```typ
+  - `Justfile`: send the banner to `/dev/null` and keep the exit code.
+  ```,
+)
+
+== Rollback
+
+#slot(
+  "rollback",
+  kind: "raw",
+  prompt: "How to undo this if it breaks something: what to revert or restore",
+  example: ```typ
+  - Revert the `Justfile` line.
+  ```,
+)
+
+== Out of scope
+
+#slot(
+  "out-of-scope",
+  kind: "raw",
+  prompt: "Bullets: what not to touch, and why",
+  example: ```typ
+  - The other gates' output. Each noisy gate gets its own finding.
+  ```,
+)
+
+== Dogfood
+
+#slot(
+  "dogfood",
+  kind: "raw",
+  prompt: "How this repo will use the change, or Not applicable and why",
+  example: ```typ
+  Every `just check` in this repo prints one line fewer per clean run.
+  ```,
+)

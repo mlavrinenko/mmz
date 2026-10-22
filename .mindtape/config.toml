@@ -2,6 +2,14 @@
 # MindTape task tracker. This file declares mmz's backlog rules. MindTape
 # constrains only what is declared here; omit a section to accept the defaults.
 
+# The task practice of the sibling mindtape repo, as its `mindtape-tasks` pack:
+# every open task is one spec in Problem, TO-BE, Changes and Out of scope, plus
+# its kind's own section, with markers, word caps and an imperative title, and
+# a status flip rides in the commit that carries its work. What stays local is
+# what is true of THIS repo: goal verdicts, the `Dogfood` section, estimate
+# caps, assignees, WIP limits and the close gate, all below.
+extends = ["mindtape-tasks"]
+
 [tasks]
 # One task per file under `tasks/`. `derive-tags` tags every task with the root
 # name `mmz`, and joins in any folder names once tasks nest into subfolders.
@@ -13,7 +21,9 @@ derive-tags = true
 # Status legend in lifecycle order. `to` declares the allowed next statuses;
 # once any entry carries `to`, `mt flip` gates every move to a listed edge
 # (a same-status re-stamp and an unset->any first stamp stay exempt; `--force`
-# overrides). Terminal states end a task.
+# overrides). Terminal states end a task. `unblocked = true` refuses entering
+# `wip` or `done` while a `depends-on` target is unfinished, and closing a
+# parent over an unfinished child.
 [[tasks.status]]
 value = "proposed"
 glyph = "💡"
@@ -30,6 +40,7 @@ to = ["wip", "cancelled"]
 value = "wip"
 glyph = "🔨"
 color = "yellow"
+unblocked = true
 to = ["done", "failed", "accepted"]
 
 [[tasks.status]]
@@ -37,6 +48,7 @@ value = "done"
 glyph = "✅"
 color = "green"
 terminal = true
+unblocked = true
 to = ["wip", "cancelled", "failed"]
 
 [[tasks.status]]
@@ -60,6 +72,7 @@ kind = "int"
 min = 0
 max = 9
 required = "!terminal"
+example = 3
 framework = "ice"
 allow-manual = false
 [[tasks.priority.bands]]
@@ -81,18 +94,252 @@ max = 9
 glyph = "🔴"
 color = "red"
 
+# Difficulty says which model tier and reasoning effort a task wants, before
+# anyone starts it. Score the JUDGMENT the task requires, not its size:
+#
+#   0-2  mechanical: the change is fully specified; no decision is left open.
+#   3-5  local judgment: one module, one obvious approach, tests fall out of it.
+#   6-8  cross-cutting design: several defensible approaches, and picking one
+#        constrains later work.
+#   9    the approach itself is the open question.
+#
+# No vendor or model name belongs in a task: mapping a number onto a model is
+# the reader's routing policy.
+[tasks.difficulty]
+required = "!terminal"
+example = 3
+
+# A task estimates how many non-test SOURCE FILES it means to touch, not how
+# long it takes. A source-file count is plannable up front and checkable
+# against git while the work runs; a duration is a guess. What counts as
+# source is the `source` path set below.
 [tasks.estimate]
-units = ["minutes", "hours", "days", "weeks"]
+units = ["src-files"]
+required = "!terminal"
+example = { src-files = 1 }
+
+# Judgment work (difficulty 3 and up) is capped at 8 source files: p75 of this
+# repo's source files per commit over its last 300 commits (95 touched source;
+# p50=3, p75=8, p90=13, p95=17), since a design decision spread wider than that
+# is two decisions. Mechanical work has no cap: a fully specified change carries
+# one decision however many files it touches. Retune the 8 as the backlog shows
+# where it pinches.
+[[tasks.rules]]
+name = "judgment-stays-small"
+when = "!terminal && difficulty >= 3"
+assert = "estimate.src-files <= 8"
+message = "split the decision from the mechanical fan-out instead of widening the cap"
+severity = "error"
+
+[[tasks.rules]]
+name = "src-budget"
+when = 'status == "wip" && has(estimate.src-files)'
+assert = 'changed("staged+worktree", "@source") <= estimate.src-files'
+message = "move work not yet written into a new task; what is already written ships with this one, so closing it needs no split, and estimate.src-files stays as filed"
+severity = "warn"
+
+# A tweak is never open: filed done, in the commit that makes the change.
+[[tasks.rules]]
+name = "tweak-lands-done"
+when = 'has_tag("tweak")'
+assert = "terminal"
+message = "file a tweak done, in the commit that makes the change: `mt add -t tweak`; plan anything bigger with another template"
+severity = "error"
+
+# Every open task gives each goal a verdict in `x-goals:`, one per goal in
+# .mindtape/goals.typ (what mmz is for) and .mindtape/process-goals.typ (how
+# this repo builds it). `check-goals` refuses a missing or unknown goal, a
+# helps or hurts with no reason, and a task that helps nothing.
+[[tasks.rules]]
+name = "goals"
+when = "!terminal"
+check = { typst = ".mindtape/lib.typ", function = "check-goals", field = "x-goals" }
+severity = "error"
+
+# Work-in-progress caps: one milestone and one leaf. A session ending on an
+# open leaf is the failure these exist to stop, so finish or split the open
+# work. Each fork worktree holds its own one, so parallel agents do not collide.
+[[tasks.rules]]
+name = "milestone-wip-cap"
+when = 'status == "wip" && kind == "milestone"'
+assert = 'count(status == "wip" && kind == "milestone") <= 1'
+message = "close or split the open milestone before opening another"
+severity = "error"
+
+[[tasks.rules]]
+name = "leaf-wip-cap"
+when = 'status == "wip" && kind != "milestone"'
+assert = 'count(status == "wip" && kind != "milestone") <= 1'
+message = "finish the open task, or split off what is done and close that, before starting another"
+severity = "error"
 
 [tasks.tags]
 # Area labels for the mmz backlog. `mmz` is the derived root tag on every task.
-allowed = ["mmz", "tooling", "cli", "cache", "config", "docs", "tests", "gating", "build", "efficiency"]
+# `decision` marks a call settled in the body with no code of its own, which
+# `flip-with-work` lets close in a task-only commit. `found` marks a task
+# filed with `mt add -t finding`, an out-of-scope observation. `tweak` is
+# written by `mt add -t tweak` alone.
+allowed = [
+  "mmz",
+  "tooling",
+  "cli",
+  "cache",
+  "config",
+  "docs",
+  "tests",
+  "gating",
+  "build",
+  "efficiency",
+  "decision",
+  "found",
+  "tweak",
+]
 
-# Every task carries exactly one Summary section.
+# What kind of work a task is. The leaf kinds are commit types, so a task names
+# the commit that will close it; `dev` stands where Conventional Commits puts
+# `chore`, a change to the harness around the repo. `milestone` ends through
+# its leaves. The list is closed, so a misspelled kind cannot fall out of the
+# WIP caps.
+[tasks.fields.kind]
+values = ["feat", "fix", "refactor", "docs", "test", "dev", "milestone"]
+required = "!terminal"
+example = "test"
+
+# Who works the task: `max` for what no agent can finish (a render loaded in a
+# browser, a call the maintainer owns), `agent` for everything else. Agents
+# pass `--set assignee=agent`.
+[tasks.assignee]
+allowed = ["max", "agent"]
+required = "!terminal"
+example = "agent"
+
+# A review comment left in a task file is a conversation, not content.
+[tasks.comments]
+policy = "forbid"
+
+# The pack's section set plus `Dogfood`: how this repo uses the change, since
+# mmz runs its own gates through itself. "Not applicable" with a reason opts
+# out. A same-named entry replaces the pack's rule in place.
 [[tasks.body.headers.rules]]
-path    = ["Summary"]
-action  = "unique"
-message = "every task must have exactly one Summary section"
+name = "section-allowlist"
+action = "allowlist"
+allowed = [
+  { match = "^(Problem|Environment|TO-BE|Source of truth|Changes|Alternatives|Rollback|Out of scope|Dogfood)$" },
+]
+when = "!terminal"
+message = "limit an open task to Problem, TO-BE, Changes, Out of scope and Dogfood, plus its kind's own section"
+
+[[tasks.body.headers.rules]]
+name = "one-dogfood-section"
+path = ["Dogfood"]
+action = "unique"
+when = "!terminal"
+message = "add one Dogfood section saying how this repo will dogfood the task (\"Not applicable\" with a reason opts out)"
+
+[[tasks.body.headers.rules]]
+name = "dogfood-after-out-of-scope"
+action = "order"
+before = ["Out of scope"]
+after = ["Dogfood"]
+when = "!terminal"
+message = "move Dogfood after Out of scope"
+
+[[tasks.body.content.rules]]
+name = "dogfood-non-empty"
+path = ["Dogfood"]
+assert = "non-empty"
+when = "!terminal"
+message = "write how this repo uses the change under Dogfood, or \"Not applicable\" and why"
+
+[[tasks.body.content.rules]]
+name = "dogfood-word-cap"
+path = ["Dogfood"]
+assert = { max-words = 120 }
+when = "!terminal"
+message = "cut this section to under 120 words, or split the task in two"
+
+# What counts as a source file for the estimate. Excluded is what every task
+# touches by process (a docs page, a test, CHANGELOG.md, its own task file) and
+# what no one hand-edits (generated Markdown, captured output, lockfiles).
+[dicts.source]
+case = "exact"
+values = [
+  "!README.md",
+  "!CONTRIBUTING.md",
+  "!AGENTS.md",
+  "!docs/contributing/*.md",
+  "!docs/src/**",
+  "!www/content/**",
+  "!www/generated/**",
+  "!CHANGELOG.md",
+  "!tasks/**",
+  "!tests/**",
+  "!**/*_tests.rs",
+  "!examples/**",
+  "!outdatty.lock",
+  "!Cargo.lock",
+  "!flake.lock",
+]
+
+# What ships to a user: the crate and its schemas. Tests, docs, fixtures and
+# the backlog are not product.
+[dicts.product]
+case = "exact"
+values = ["src/**", "schema/**", "!**/*_tests.rs"]
+
+# A commit that changes product code adds a `CHANGELOG.md` entry, or says it
+# has nothing to announce with a `Changelog: none` trailer. A `fixup!`,
+# `squash!` or `amend!` commit is exempt: autosquash folds it into one that has.
+[[commits.rules]]
+name = "changelog-with-product-change"
+when = 'count(files, "@product") >= 1 && !matches(subject, "^(fixup|squash|amend)! ") && !matches(trailers, "(?i)^Changelog: none$")'
+assert = 'matches(files, "^CHANGELOG[.]md$")'
+message = "add an entry under [Unreleased] in CHANGELOG.md, or add a `Changelog: none` trailer"
+severity = "error"
+
+[[commits.rules]]
+name = "tweak-stays-one-file"
+scope = "task"
+when = 'into("done") && staged(has_tag("tweak"))'
+assert = 'count(files, "@source") <= 1'
+message = "file a planned task for the rest, since a tweak changes one source file"
+severity = "error"
+
+# Work names a task only once the committed tree holds it started or finished.
+[[commits.rules]]
+name = "refs-task-is-started"
+scope = "task"
+when = "named && staged(exists)"
+assert = 'staged(status == "wip" || terminal)'
+message = "flip the task to wip in the first commit that names it (`mt wip <stem>`, staged with the work)"
+severity = "error"
+
+# `mt ls @owner` is what the maintainer still has to do by hand, `mt ls @agent`
+# what an agent can pick up, `mt ls @blocked` what is stuck and on what.
+[views.owner]
+filter = 'assignee == "max" && !terminal'
+sort = ["priority:desc"]
+description = "Open tasks waiting on the maintainer"
+
+[views.agent]
+filter = 'assignee == "agent" && !terminal'
+sort = ["priority:desc"]
+description = "Open tasks an agent can take"
+
+[views.blocked]
+filter = "blocked"
+sort = ["blocks:desc", "priority:desc"]
+columns = ["slug#", "title", "why"]
+description = "Blocked tasks and what each waits on"
+
+# A task untouched for 30 days (no `mt review`, no status change) has drifted
+# from the code around it, so starting it is refused until someone re-reads it
+# and stamps `mt review`.
+[[on.flip]]
+when = 'into("wip") && stale(30)'
+actions = [
+  { gate = true, message = "re-read the scope against today's code, fix what went stale, run `mt review`, then start again" },
+]
 
 # Closing a task asserts the build already passed against this worktree rather
 # than re-running it here. `mmz --is-fresh --tag gate` exits 0 only when every
@@ -112,3 +359,20 @@ when = 'into("done") || into("cancelled") || into("failed")'
 actions = [
   { run = "target/debug/mmz --is-fresh --tag gate", gate = true, message = "checks have not passed against this worktree — run `just check`, then flip again (`--force` waives it)" },
 ]
+
+[add]
+header = ""
+comments = false
+
+# Who works tasks. `[tasks.assignee] allowed` points into this registry.
+[[roles]]
+name = "maintainer"
+
+[[actors]]
+name = "max"
+kind = "human"
+roles = ["maintainer"]
+
+[[actors]]
+name = "agent"
+kind = "llm"

@@ -20,7 +20,7 @@ groups:
       .githooks/pre-commit: 6a1f231f8e872b3c3531ffe500900f431117047712b765e06bae9efcee7df5e4
       flake.nix: ff8451ad933a69671d3c3ff6a61dab0f5aef62798e38ad8e73a881a2532efe28
     dependents:
-      docs/src/contributing.typ: 95b989047dc05b97d892e01749c2442a956674e3de1edb6da900b712927fa063
+      docs/src/contributing.typ: 5e0cae0bba9f6f39f770d18bf4a03113752cf6af94ecce69b07e996ed255ee91
       docs/src/contributing/worktrees.typ: e45d3231ab7eb6cb4d56ffffa43c4fcdd7ce706a514fc98a6a8e1b6e76c5a954
   docs-pipeline:
     source:
@@ -70,3 +70,8 @@ groups:
       src/status_verdict.rs: 959e93d34412f2bc56b210953c23757482a7c86bf3cf1dafbbd1b3d8f5272153
     dependents:
       schema/status.schema.json: 3d981d66b6b9209384d9c4148bd23e2fac49450388a6c56955ec56e1f01f96c4
+  task-practice:
+    source:
+      .mindtape/config.toml: ed19326f97ede0d25956afc4a77d2c087d0290957a9985390d5fdd2fa6e77960
+    dependents:
+      docs/src/contributing/tasks.typ: 10ff4f5cb8467acd0a04c5a7ed19551ecd34cadda55f1a6d9cd5f8ef15c4e1f9

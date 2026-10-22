@@ -59,13 +59,8 @@ Gate membership is derived: a gate carries `[group("gate")]` AND appears in
 `check`'s dependency list, or the docs build fails naming both sides. That list
 is also this table's row order, so reordering rows is an edit to the `check` line.
 
-Individual gates run on their own, unmemoized, when you want the output:
-
-```bash
-just clippy
-just test
-just docs::check
-```
+Run one gate on its own, unmemoized, for its output: `just clippy`,
+`just test`, `just docs::check`.
 
 = Code style
 
@@ -86,9 +81,8 @@ an exit code in `src/main.rs`'s `exit_for` and an entry in
 
 = Project structure
 
-Keep `src/main.rs` a thin entry point: argv parsing, logger init, and a call into
-the library. It is excluded from coverage, so logic there goes untested; keep the
-logic out rather than lower the bar.
+Keep `src/main.rs` a thin entry point: argv parsing, logger init, a call into the
+library. It is excluded from coverage, so logic there would go untested.
 
 #let caps = fact("linecop-caps")
 
@@ -180,8 +174,8 @@ just docs check   # build, index, and validate the site
 #link(
   "docs/contributing/generated-docs.md",
 )[docs/contributing/generated-docs.md]
-covers the pipeline: which facts are derived from where, how to add a source, and
-the typlite constraints a source has to write within.
+covers the pipeline: which facts come from where, how to add a source, and what
+typlite can render.
 
 The rule that matters: #strong[a doc states a fact by reading it]. The manifest
 reference is generated from `mmz --schema`, the CLI reference from `mmz --help`,
@@ -222,24 +216,19 @@ watermark: a human looked, no tool verified.
 
 - #link("https://www.conventionalcommits.org/")[Conventional Commits] for the
   subject line, in English, matching this repo's history.
-- Add a `Refs: <stem>` footer naming the MindTape task the commit closes or
-  advances, the bare stem: `mt check --commits` refuses a path. File a task
-  first if none exists; never guess a stem. Add no other trailers.
+- A `Refs: <stem>` footer names the task the commit advances, by bare stem.
+  File a task first if none exists; never guess a stem.
+- A change to `src/` or `schema/` adds an entry under `[Unreleased]` in
+  `CHANGELOG.md`, or a `Changelog: none` trailer. Add no other trailers.
 
-`git commit` enforces both: `.githooks/commit-msg` runs `mt check --commit-msg`,
+`git commit` enforces these: `.githooks/commit-msg` runs `mt check --commit-msg`,
 and `.githooks/pre-commit` refuses a tree #just.check() has not passed or an
 unstaged `outdatty.lock`. The dev shell installs them on entry, through
 #just.install-hooks().
 
-Task tracking is #link("https://github.com/mlavrinenko/mindtape")[MindTape]: one
-Typst file per task under `tasks/`, ruled by `.mindtape/config.toml` and driven by
-the `mt` CLI (`mt ls`, `mt add`, `mt flip`, `mt check`), never by hand. `.mmz/`
-is unrelated: it is mmz's own command cache.
-
-Closing a task runs `mmz --is-fresh --tag gate` too, so run #just.check() to
-record a pass, then flip. `--force` waives the gate and records the waiver in the
-note. That is mmz dogfooding its headline feature on its own backlog, see
-#www-link("/gating/").
+Tasks live under `tasks/`, driven by `mt`; their shape and flip flow are in
+#link("docs/contributing/tasks.md")[docs/contributing/tasks.md], and how a close
+gates on mmz itself in #www-link("/gating/").
 
 = Submitting
 

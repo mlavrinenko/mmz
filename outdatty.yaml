@@ -147,3 +147,11 @@ groups:
     dependents:
       - docs/src/contributing.typ
       - docs/src/contributing/worktrees.typ
+
+  # The backlog's rules: docs/src/contributing/tasks.typ narrates the shape and
+  # the flip flow .mindtape/config.toml enforces.
+  - name: task-practice
+    source:
+      - .mindtape/config.toml
+    dependents:
+      - docs/src/contributing/tasks.typ
