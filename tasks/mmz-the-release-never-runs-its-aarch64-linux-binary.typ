@@ -4,7 +4,7 @@
 #show: task.with(
   title: "Run the aarch64-linux release binary before it ships",
   kind: "dev",
-  tags: ("build",),
+  tags: ("build", "verified"),
   priority: framework("ice", confidence: 0.8, ease: 6.0, impact: 5.0),
   difficulty: 1,
   estimate: (src-files: 2),
@@ -26,7 +26,7 @@
       cheap-delegation: neutral,
     ),
   ),
-  status: accepted(2026, 10, 23)[waits on the v0.14.0 release run],
+  status: done(2026, 10, 23),
   links: related(
     "mmz-verify-the-lang-all-release-build-on-every-target.typ",
   )[found by this verification],
@@ -62,3 +62,7 @@
 == Dogfood
 
 This repo's own release is the change. The tag cut after the current backlog lands runs it, and `mt done` waits on that run.
+
+== Verification
+
+The v0.14.0 release run, https://github.com/mlavrinenko/mmz/actions/runs/39863032670, built both aarch64-linux legs on `ubuntu-24.04-arm` and ran the verify step on each: the default leg (https://github.com/mlavrinenko/mmz/actions/runs/39863032670/job/120121123098) printed `mmz 0.14.0 (1 ast lang)` and the full leg (https://github.com/mlavrinenko/mmz/actions/runs/39863032670/job/120121123130) printed `mmz 0.14.0 (28 ast langs)`. Both published archives need at most `GLIBC_2.39`, the same as v0.13.0's cross-built ones.
