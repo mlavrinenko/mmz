@@ -31,6 +31,11 @@ command killed by signal N exits 128 plus N, as a shell reports it: 137 for an
 OOM kill, 130 for Ctrl-C, 143 for SIGTERM. The record still says failed, so the
 next run executes it again.
 
+A SIGTERM or SIGHUP sent to `mmz` itself, by `timeout` or a CI cancel, is passed
+on to the command, and `mmz` waits for it to finish; Ctrl-C reaches both through
+the process group. A run a signal cut short records a failure, even when the
+command's trap exits 0.
+
 #exit-code-table
 
 Distinguishing them matters for the two that write no record — 5 and 6 — because
