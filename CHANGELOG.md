@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `mmz --schema` and `mmz --schema=fragment` name `probe_shell` among the keys
+  only the root manifest may set. Their descriptions listed four, so an editor's
+  hover told a fragment author it could set the fifth, which the loader refuses.
+
 ## [0.13.0] - 2026-10-20
 
 ### Added

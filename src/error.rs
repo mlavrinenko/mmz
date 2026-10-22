@@ -430,7 +430,7 @@ pub enum Error {
     },
 
     /// An imported file (not the root manifest) sets a key that only the root
-    /// manifest may set (`cache_dir`, `gitignore`, `strict`, `on_hit`).
+    /// manifest may set: one of [`crate::compose::POLICY_KEYS`].
     #[error("`{key}` is set in {path}, but may only be set in the root manifest")]
     FragmentPolicyKey {
         /// The offending top-level key.

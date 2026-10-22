@@ -11,7 +11,7 @@ groups:
     source:
       src/main.rs: 34f03130c72788d5139276ad72bb8f68953a091b0b9915bf52fd1eda3034c37d
     dependents:
-      www/utils/cli-notes.typ: 2b608f90d0fa6a564c70c813b33486c37bdc419f114b2064fdafeac4f00ae9db
+      www/utils/cli-notes.typ: cfe694e2450f086283102d1e8881d2612aa155e377a6761ed8f42ecb7df4da24
       www/utils/exit-code-notes.typ: 135797116c530857572fcf1ca2d14e2113e392493e7e20b678963aa90fa2305b
   dev-shell:
     source:
@@ -47,7 +47,7 @@ groups:
       www/utils/gate-notes.typ: d4a5b0e3c9c7e0b5051178e40179792eed4329d260c6a9f7562a86d68ecc434d
   manifest-prose:
     source:
-      schema/mmz.schema.json: 38a0c545639642c0ba8cdae96b2c5d4b6467ae224ecbdadfadaa2f87481a06c8
+      schema/mmz.schema.json: 39a3a9ad8e554a34724908c007a8a293701e27ee5d201932b6398ae259b7d934
     dependents:
       www/utils/config-notes.typ: 7c58f19d00b467bda0ebc073ed430dc881aced7a6a280ff942ff09bc596b914d
   manifest-schema:
@@ -57,13 +57,13 @@ groups:
       src/probe.rs: 1ce5a9a487b2913beabbd8af76422d629708fc49c6cd8f15fde10de816978e7e
       src/ttl.rs: d3fb9ba6aeca55c4df2468194b28e7b9812bf97955e41a5088ab5b59e18affa6
     dependents:
-      schema/mmz.schema.json: 38a0c545639642c0ba8cdae96b2c5d4b6467ae224ecbdadfadaa2f87481a06c8
-      src/schema.rs: 68716847cae4573712e77898eeb07da8c1e2a298034bc82a71dc25cd10bb5522
+      schema/mmz.schema.json: 39a3a9ad8e554a34724908c007a8a293701e27ee5d201932b6398ae259b7d934
+      src/schema.rs: 9c410b09548146beb3fd7f289a9ee4f49f8e67b7fd6108faf2ee3dc0a17fc437
   release-notes:
     source:
       Cargo.toml: 551c69f3f513b556283cd6beaeb723c8257ef5c0a0b7e8e42f31c0e44a639ab0
     dependents:
-      CHANGELOG.md: c7e5c97f0e1c9f3662dd6688d01bac16d878d4dd7e1bf0d9e0bd1161e5a369e5
+      CHANGELOG.md: 72b481eeb0d347714578f03acab1b1835d48b887a0d94a32ad75742c57324b34
   status-schema:
     source:
       src/status.rs: b58219d9166c678712b20b14c3340038b886fa7378a6c5476e4481fd0a2f9f13

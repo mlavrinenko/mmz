@@ -136,8 +136,8 @@
     summary: [Print the JSON Schema for a file named in a manifest's
       `imports:` list.],
     detail: [
-      Narrower than `--schema`: a fragment may not set `cache_dir`,
-      `gitignore`, `strict` or `on_hit`, so validating it against the config
+      Narrower than `--schema`: a fragment may not set a root-only policy
+      key, so validating it against the config
       schema instead would accept documents mmz rejects. Point a fragment's
       own `# yaml-language-server: $schema=…` line here.
     ],
@@ -148,8 +148,8 @@
       behind each one.],
     detail: [
       Leads with the source list in load order, so the import graph is
-      visible before the entries it fed are, then the effective `gitignore`,
-      `cache_dir`, `strict` and `on_hit` (defaulted ones marked, since they
+      visible before the entries it fed are, then every effective policy key
+      (defaulted ones marked, since they
       can only come from the root manifest), then each scope, probe and
       command annotated with its own file. Read-only, and prints the merged
       model only *after* validation — it is not a debugging aid for a

@@ -117,7 +117,7 @@ mod tests {
         assert_eq!(
             actual, expected,
             "fragment schema's properties must be exactly the config schema's minus \
-             cache_dir, gitignore, strict and on_hit"
+             compose::POLICY_KEYS"
         );
 
         for (key, fragment_value) in fragment_props {
@@ -190,6 +190,30 @@ mod tests {
                 props.contains_key(key),
                 "fragment schema must declare `{key}`, which a fragment may legally set"
             );
+        }
+    }
+
+    /// The prose a reader actually sees names every root-only key: the
+    /// fragment schema's own description, and the `imports` description both
+    /// schemas share (byte-identical, per the test above). A key added to
+    /// [`POLICY_KEYS`] and left out of that prose tells an editor's hover and
+    /// the manifest reference that a fragment may set it; `probe_shell` was
+    /// that key once.
+    #[test]
+    fn schema_prose_names_every_policy_key() {
+        let fragment: serde_json::Value =
+            serde_json::from_str(FRAGMENT_SCHEMA).expect("fragment schema is valid json");
+        for pointer in ["/description", "/properties/imports/description"] {
+            let prose = fragment
+                .pointer(pointer)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_else(|| panic!("fragment schema has a `{pointer}` string"));
+            for key in POLICY_KEYS {
+                assert!(
+                    prose.contains(key),
+                    "fragment schema's `{pointer}` must name root-only key `{key}`"
+                );
+            }
         }
     }
 }

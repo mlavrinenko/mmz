@@ -197,17 +197,17 @@ fn the_json_form_round_trips_and_carries_sources_in_load_order() {
     assert_eq!(json, reparsed);
 }
 
-/// The four policy keys — `gitignore`, `cache_dir`, `strict`, `on_hit` — are
-/// part of the manifest mmz actually assembled just as much as a scope or a
-/// command is, and are the ones most likely to explain a surprise: a `strict`
-/// left at its default explains an unexpected pass-through, a defaulted
-/// `on_hit` explains silence on a cache hit, a `gitignore` override explains
-/// an empty scope. Every key shows its *effective* value — resolved, not
-/// merely present-or-absent — because "what is mmz actually using" is the
-/// question, and a defaulted key that showed as `null`/missing would not
-/// answer it. `composed_project` declares `on_hit` and leaves the other three
-/// to their defaults, so this one fixture exercises both "shows the default"
-/// and "a declared value overrides it" at once.
+/// The five policy keys — `gitignore`, `cache_dir`, `strict`, `on_hit`,
+/// `probe_shell` — are part of the manifest mmz actually assembled just as much
+/// as a scope or a command is, and are the ones most likely to explain a
+/// surprise: a `strict` left at its default explains an unexpected
+/// pass-through, a defaulted `on_hit` explains silence on a cache hit, a
+/// `gitignore` override explains an empty scope. Every key shows its
+/// *effective* value — resolved, not merely present-or-absent — because "what
+/// is mmz actually using" is the question, and a defaulted key that showed as
+/// `null`/missing would not answer it. `composed_project` declares `on_hit` and
+/// leaves the other four to their defaults, so this one fixture exercises both
+/// "shows the default" and "a declared value overrides it" at once.
 #[test]
 fn the_policy_section_reports_every_keys_effective_value_declared_and_defaulted() {
     let dir = tempfile::tempdir().expect("tempdir");
