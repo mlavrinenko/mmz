@@ -3,8 +3,8 @@ algorithm: blake3
 groups:
   binary-size:
     source:
-      Cargo.lock: 220f261b2752c7465b14e7ff4508530271b499071ff43b46590a1953d6464c7d
-      Cargo.toml: 2756e467c3b4eb0723eb6122cd0b2e4fd2116b829ebcbc0450600902508f0e85
+      Cargo.lock: c15d4d933ef3c7c842f66a3a0073c3167e8f33986a0d6b0a7191a1811c7b2d0e
+      Cargo.toml: aa12e957cdc02e6fa3aa269e5331dc44145df9f6c41a9e020e59a978639e8c8b
     dependents:
       www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
@@ -61,9 +61,9 @@ groups:
       src/schema.rs: 9c410b09548146beb3fd7f289a9ee4f49f8e67b7fd6108faf2ee3dc0a17fc437
   release-notes:
     source:
-      Cargo.toml: 2756e467c3b4eb0723eb6122cd0b2e4fd2116b829ebcbc0450600902508f0e85
+      Cargo.toml: aa12e957cdc02e6fa3aa269e5331dc44145df9f6c41a9e020e59a978639e8c8b
     dependents:
-      CHANGELOG.md: 9292c10f59582c7b1855b907f3969b38a556f4ce221a2b3f79e9de977b24b8b2
+      CHANGELOG.md: 7412ce8e22e025e78c61f4ea375cde4cfcc4e05d4f483842739e3116852f8fef
   status-schema:
     source:
       src/status.rs: b58219d9166c678712b20b14c3340038b886fa7378a6c5476e4481fd0a2f9f13
