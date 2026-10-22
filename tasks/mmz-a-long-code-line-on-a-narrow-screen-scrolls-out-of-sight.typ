@@ -4,7 +4,7 @@
   title: "mmz: a long code line on a narrow screen scrolls out of sight",
   tags: ("docs",),
   priority: framework("ice", confidence: 0.8, ease: 7.0, impact: 4.0),
-  status: wip(2026, 10, 22),
+  status: done(2026, 10, 22),
   links: related(
     "mmz-review-the-composition-docs-page-in-a-browser.typ",
   )[found by this review],
