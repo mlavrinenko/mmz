@@ -23,9 +23,9 @@
       simply unmemoized, and `MMZ_DISABLE=1` makes a wrapped one run anyway.
 
       On a hit, nothing runs and the exit code is 0. On a miss the command runs
-      with its stdout and stderr streamed through untouched, and a record is
-      written only if it exits 0 — a failing command never becomes a claim that
-      the work is done.
+      with its stdout and stderr streamed through untouched, and its outcome is
+      recorded. Only an exit 0 records a pass, so a failing command never
+      becomes a claim that the work is done.
     ],
   ),
   "--": (
