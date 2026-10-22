@@ -38,7 +38,7 @@ groups:
   gates:
     source:
       .just/docs.just: 3573f518fa948e54bdd2dabb263335d830aa75bb505838495710b06fded2b3fa
-      Justfile: 97e4a43a0e076899d8da51e0a3f0ac84bcbdcd9c3cb6f572ae3855d2bdea9438
+      Justfile: 0c2b7fde0e9a979224aeac20278e2281bf2ac9d9ea4d7b014ff319274f157a63
     dependents:
       .mmz/conf.d/10-rust.yaml: ce20bfa2f797b8a8d3d4c471e1dd0ea4ad3897fb2f31e676d1a090f53824d41e
       .mmz/conf.d/20-docs.yaml: ae01274105daacf30a390d3c84df3764c8f5a6b62b63ef1139a8691fc727a2a8

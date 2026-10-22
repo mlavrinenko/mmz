@@ -121,7 +121,7 @@ clippy:
 [doc("Auto-fix clippy warnings")]
 [group("dev")]
 clippy-fix:
-    cargo clippy --fix --workspace --all-targets --allow-dirty --allow-staged -- -D warnings
+    cargo clippy -q --fix --workspace --all-targets --allow-dirty --allow-staged -- -D warnings
 
 [doc("Run the test suite")]
 [group("dev")]
