@@ -16,6 +16,15 @@
 
 #let SCHEMA = json("../generated/config-schema.json")
 
+// The root-only policy keys, in schema order: what the config schema declares
+// and `mmz --schema=fragment` does not. schema.rs asserts that gap is exactly
+// compose::POLICY_KEYS, the set the loader refuses in a fragment, so prose
+// reading it here names the keys the binary enforces.
+#let FRAGMENT_SCHEMA = json("../generated/fragment-schema.json")
+#let POLICY_KEYS = (
+  SCHEMA.properties.keys().filter(k => k not in FRAGMENT_SCHEMA.properties)
+)
+
 // One reference entry: the key as a reader writes it, plus everything known
 // about it from either side.
 #let _entry(key, prop) = (

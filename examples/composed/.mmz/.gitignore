@@ -1,0 +1,3 @@
+# Throwaway cache records. Written by `mmz --init`; keeps a project's root
+# .gitignore untouched.
+/cache

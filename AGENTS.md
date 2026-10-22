@@ -14,7 +14,7 @@ Repository: [https://github.com/mlavrinenko/mmz](https://github.com/mlavrinenko/
 
 - `src/` — the library; `src/main.rs` is a thin argv-parsing wrapper over it
 - `schema/` — the JSON Schemas for `.mmz/config.yaml` and `--status=json`
-- `examples/demo/` — the docs fixture; `www/generate.sh` runs the real binary against a throwaway copy of it, so every transcript on the site is real output
+- `examples/` — the docs fixtures, `demo/` and the composed `composed/`; `www/generate.sh` runs the real binary against a throwaway copy of each, so every transcript on the site is real output
 - `www/content/*.typ` — the docs site (tola)
 - `docs/src/*.typ` — the sources this file, README.md and CONTRIBUTING.md are rendered from
 - `tasks/` — mmz’s own backlog as per-file MindTape task artifacts

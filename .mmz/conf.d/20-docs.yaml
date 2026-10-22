@@ -25,7 +25,7 @@ scopes:
   # The committed outputs of the Markdown render. They are inputs to the
   # freshness check, which compares them against a fresh render.
   docs-md-out: ["README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/contributing/*.md"]
-  fixture: ["examples/demo/**"]
+  fixture: ["examples/**"]
 
 probes:
   # See ../conf.d/10-rust.yaml for why every recipe probe below carries `-S` and `-e`.

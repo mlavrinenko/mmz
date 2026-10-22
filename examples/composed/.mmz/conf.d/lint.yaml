@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=../../../../schema/mmz-fragment.schema.json
+# A fragment: rules only. Its glob resolves against the project root, not this
+# file's directory, so `tests/**/*.rs` means examples/composed/tests here.
+scopes:
+  rust-tests: ["tests/**/*.rs"]
+
+commands:
+  - name: ./bin/lint.sh
+    inputs: [rust-tests]

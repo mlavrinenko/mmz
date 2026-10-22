@@ -71,26 +71,9 @@
 // instead of through Typst's own heading syntax.
 #let doc-title(body) = html.elem("h1")[#body]
 
-// Spell a small derived count as an English word, so prose that used to read
-// "Two gates" does not regress to "2 gates" the moment the number stops being
-// hand-typed. Above a table, fall back to the numeral — that is where a numeral
-// is what a reader wants anyway.
-#let num-word(n) = {
-  let words = (
-    "zero",
-    "one",
-    "two",
-    "three",
-    "four",
-    "five",
-    "six",
-    "seven",
-    "eight",
-    "nine",
-    "ten",
-  )
-  if n >= 0 and n < words.len() { words.at(n) } else { str(n) }
-}
+// `num-word` lives in www/utils/words.typ so the docs site can spell the same
+// derived counts; re-exported here so docs/src sources import it from lib.typ.
+#import "/www/utils/words.typ": num-word
 
 // Read one of the generators' derived facts by name (e.g. "crate-map"), so
 // every source reads the same root-relative path instead of retyping it.

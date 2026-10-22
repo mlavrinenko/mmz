@@ -185,7 +185,7 @@ the typlite constraints a source has to write within.
 
 The rule that matters: #strong[a doc states a fact by reading it]. The manifest
 reference is generated from `mmz --schema`, the CLI reference from `mmz --help`,
-every transcript from a real run against `examples/demo`, and the gate table
+every transcript from a real run against a fixture under `examples/`, and the gate table
 above from `just --dump`. If you find yourself typing a fact that already exists
 in a file the build can read, derive it instead.
 

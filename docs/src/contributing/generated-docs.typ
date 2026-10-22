@@ -2,9 +2,8 @@
 // docs/contributing/generated-docs.md. Rendered to Markdown by
 // docs/generate-md.sh via typlite.
 //
-// The pipeline documenting itself. This is the file to read before adding a
-// docs/src source, a content page, or a derived fact — and the file to update
-// when the pipeline itself changes.
+// The pipeline documenting itself: read it before adding a docs/src source, a
+// content page or a derived fact, and update it when the pipeline changes.
 #import "../lib.typ": doc-title, just, www-link
 
 #metadata((
@@ -22,9 +21,8 @@ This file explains the machinery, and what you owe it when you add to it.
 
 = Why
 
-Every fact restated by hand is a fact that will eventually be wrong, and the
-failure is silent — a reader trusts documentation precisely when they cannot
-check it. This repo had three copies of the flag list (the binary, the README,
+Every fact restated by hand will eventually be wrong, and silently — a reader
+trusts documentation precisely when they cannot check it. This repo had three copies of the flag list (the binary, the README,
 `www/index.html`) and two of the manifest keys.
 
 `outdatty.yaml` couples sources to dependents, so an edit at least _flags_ the
@@ -33,13 +31,13 @@ README was where that quietly stopped happening.
 
 So: #strong[a doc states a fact by reading it]. If a fact exists in a file the
 build can read, the doc reads it. What stays hand-written is judgement — why a
-key exists, when to reach for it, what it costs — which has no machine source and
-is the only thing worth a reviewer's attention.
+key exists, when to reach for it, what it costs — which has no machine source
+and is the only thing worth a reviewer's attention.
 
 = The two render paths
 
-They share the generated facts and nothing else. Keeping them straight is the
-one thing that trips people up.
+They share the generated facts and nothing else, and mixing them up is what
+trips people.
 
 #table(
   columns: 3,
@@ -62,9 +60,11 @@ Three scripts, run in a fixed order, all writing to the gitignored
 `www/generated/`:
 
 + #strong[`www/generate.sh`] builds `mmz` release and captures its live output:
-  the help text, both JSON Schemas, the version, a `--init` in an empty
+  the help text, all three JSON Schemas, the version, a `--init` in an empty
   directory, and a dozen transcripts from running the real binary against a
-  throwaway copy of `examples/demo`.
+  throwaway copy of `examples/demo`. It calls `www/generate-composition.sh` for
+  the composition page's captures, against `examples/composed`, because a
+  composed `--status` grows a column no other capture has.
 + #strong[`www/generate-facts.sh`] derives the rest from files: the crate map
   from `cargo metadata`, the gate table and the `just` module from
   `just --dump`, the caps from `.linecop.yaml`, the binary sizes from
@@ -79,35 +79,33 @@ The order is not negotiable, and each script's header says why. In short:
 the same critical section; and the page manifest is a full page compile, so it
 needs both the facts and the captures already in place.
 
-A capture must also be the same bytes on every build, and the way to get that is
-to pin the input rather than to correct the output. `generate.sh` exports
+A capture must be the same bytes on every build, and the way there is to pin
+the input, not to correct the output. `generate.sh` exports
 `MMZ_NOW`, so a record's `ran_at` and the ages in a `--status` table are the
 binary's own stdout and still identical run to run. Reach for post-processing
 only when nothing can be pinned instead: a normalized capture is a place where
 the docs and the binary are allowed to disagree.
 
-The fixture's location is the one input that cannot be pinned that way. The
-mutating captures run against a copy of `examples/demo` under `$TMPDIR`, so a
-command that prints a path — `--status=json` names the manifest — carries that
-build's `mktemp` directory verbatim, and `/tmp/tmp.BIg78u4JqB/demo/.mmz/config.yaml`
-is neither reproducible nor readable. A capture that names it is marked `rel` at
+The fixture's location is the one input that cannot be pinned. The mutating
+captures run against a copy under `$TMPDIR`, so a command that prints a path
+(`--status=json` names the manifest) carries that build's `mktemp` directory
+verbatim, which is neither reproducible nor readable. A capture that names it is marked `rel` at
 its call site in `generate.sh`, which rewrites the copy's path to a
 project-relative one; every other byte is stdout as written.
 
 That marking is a convention, and a convention no gate reads is a leak waiting
 for the next path-printing capture. `.just/scripts/check-capture-paths.sh` runs
 last inside `generate.sh` and fails the build on any generated file still naming
-a temp directory — matching both `mktemp`'s own naming and, exactly, the two
-directories this run created and passed down. It is the one reader in the repo
+a temp directory — matching both `mktemp`'s own naming and, exactly, each
+directory this run created and passed down. It is the one reader in the repo
 that distrusts a capture's bytes: #just.docs-check() builds the site and
 validates its links, #just.docs-md-check() diffs Markdown against its source, and
 neither can see inside stdout, because stdout is the thing being trusted.
 
 All three serialize on `target/www-generated.lock`, because #just.check() runs
 its arms in parallel and more than one of them is inside that directory at once.
-A caller that already holds the lock exports `MMZ_GENERATED_LOCK=1` so the nested
-calls skip their own acquisition rather than deadlocking against their own
-process tree.
+A caller already holding the lock exports `MMZ_GENERATED_LOCK=1`, so the nested
+calls skip acquiring it instead of deadlocking against their own process tree.
 
 = Adding a docs/src source
 
@@ -124,10 +122,10 @@ reads each source's own declaration, so there is no list to add to:
 #doc-title[My topic]
 ```
 
-Then #just.docs-md() renders it, and #just.docs-md-check() will fail from then on
-if the committed output drifts. Add the output path to `.linecop.yaml`'s excludes
-— a generated Markdown file's line count is not a meaningful size proxy, because
-typlite emits one line per paragraph rather than hard-wrapping.
+Then #just.docs-md() renders it, and #just.docs-md-check() fails from then on
+if the committed output drifts. Add the output path to `.linecop.yaml`'s
+excludes: typlite emits one line per paragraph, so a generated file's line count
+is no size proxy.
 
 = Adding a content page
 
@@ -158,16 +156,15 @@ a `<page-meta>` block pointed at some other page's route.
 
 Write it into `www/generated/` from `www/generate-facts.sh` through `emit` (JSON)
 or `emit_raw` (anything else). Both write via a temp file and an atomic rename,
-and both refuse to install a malformed or empty artifact — a partial fact file is
-worse than none, because the reader gets a plausible-looking prefix instead of an
-error.
+and refuse to install a malformed or empty artifact — a partial fact file is
+worse than none, since the reader gets a plausible prefix instead of an error.
 
 Then decide whether it needs a coverage gate. The existing ones follow one
 pattern: derive the key set from the source, read the hand-written notes dict's
 keys back through a `typst query` driver, and fail on a set difference in
-_either_ direction. Both directions matter — a missing note means an
-undocumented thing, and an extra note means prose describing something that no
-longer exists, which reads as current and is worse.
+_either_ direction. A missing note is an undocumented thing; an extra note is
+prose about something that no longer exists, which reads as current and is
+worse.
 
 Read the notes dict by evaluating it, never by grepping quoted strings out of the
 file. The keys are Typst code, and a regex cannot tell a key from a word in a
@@ -177,9 +174,8 @@ comment.
 
 Binary size is the one fact the generators do not measure, because measuring it
 means linking the binary once per grammar — thirty LTO builds, about half an
-hour. A fact that costs that much cannot be derived on every docs build, but it
-must not go back to being typed into a page either. The shape that resolves it,
-and the shape to copy for the next such fact:
+hour. That cannot run on every docs build, nor go back to being typed into a
+page. The shape that resolves it, and the one to copy for the next such fact:
 
 + #strong[Measure on demand, commit the result.] #just.measure-sizes() runs
   `www/measure-sizes.sh`, which writes `www/sizes.yaml` — the one committed
@@ -240,9 +236,8 @@ Markdown, so a renamed page would otherwise ship a 404 only a reader ever finds.
   with a version bump, and no source proves them.
 - #strong[Which dependencies are worth naming] in AGENTS.md's architecture list.
   That is editorial judgement; only the versions are read.
-- #strong[The comparison page's rubric.] Scoring another tool is an argument, not
-  a fact, and pretending otherwise by deriving it from something would only hide
-  the judgement.
+- #strong[The comparison page's rubric.] Scoring another tool is an argument,
+  not a fact; deriving it from something would only hide the judgement.
 
 = Related
 

@@ -32,8 +32,8 @@ set working-directory := '..'
 
 # Capture live `mmz` output for the docs (www/generated/*), so the site's
 # transcripts, CLI reference and manifest reference cannot drift from the
-# binary. Builds mmz release, runs it against a throwaway copy of
-# examples/demo, then derives the facts and the page manifest.
+# binary. Builds mmz release, runs it against throwaway copies of
+# the examples/ fixtures, then derives the facts and the page manifest.
 #
 # generate.sh calls generate-facts.sh and generate-site-pages.sh at its own end,
 # in that order and never before: it `rm -rf`s the whole generated/ dir on entry,

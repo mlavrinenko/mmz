@@ -1,5 +1,7 @@
 #import "../utils/page.typ": page
-#import "../utils/ui.typ": callout
+#import "../utils/ui.typ": callout, transcript
+#import "../utils/config-ref.typ": POLICY_KEYS
+#import "../utils/words.typ": num-word
 #import "../utils/site.typ": u
 
 #let meta = (
@@ -11,6 +13,11 @@
 #metadata(meta) <page-meta>
 
 #show: page.with(..meta)
+
+// The root-only policy keys, read from the schemas rather than typed here: a
+// fifth key once made the hand-typed "four" wrong without anything failing.
+#let policy-keys(conj) = POLICY_KEYS.map(raw).join(", ", last: " " + conj + " ")
+#let policy-count = num-word(POLICY_KEYS.len())
 
 `mmz` reads one manifest, but that manifest does not have to be one file. A
 top-level `imports:` list pulls scopes, probes and commands out of other YAML
@@ -40,9 +47,7 @@ cycle. For the full key syntax see #link(u("/manifest/"))[the manifest
 `scopes` and `probes` merge by key; `commands` merge by `name`. Declare the same
 key in two files and `mmz` refuses to guess which one you meant:
 
-```
-mmz: scope `rust` is declared in both .mmz/config.yaml and .mmz/conf.d/lint.yaml
-```
+#transcript("composition-duplicate-scope.txt")
 
 Last-wins was the obvious alternative, and it was refused on purpose. Picture
 the case it exists for: a generator drops a fresh `rules.yaml` naming a `rust`
@@ -54,7 +59,7 @@ every rule depending on `rust` is now checked against stale globs, and `mmz`
 reports fresh with a straight face. That is a false green: the exact failure
 this tool exists to catch, produced by the tool itself.
 
-#callout("warn")[
+#callout("note")[
   Erroring is also the only forward-compatible choice. Loosening an error into
   an override later is additive; the reverse — turning a working override into
   an error — breaks whoever depended on it. Ship the strict form first.
@@ -85,12 +90,10 @@ imports:
 
 That is wrong, and `mmz` says so by naming the path it actually resolved:
 
-```
-mmz: import in .mmz/config.yaml names `.mmz/.mmz/conf.d/`, which does not exist
-```
+#transcript("composition-wrong-import.txt")
 
 `.mmz/config.yaml` already sits inside `.mmz`, so its own directory *is*
-`.mmz`— resolving `.mmz/conf.d/` against it lands on `.mmz/.mmz/conf.d/`, one
+`.mmz`— resolving `.mmz/conf.d/` against it lands on `.mmz/.mmz/conf.d`, one
 level too deep. The importing file's directory is the base, not the project
 root, so the entry wants no `.mmz/` prefix at all:
 
@@ -109,7 +112,7 @@ scopes:
 ```
 
 `rust-tests` is *not* `.mmz/conf.d/tests/**/*.rs`, even though the fragment
-declaring it lives three directories deep. The glob resolves against the
+declaring it lives two directories deep. The glob resolves against the
 project root exactly as it would in the root manifest — a fragment cannot
 express globs about itself, only about the project it was imported into. Both
 rules are visible in the same two files at once: the import path that named
@@ -125,13 +128,13 @@ this fragment is file-relative, the glob written inside it is root-relative.
 = What a fragment may say
 
 A fragment declares rules: `scopes`, `probes`, `commands`, and its own
-`imports:`. It may not set `cache_dir`, `gitignore`, `strict` or `on_hit` —
-those four govern the whole run, not one rule, and setting one in a fragment is
+`imports:`. It may not set #policy-keys("or") — those #policy-count govern the
+whole run, not one rule, and setting one in a fragment is
 a load error naming the key and the file. Project policy stays with the
 project; there is no precedence to learn because there is nothing to override.
 
 Validate a fragment on its own with `mmz --schema=fragment`; the shape is
-narrower than the full manifest schema precisely by those four keys.
+narrower than the full manifest schema precisely by those #policy-count keys.
 
 = Order: host rules first, then imports, depth-first
 
@@ -149,45 +152,17 @@ overlap — most manifests never hit it.
 scope, probe and command — the answer to "which file actually produced this
 rule?" for a project built from several files:
 
-```
-sources:
-  1  .mmz/config.yaml
-  2  .mmz/conf.d/lint.yaml
-
-policy:  # .mmz/config.yaml
-  gitignore: true  (default)
-  cache_dir: .mmz/cache  (default)
-  strict: [no_match, no_inputs]  (default)
-  on_hit: (none)  (default)
-
-scopes:
-  rust:  # .mmz/config.yaml
-    globs: [src/**/*.rs]
-  rust-tests:  # .mmz/conf.d/lint.yaml
-    globs: [tests/**/*.rs]
-
-commands:
-  ./bin/build.sh:  # .mmz/config.yaml
-    match: prefix
-    inputs: [rust]
-  ./bin/lint.sh:  # .mmz/conf.d/lint.yaml
-    match: prefix
-    inputs: [rust-tests]
-```
+#transcript("composition-dump.txt")
 
 `sources` is numbered in load order — root first, then each import depth-first
 — so the import graph is visible before the entries it fed. Every scope, probe
 and command carries a trailing `# <file>` naming exactly where it came from,
-and the four policy keys are always resolved (defaulted ones marked so) since
+and the #policy-count policy keys are always resolved (defaulted ones marked so) since
 they govern the run whether or not any file wrote them.
 
 `--status` carries the same fact per rule, one column, alongside its freshness:
 
-```
-RULE            SOURCE                 STATE  AGE
-./bin/build.sh  .mmz/config.yaml       fresh  0s ago
-./bin/lint.sh   .mmz/conf.d/lint.yaml  fresh  0s ago
-```
+#transcript("composition-status.txt")
 
 `--status=json` reports the same `source` field per rule, so a script can ask
 "is the rule that just went stale one of mine, or one a generator wrote?"

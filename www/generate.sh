@@ -24,9 +24,8 @@
 # `just docs::gen` invokes this; docs::build / docs::serve / docs::check run it
 # first.
 #
-# Two tola behaviours bite whoever edits this file — a serve that will not see a
-# brand-new capture, and an `image()` path that validate calls broken. Both are
-# written up under "Docs SSG gotchas" in docs/src/contributing/generated-docs.typ.
+# Two tola behaviours bite whoever edits this file; "Working within tola" in
+# docs/src/contributing/generated-docs.typ has both.
 set -eo pipefail
 
 # The clock every capture below is taken against: 2026-08-17T17:00:00Z. mmz
@@ -51,20 +50,16 @@ MMZ="$REPO/target/release/mmz"
 (cd "$REPO" && cargo build -q --release --bin mmz)
 
 # Serialize every writer of www/generated/ (see www/generate-facts.sh for the
-# others). `just check` runs its arms in parallel and more than one of them
-# touches this directory: docs::check runs this script, while docs::md-check and
-# check-doc-facts regenerate the facts inside it. The `rm -rf` below would then
-# delete the facts out from under a concurrent reader — an intermittent "file not
-# found (searched at www/generated/crate-map.json)" on work that is perfectly
-# correct.
+# others). `just check` runs its arms in parallel: docs::check runs this script
+# while docs::md-check and check-doc-facts regenerate the facts inside it, so the
+# `rm -rf` below would delete facts from under a concurrent reader, failing
+# correct work with an intermittent "file not found (…crate-map.json)".
 #
-# Taken on a file descriptor rather than by re-exec'ing under `flock`, because a
-# re-exec would rerun the build above. The lock is held until this script exits
-# and fd 9 closes. MMZ_GENERATED_LOCK tells the nested generate-facts.sh and
-# generate-site-pages.sh calls at the end of this file that the lock is already
-# held, so neither deadlocks waiting for a lock this process owns — and it makes
-# THIS script's own acquisition conditional too, since docs/generate-md.sh calls
-# this script while already holding the lock across its own subsequent reads.
+# Taken on a file descriptor, not by re-exec'ing under `flock`, which would rerun
+# the build above; fd 9 holds it until exit. MMZ_GENERATED_LOCK tells the nested
+# generate-*.sh calls the lock is already held so none deadlocks against this
+# process, and makes THIS acquisition conditional too, since
+# docs/generate-md.sh calls this script while holding the lock itself.
 mkdir -p "$REPO/target"
 if [ -z "$MMZ_GENERATED_LOCK" ]; then
   exec 9>"$REPO/target/www-generated.lock"
@@ -179,6 +174,11 @@ gen_run prune --prune
 cd "$REPO"
 rm -rf "$(dirname "$COPY")"
 
+# The composition page's captures, against their own composed fixture.
+COMPOSED_TMP="$(mktemp -d)"
+bash "$SCRIPT_DIR/generate-composition.sh" "$MMZ" "$REPO/examples/composed" "$OUT" "$COMPOSED_TMP"
+rm -rf "$COMPOSED_TMP"
+
 # Restore the derived facts inside the same critical section that deleted them.
 # Splitting the wipe and the restore across two lock acquisitions would leave a
 # window where www/generated/ exists with no facts in it, which is the exact
@@ -194,6 +194,7 @@ bash "$SCRIPT_DIR/generate-site-pages.sh"
 # Last, over everything the three scripts wrote: no capture may name a directory
 # this build invented. The two mktemp roots are passed down by value — gone from
 # disk by now — so the check is exact about THIS run, not a guess at mktemp names.
-bash "$REPO/.just/scripts/check-capture-paths.sh" "$OUT" "$(dirname "$COPY")" "$INIT_DIR"
+bash "$REPO/.just/scripts/check-capture-paths.sh" "$OUT" "$(dirname "$COPY")" "$INIT_DIR" \
+  "$COMPOSED_TMP"
 
 echo "generate.sh: $(find "$OUT" -type f | wc -l) files under $OUT"

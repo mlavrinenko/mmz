@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=../../../schema/mmz.schema.json
+# The composition page's fixture: a root manifest plus one imported fragment,
+# the smallest project whose --dump-config and --status have something to say
+# about where each rule came from. www/generate-composition.sh runs the real
+# `mmz` against a throwaway copy of it, so the page's transcripts are this
+# project's actual behaviour. examples/demo stays single-file on purpose: a
+# SOURCE column there would change every other page's --status capture.
+#
+# The import path is relative to THIS file's directory, which is already
+# `.mmz`, so the entry carries no `.mmz/` prefix. The generator also breaks it
+# the way everyone does once, to capture the error that names the path.
+imports:
+  - conf.d/
+
+scopes:
+  rust: ["src/**/*.rs"]
+
+commands:
+  - name: ./bin/build.sh
+    inputs: [rust]

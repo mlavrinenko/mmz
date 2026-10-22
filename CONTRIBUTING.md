@@ -113,7 +113,7 @@ just docs check   # build, index, and validate the site
 
 [docs/contributing/generated-docs.md](docs/contributing/generated-docs.md) covers the pipeline: which facts are derived from where, how to add a source, and the typlite constraints a source has to write within.
 
-The rule that matters: **a doc states a fact by reading it**. The manifest reference is generated from `mmz --schema`, the CLI reference from `mmz --help`, every transcript from a real run against `examples/demo`, and the gate table above from `just --dump`. If you find yourself typing a fact that already exists in a file the build can read, derive it instead.
+The rule that matters: **a doc states a fact by reading it**. The manifest reference is generated from `mmz --schema`, the CLI reference from `mmz --help`, every transcript from a real run against a fixture under `examples/`, and the gate table above from `just --dump`. If you find yourself typing a fact that already exists in a file the build can read, derive it instead.
 
 ## Adding a manifest key
 
