@@ -84,7 +84,7 @@ jobs:
   # twenty-seven C compiles do not belong in front of the recipe people run in
   # a loop.
   #
-  # x86_64-linux only. Whether the same set compiles under the cross, Darwin
+  # x86_64-linux only. Whether the same set compiles under the aarch64, Darwin
   # and MSVC release targets is answered by the release workflow, not here.
   grammars:
     name: Test with every grammar

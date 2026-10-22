@@ -4,7 +4,7 @@
   title: "mmz: the release never runs its aarch64-linux binary",
   tags: ("build",),
   priority: framework("ice", confidence: 0.8, ease: 6.0, impact: 5.0),
-  status: proposed(2026, 10, 22),
+  status: wip(2026, 10, 22),
   links: related(
     "mmz-verify-the-lang-all-release-build-on-every-target.typ",
   )[found by this verification],
