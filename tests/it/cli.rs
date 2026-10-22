@@ -368,6 +368,7 @@ fn mmz_cmd(cwd: &Path, args: &[&str]) -> std::process::Output {
     let bin = assert_cmd::cargo::cargo_bin("mmz");
     std::process::Command::new(bin)
         .current_dir(cwd)
+        .env_remove("MMZ_DISABLE")
         .args(args)
         .output()
         .expect("ran mmz")

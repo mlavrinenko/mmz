@@ -1,4 +1,24 @@
-use super::run;
+use std::path::Path;
+
+use super::{Invocation, execute};
+use crate::clock::Clock;
+use crate::disable::Disable;
+
+/// [`super::run`] with the run-anyway switch pinned off rather than read from
+/// the environment, so a suite run under `MMZ_DISABLE=1` (a forced `just check`)
+/// still tests the skip these cases assert.
+fn run(argv: &[String], cwd: &Path) -> crate::error::Result<u8> {
+    run_with(argv, cwd, Disable::off())
+}
+
+fn run_with(argv: &[String], cwd: &Path, disable: Disable) -> crate::error::Result<u8> {
+    execute(&Invocation {
+        argv,
+        cwd,
+        clock: Clock::resolve()?,
+        disable,
+    })
+}
 
 fn write_manifest(dir: &std::path::Path, body: &str) {
     let cfg = dir.join(".mmz");
@@ -360,5 +380,32 @@ fn malformed_macro_is_a_config_error() {
     assert!(
         matches!(run(&argv, base), Err(crate::Error::MacroSyntax { .. })),
         "a two-macro name is rejected at load"
+    );
+}
+
+#[test]
+fn a_disabled_run_executes_a_fresh_rule_and_leaves_its_record_a_pass() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let base = dir.path();
+    std::fs::write(base.join("a.txt"), b"one").expect("input");
+    write_manifest(
+        base,
+        "scopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n",
+    );
+    let argv = [
+        "sh".to_owned(),
+        "-c".to_owned(),
+        "printf x >> runs.log".to_owned(),
+    ];
+
+    assert_eq!(run_with(&argv, base, Disable::off()).expect("run"), 0);
+    assert_eq!(run_with(&argv, base, Disable::on()).expect("forced"), 0);
+    assert_eq!(runs(base), 2, "forced past a fresh record");
+
+    assert_eq!(run_with(&argv, base, Disable::off()).expect("run"), 0);
+    assert_eq!(
+        runs(base),
+        2,
+        "the forced run left a record the next run honours"
     );
 }

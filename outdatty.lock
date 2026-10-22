@@ -9,10 +9,10 @@ groups:
       www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
     source:
-      src/main.rs: f1d588b1a0d698297b33c9d31e6cbaa4ae7d4b0690b14724b4713b4ce1b3368f
+      src/main.rs: 27bfa06809df661d7beae261b78d7fbe86aedafc514dc0c60c01e521915c3a34
     dependents:
-      www/utils/cli-notes.typ: cfe694e2450f086283102d1e8881d2612aa155e377a6761ed8f42ecb7df4da24
-      www/utils/exit-code-notes.typ: 135797116c530857572fcf1ca2d14e2113e392493e7e20b678963aa90fa2305b
+      www/utils/cli-notes.typ: cf779ef4956c37bd71d34c7b55d1e0b63c59f506d2aec3fe601975a60c362274
+      www/utils/exit-code-notes.typ: e2b7811e399aba766934cac7eb25c3d262894cb73969a4bac1825ff965f38a13
   dev-shell:
     source:
       .config/wt.toml: 326ece11a99b6e0e03333d52732862c0390a4afb9678bf99c8e63756c25b5d85
@@ -63,7 +63,7 @@ groups:
     source:
       Cargo.toml: 551c69f3f513b556283cd6beaeb723c8257ef5c0a0b7e8e42f31c0e44a639ab0
     dependents:
-      CHANGELOG.md: ef64e37c18aef5b2e17229a46e3d8547291de9510eaf74ae118d7680e99b163b
+      CHANGELOG.md: 56397c1c68873b39de59c4045140a1d62fcb06a35911341c1a4234515004e4a6
   status-schema:
     source:
       src/status.rs: b58219d9166c678712b20b14c3340038b886fa7378a6c5476e4481fd0a2f9f13

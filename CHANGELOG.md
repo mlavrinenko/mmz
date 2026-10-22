@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `MMZ_DISABLE=1` makes a wrapped run execute instead of skip, so a record you
+  distrust is re-verified without deleting `.mmz/cache`:
+
+  ```bash
+  MMZ_DISABLE=1 just check     # every arm runs and re-records
+  ```
+
+  Only the skip goes away. The run still matches a rule, still honours `strict`,
+  runs its probes, checks its `outputs` and records its outcome as any run does,
+  so a forced gate still leaves the pass `mmz --is-fresh --tag gate` asserts.
+  `--is-fresh` and `--status` run nothing and ignore the variable. Unset, empty
+  and `0` are off. Any other value is refused with exit 2 naming the variable,
+  as a malformed `MMZ_NOW` is, because reading `yes` as off would skip a run you
+  asked to force.
+- Library: `mmz::disable` resolves the variable, and `Error::InvalidDisable`
+  is the new error case, so an exhaustive `match` on `Error` needs an arm.
+
 ### Fixed
 
 - A wrapped command killed by a signal exits `128 + N`, as a shell reports it:

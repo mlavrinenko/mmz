@@ -19,8 +19,8 @@
       #raw("mmz") receives a clean argv vector, not a shell-expanded string, so
       matching is on whole tokens and there is no nesting blind spot. Other
       wrappers go outside it (`chronic mmz cargo test`). There is no runner
-      integration and no `--no-memo`: a bare command without `mmz` is simply
-      unmemoized.
+      integration and no `--no-memo` flag: a bare command without `mmz` is
+      simply unmemoized, and `MMZ_DISABLE=1` makes a wrapped one run anyway.
 
       On a hit, nothing runs and the exit code is 0. On a miss the command runs
       with its stdout and stderr streamed through untouched, and a record is

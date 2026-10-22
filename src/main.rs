@@ -44,9 +44,12 @@ A --is-fresh whose selection holds no rule is refused (exit 7) rather than passi
 on the strength of having checked nothing; --status reports it and exits 0.
 
 Environment:
-    MMZ_NOW    pin \"now\" to a Unix epoch in seconds, so a record's ran_at and
-               the AGE column read the same on every run. A malformed value is
-               refused, never ignored. Unset, mmz reads the system clock.
+    MMZ_NOW      pin \"now\" to a Unix epoch in seconds, so a record's ran_at and
+                 the AGE column read the same on every run. A malformed value is
+                 refused, never ignored. Unset, mmz reads the system clock.
+    MMZ_DISABLE  1 makes a wrapped run execute instead of skip, and record its
+                 outcome as usual. 0, empty or unset leaves memoization on; any
+                 other value is refused. --is-fresh and --status ignore it.
 
 Exit codes:
     0    fresh, skipped, or succeeded        6    a probe failed, could not run, or
@@ -391,6 +394,7 @@ fn exit_for(err: &Error) -> u8 {
         | Error::ManifestExists { .. }
         | Error::TagWithCommand
         | Error::InvalidNow { .. }
+        | Error::InvalidDisable { .. }
         | Error::ImportNotCheckout { .. }
         | Error::ImportSelf { .. } => 2,
         Error::NoMatch { .. } | Error::NoInputs { .. } => 3,

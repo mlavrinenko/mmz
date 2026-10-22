@@ -8,9 +8,12 @@ use std::path::Path;
 use assert_cmd::Command;
 
 /// An `mmz` invocation rooted at `dir`.
+///
+/// `MMZ_DISABLE` is cleared, so a suite run under a forced `just check` still
+/// sees mmz skip; a test that wants the switch sets it after this returns.
 pub fn mmz(dir: &Path) -> Command {
     let mut cmd = Command::cargo_bin("mmz").expect("binary should build");
-    cmd.current_dir(dir);
+    cmd.current_dir(dir).env_remove("MMZ_DISABLE");
     cmd
 }
 

@@ -30,12 +30,13 @@
   ),
   "2": (
     meaning: [Usage error: an empty invocation, an unknown option, `--init` over
-      an existing manifest, an `--import` directory that is not another checkout, or
-      a `MMZ_NOW` that is not a Unix epoch.],
+      an existing manifest, an `--import` directory that is not another checkout, a
+      `MMZ_NOW` that is not a Unix epoch, or a `MMZ_DISABLE` that is not `1` or `0`.],
     detail: [
-      The clock case is the one that is not about argv: a malformed pin is
-      refused rather than ignored, so the misconfiguration surfaces here instead
-      of as a stamp nobody can reproduce.
+      The environment cases are the ones that are not about argv: a malformed pin
+      is refused rather than ignored, so the misconfiguration surfaces here instead
+      of as a stamp nobody can reproduce, and a malformed `MMZ_DISABLE` instead of
+      as a run that skipped when it was asked not to.
     ],
   ),
   "3": (

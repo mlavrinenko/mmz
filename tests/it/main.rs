@@ -10,6 +10,7 @@ mod cli;
 mod cli_ast_probes;
 mod cli_clock;
 mod cli_declaration_changes;
+mod cli_disable;
 mod cli_dump;
 mod cli_empty_selection;
 mod cli_import;

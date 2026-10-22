@@ -70,10 +70,13 @@ on field names.
 
 = Environment
 
-`mmz` reads one variable out of the environment, and only for the times it
-writes down:
+`mmz` reads two variables out of the environment. One pins the times it writes
+down, the other runs a command it would have skipped.
 
 / #raw("MMZ_NOW"): pin "now" to a Unix epoch in seconds.
+/ #raw("MMZ_DISABLE"): `1` runs every wrapped command instead of skipping it.
+
+== MMZ_NOW
 
 A cache record's `ran_at` is stamped from it, and `--status`'s `AGE` column is
 measured against it. Both resolve it once per invocation, so a build that
@@ -95,6 +98,28 @@ rewrite every stamp in every project that has it set.
 
 Freshness is untouched by any of this. `mmz` compares digests, never times, so a
 pinned clock changes what the output _says_ and never which rules are fresh.
+
+== MMZ_DISABLE
+
+Suspect a record and want the whole gate to run again without touching an input
+or deleting the cache? Export the switch and every wrapped run executes.
+
+```bash
+MMZ_DISABLE=1 mmz cargo test   # runs even when the record says fresh
+```
+
+Only the skip goes away. The command runs, its outcome is recorded like any
+other run's, and the record it leaves is a pass `--is-fresh` accepts, so a forced
+gate can still close a task. Matching, `strict`, probes and `outputs` behave as
+they do without it.
+
+`--is-fresh` and `--status` run nothing, so they ignore the variable.
+
+#callout("note")[
+  Unset, empty and `0` are off. Any other value, `yes` and `true` included, is
+  refused with exit 2 before the command runs, the same way a malformed
+  `MMZ_NOW` is. Reading `yes` as off would skip a run you asked to force.
+]
 
 = The full help text
 

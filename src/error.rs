@@ -296,6 +296,19 @@ pub enum Error {
         value: String,
     },
 
+    /// `MMZ_DISABLE` is set to something other than `1`, `0` or nothing.
+    ///
+    /// Refused rather than ignored, for the reason `InvalidNow` is: a value read
+    /// as off would skip a run somebody asked to force, and one read as on would
+    /// turn a typo into a gate's whole runtime.
+    #[error(
+        "`MMZ_DISABLE` is set to `{value}`, which is not `1` or `0`; set it to `1` to run every wrapped command without skipping, or unset it (or set `0`) to memoize as usual"
+    )]
+    InvalidDisable {
+        /// The offending value, as the environment spells it.
+        value: String,
+    },
+
     /// A cache record could not be serialized.
     #[error("failed to serialize cache record: {0}")]
     Serialize(Box<serde_yaml_ng::Error>),

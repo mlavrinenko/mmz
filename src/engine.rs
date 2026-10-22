@@ -13,6 +13,7 @@ use std::path::Path;
 use std::process::{Command, ExitStatus};
 
 use crate::clock::Clock;
+use crate::disable::{self, Disable};
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
 use crate::{cache, hashing, notice, outputs, parametric, probe, resolve, ttl};
@@ -27,16 +28,18 @@ struct Digested {
 }
 
 /// One invocation's ambient facts: the command line, the directory it runs in,
-/// and the clock any record it writes is stamped from.
+/// the clock any record it writes is stamped from, and whether `MMZ_DISABLE`
+/// forces the run.
 ///
-/// Bundled rather than passed as three parameters because they are constant for
+/// Bundled rather than passed as four parameters because they are constant for
 /// the whole run and travel together down every path through the engine — and
-/// because the clock in particular must be the one value [`run`] resolved, not
-/// something a callee could be tempted to read for itself.
+/// because the clock and the switch in particular must be the values [`run`]
+/// resolved, not something a callee could be tempted to read for itself.
 struct Invocation<'a> {
     argv: &'a [String],
     cwd: &'a Path,
     clock: Clock,
+    disable: Disable,
 }
 
 /// Runs `argv` (a program and its arguments) with memoization, from `cwd`.
@@ -50,25 +53,38 @@ struct Invocation<'a> {
 /// when one cannot be loaded, [`Error::NoMatch`] / [`Error::NoInputs`] when the
 /// relevant strict case is enforced, [`Error::EmptyCommand`] if `argv` is
 /// empty, [`Error::InvalidNow`] if `MMZ_NOW` is set to something that is not a
-/// Unix epoch, or [`Error::Spawn`] if the command cannot be launched.
+/// Unix epoch, [`Error::InvalidDisable`] if `MMZ_DISABLE` is set to something
+/// other than `1` or `0`, or [`Error::Spawn`] if the command cannot be launched.
+///
+/// With `MMZ_DISABLE=1` the command always runs and its outcome is recorded as
+/// usual; only the skip is gone.
 pub fn run(argv: &[String], cwd: &Path) -> Result<u8> {
     // Resolved before anything else, and once: a record this invocation writes
-    // is stamped from it, and a malformed pin is a misconfigured invocation —
-    // caught before the wrapped command runs rather than after, when the stamp
-    // would be all that is left to refuse.
+    // is stamped from the clock, and a malformed pin or switch is a
+    // misconfigured invocation — caught before the wrapped command runs rather
+    // than after, when the stamp would be all that is left to refuse.
     let call = Invocation {
         argv,
         cwd,
         clock: Clock::resolve()?,
+        disable: Disable::resolve()?,
     };
-    let located = Manifest::locate(cwd)?;
+    execute(&call)
+}
+
+/// Everything [`run`] does once the ambient facts are resolved. Split out so a
+/// unit test can hand in a [`Disable`] of its own: the process environment is
+/// the only other way to set it, and a test that read it would change verdict
+/// whenever its runner happened to export `MMZ_DISABLE`.
+fn execute(call: &Invocation) -> Result<u8> {
+    let located = Manifest::locate(call.cwd)?;
     let manifest = &located.manifest;
     let base = located.root.as_path();
-    let matches = parametric::resolve_matches(manifest, base, argv)?;
+    let matches = parametric::resolve_matches(manifest, base, call.argv)?;
     parametric::detect_collision(&matches)?;
     match matches.first() {
-        Some(hit) => memoized(manifest, hit, base, &call),
-        None => no_match(manifest, &call),
+        Some(hit) => memoized(manifest, hit, base, call),
+        None => no_match(manifest, call),
     }
 }
 
@@ -105,7 +121,12 @@ fn memoized(
     };
     let digest = resolved.digest;
     let cache_dir = base.join(&manifest.cache_dir);
-    if let Some(cached) = cache::read(&cache_dir, identity) {
+    if call.disable.is_on() {
+        log::info!(
+            "mmz: `{identity}` runs regardless of its record ({} is set)",
+            disable::VAR
+        );
+    } else if let Some(cached) = cache::read(&cache_dir, identity) {
         let voided = outputs::first_missing(base, &rule.outputs);
         let expired = ttl::outlived(rule.ttl.as_ref(), cached.ok, cached.ran_at, call.clock);
         if cached.ok && cached.digest == digest && voided.is_none() && expired.is_none() {
