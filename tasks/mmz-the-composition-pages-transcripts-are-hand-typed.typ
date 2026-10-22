@@ -4,7 +4,7 @@
   title: "mmz: the composition page's transcripts are hand-typed",
   tags: ("docs",),
   priority: framework("ice", confidence: 0.9, ease: 6.0, impact: 5.0),
-  status: wip(2026, 10, 22),
+  status: done(2026, 10, 22),
   links: related(
     "mmz-review-the-composition-docs-page-in-a-browser.typ",
   )[found by this review],
