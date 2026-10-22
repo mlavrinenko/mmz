@@ -20,6 +20,7 @@ mod cli_parametric;
 mod cli_probes;
 mod cli_schema;
 mod cli_scope_gitignore;
+mod cli_signal_exit;
 mod cli_ttl;
 mod cli_unreadable_inputs;
 mod cli_unreadable_state;

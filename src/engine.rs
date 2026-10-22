@@ -221,11 +221,30 @@ fn exec(call: &Invocation) -> Result<u8> {
     Ok(exit_code(status))
 }
 
-/// Maps an [`ExitStatus`] to a propagatable code. A signal death or an
-/// out-of-range code both become `1`.
+/// Maps an [`ExitStatus`] to a propagatable code. A death by signal `N` becomes
+/// `128 + N`, as a shell reports it (`137` for SIGKILL, `143` for SIGTERM), so
+/// an OOM kill never reads as a failing test. Any other status without an
+/// in-range code becomes `1`.
 fn exit_code(status: ExitStatus) -> u8 {
-    let code = status.code().unwrap_or(1);
-    u8::try_from(code).unwrap_or(1)
+    if let Some(code) = status.code() {
+        return u8::try_from(code).unwrap_or(1);
+    }
+    signal_code(status).unwrap_or(1)
+}
+
+/// The shell-style `128 + N` code for a status that ended by signal `N`.
+#[cfg(unix)]
+fn signal_code(status: ExitStatus) -> Option<u8> {
+    use std::os::unix::process::ExitStatusExt;
+
+    let signal = status.signal()?;
+    u8::try_from(signal.checked_add(128)?).ok()
+}
+
+/// Windows statuses always carry a code, so there is no signal to map.
+#[cfg(not(unix))]
+fn signal_code(_status: ExitStatus) -> Option<u8> {
+    None
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ groups:
       www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
     source:
-      src/main.rs: 34f03130c72788d5139276ad72bb8f68953a091b0b9915bf52fd1eda3034c37d
+      src/main.rs: f1d588b1a0d698297b33c9d31e6cbaa4ae7d4b0690b14724b4713b4ce1b3368f
     dependents:
       www/utils/cli-notes.typ: cfe694e2450f086283102d1e8881d2612aa155e377a6761ed8f42ecb7df4da24
       www/utils/exit-code-notes.typ: 135797116c530857572fcf1ca2d14e2113e392493e7e20b678963aa90fa2305b
@@ -20,7 +20,7 @@ groups:
       .githooks/pre-commit: 6a1f231f8e872b3c3531ffe500900f431117047712b765e06bae9efcee7df5e4
       flake.nix: ff8451ad933a69671d3c3ff6a61dab0f5aef62798e38ad8e73a881a2532efe28
     dependents:
-      docs/src/contributing.typ: 5e0cae0bba9f6f39f770d18bf4a03113752cf6af94ecce69b07e996ed255ee91
+      docs/src/contributing.typ: 883e6efb3b1fd14c5bde3f95b0991e2f1b991055f98853a29b3cdadb0c3b7640
       docs/src/contributing/worktrees.typ: e45d3231ab7eb6cb4d56ffffa43c4fcdd7ce706a514fc98a6a8e1b6e76c5a954
   docs-pipeline:
     source:
@@ -63,7 +63,7 @@ groups:
     source:
       Cargo.toml: 551c69f3f513b556283cd6beaeb723c8257ef5c0a0b7e8e42f31c0e44a639ab0
     dependents:
-      CHANGELOG.md: 72b481eeb0d347714578f03acab1b1835d48b887a0d94a32ad75742c57324b34
+      CHANGELOG.md: ef64e37c18aef5b2e17229a46e3d8547291de9510eaf74ae118d7680e99b163b
   status-schema:
     source:
       src/status.rs: b58219d9166c678712b20b14c3340038b886fa7378a6c5476e4481fd0a2f9f13

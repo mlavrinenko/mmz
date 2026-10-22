@@ -57,7 +57,8 @@ Exit codes:
     5    declared output missing after a          read or written (nothing recorded)
          successful run (nothing recorded)   70   internal error
                                              127  command could not be spawned
-    otherwise the wrapped command's own exit code"
+    otherwise the wrapped command's own exit code, or 128 plus N when the
+    command dies by signal N (137 for SIGKILL, 143 for SIGTERM)"
 );
 
 fn main() -> ExitCode {

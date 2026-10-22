@@ -26,7 +26,10 @@
 = Exit codes
 
 `mmz` returns the wrapped command's own exit code when it runs one, so these are
-the codes that mean something happened before, instead of, or around that.
+the codes that mean something happened before, instead of, or around that. A
+command killed by signal N exits 128 plus N, as a shell reports it: 137 for an
+OOM kill, 130 for Ctrl-C, 143 for SIGTERM. The record still says failed, so the
+next run executes it again.
 
 #exit-code-table
 

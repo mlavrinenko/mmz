@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A wrapped command killed by a signal exits `128 + N`, as a shell reports it:
+  137 for SIGKILL, 130 for SIGINT, 143 for SIGTERM. Every signal death used to
+  exit 1, so an OOM kill read as a failing test. The record still says failed,
+  so the next run executes the command again. `mmz --help` lists the case.
 - `mmz --schema` and `mmz --schema=fragment` name `probe_shell` among the keys
   only the root manifest may set. Their descriptions listed four, so an editor's
   hover told a fragment author it could set the fifth, which the loader refuses.
