@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- mmz no longer hangs after the wrapped command exits when no SIGCHLD reaches
+  it, as under a ptrace tracer such as `cargo tarpaulin`. 0.14.0 noticed the
+  exit only through that signal and waited forever without it. A thread now
+  waits on the command itself, and the wait ends when the command does.
+
 ## [0.14.0] - 2026-10-23
 
 ### Added

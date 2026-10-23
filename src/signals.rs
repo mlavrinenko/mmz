@@ -68,10 +68,13 @@ mod unix {
     use std::process::{Child, Command};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError};
+    use std::thread;
 
-    use rustix::process::{Pid, Signal, kill_process};
-    use signal_hook::consts::{SIGCHLD, SIGHUP, SIGINT, SIGTERM};
+    use rustix::io::Errno;
+    use rustix::process::{Pid, Signal, WaitId, WaitIdOptions, kill_process, waitid};
+    use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     use signal_hook::flag;
+    use signal_hook::iterator::Handle;
     use signal_hook::iterator::Signals;
 
     use super::Ran;
@@ -201,8 +204,7 @@ mod unix {
         }
     }
 
-    /// Catches [`CAUGHT`] while the command runs, plus SIGCHLD to wake when it
-    /// exits.
+    /// Catches [`CAUGHT`] while the command runs.
     struct Guard {
         /// Declared first, so it drops first: the default actions come back
         /// before the catch goes, and no signal falls between the two.
@@ -228,7 +230,7 @@ mod unix {
                     }
                 }
             }
-            let signals = Signals::new(caught.into_iter().chain([SIGCHLD]))?;
+            let signals = Signals::new(caught)?;
             Ok(Self {
                 _lease: Lease::take(&defaults)?,
                 signals,
@@ -237,32 +239,52 @@ mod unix {
 
         /// Waits for `child`, passing each caught signal on as it arrives.
         ///
-        /// Only this thread reaps the child, so a pid it signals is still the
-        /// command's, a zombie at worst. A signal that lands as the command
-        /// exits still counts, but goes nowhere: the pid is reaped by then and
-        /// may name another process.
+        /// A waiter thread ends the relay when the command exits, not a
+        /// SIGCHLD, which a tracer such as tarpaulin's ptrace can swallow. It
+        /// waits with `WNOWAIT`, so the command stays a zombie until this
+        /// thread reaps it, and a pid the relay signals is never another
+        /// process's. A signal that lands as the command exits still counts.
         fn wait(&mut self, child: &mut Child) -> io::Result<Ran> {
             let pid = Pid::from_child(child);
+            let handle = self.signals.handle();
+            let waiter = thread::spawn(move || close_on_exit(pid, &handle));
             let mut interrupted = false;
-            let status = loop {
-                if let Some(status) = child.try_wait()? {
-                    break status;
-                }
+            while !self.signals.is_closed() {
                 for signal in self.signals.wait() {
                     interrupted |= relay(signal, pid);
                 }
-            };
-            interrupted |= self.signals.pending().any(|signal| signal != SIGCHLD);
+            }
+            interrupted |= self.signals.pending().next().is_some();
+            if waiter.join().is_err() {
+                log::warn!("mmz: the thread waiting on the command panicked");
+            }
             Ok(Ran {
-                status,
+                status: child.wait()?,
                 interrupted,
             })
         }
     }
 
+    /// Blocks until the command at `pid` exits, leaving it unreaped, then
+    /// closes `handle` to end the relay. A failed wait closes it too, and
+    /// [`Guard::wait`] falls back to a plain reap.
+    fn close_on_exit(pid: Pid, handle: &Handle) {
+        let options = WaitIdOptions::EXITED | WaitIdOptions::NOWAIT;
+        let waited = loop {
+            match waitid(WaitId::Pid(pid), options) {
+                Err(Errno::INTR) => {}
+                other => break other,
+            }
+        };
+        if let Err(err) = waited {
+            log::warn!("mmz: cannot wait for the command ({err}); no longer passing signals on");
+        }
+        handle.close();
+    }
+
     /// Passes SIGTERM or SIGHUP on to the command; SIGINT reached it already,
     /// through the process group. Returns whether `signal` is one of
-    /// [`CAUGHT`], not the SIGCHLD that only wakes the loop.
+    /// [`CAUGHT`].
     fn relay(signal: c_int, pid: Pid) -> bool {
         let onward = match signal {
             SIGTERM => Signal::TERM,
