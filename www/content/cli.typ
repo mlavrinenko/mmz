@@ -145,6 +145,9 @@ memoizes. A file mmz can't write stops the run with exit 8 before the command
 starts, so nothing runs and nothing is recorded. Empty or unset writes nothing,
 and `--is-fresh` and `--status` ignore it.
 
+The command runs without the variable, so a nested `mmz` inside it can't write
+its own answer over the outer run's.
+
 = The full help text
 
 Everything above is generated from this:

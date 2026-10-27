@@ -241,17 +241,23 @@ fn exec(call: &Invocation) -> Result<u8> {
 
 /// Spawns the command with inherited stdio and waits for it, passing on a
 /// signal sent to mmz meanwhile (see [`signals`]). Every run passes through
-/// here, so this is where `MMZ_REPORT` learns the command ran.
+/// here, so this is where `MMZ_REPORT` learns the command ran, and where the
+/// command is spawned without it.
 fn exec_watched(call: &Invocation) -> Result<signals::Ran> {
     let Some((program, rest)) = call.argv.split_first() else {
         return Err(Error::EmptyCommand);
     };
     call.report.write(call.cwd, Decision::Ran)?;
-    signals::run(Command::new(program).args(rest).current_dir(call.cwd)).map_err(|source| {
-        Error::Spawn {
-            program: program.clone(),
-            source,
-        }
+    // The report answers the caller of this run alone. A nested mmz inside the
+    // command would otherwise write its own decision over this one's `ran`.
+    let mut command = Command::new(program);
+    command
+        .args(rest)
+        .current_dir(call.cwd)
+        .env_remove(crate::report::VAR);
+    signals::run(&mut command).map_err(|source| Error::Spawn {
+        program: program.clone(),
+        source,
     })
 }
 

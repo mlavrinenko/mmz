@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The wrapped command no longer inherits `MMZ_REPORT`. A nested `mmz` inside it
+  wrote its own decision over the outer run's, so an outer run that ran could
+  report `skipped` when the inner one skipped.
+
 ## [0.15.0] - 2026-10-28
 
 ### Added

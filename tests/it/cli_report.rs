@@ -150,3 +150,38 @@ fn is_fresh_ignores_the_variable() {
         .success();
     assert!(!dir.path().join("report").exists());
 }
+
+#[test]
+fn the_wrapped_command_does_not_inherit_the_variable() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_project(dir.path());
+
+    mmz(dir.path())
+        .env("MMZ_REPORT", "report")
+        .args(["sh", "-c", "echo \"${MMZ_REPORT-unset}\" > seen"])
+        .assert()
+        .success();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("seen")).expect("read seen"),
+        "unset\n"
+    );
+}
+
+#[test]
+fn a_nested_skip_does_not_overwrite_the_outer_run() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    write_manifest(
+        dir.path(),
+        "on_hit: \"\"\nscopes:\n  src: [\"*.txt\"]\ncommands:\n  - name: sh\n    inputs: [src]\n  - name: \"true\"\n    inputs: [src]\n",
+    );
+    fs::write(dir.path().join("a.txt"), b"one").expect("write input");
+    mmz(dir.path()).arg("true").assert().success();
+
+    let inner = format!("'{}' true", env!("CARGO_BIN_EXE_mmz"));
+    mmz(dir.path())
+        .env("MMZ_REPORT", "report")
+        .args(["sh", "-c", inner.as_str()])
+        .assert()
+        .success();
+    assert_eq!(report(dir.path()), "ran\n", "the outer `sh` ran");
+}
