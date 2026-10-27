@@ -41,9 +41,9 @@
 //! declared artifact outputs
 //! ([`outputs`]), rule matching ([`matcher`]), glob-fanned parametric rules
 //! ([`parametric`]), the cache ([`cache`]), cache-hit notices ([`notice`]), the
-//! process clock ([`clock`]), the run-anyway switch ([`disable`]), record
-//! expiry ([`ttl`]), and the orchestration engine ([`engine`]). The
-//! `mmz --…` actions live in [`init`], [`schema`], [`status`], [`freshness`],
+//! process clock ([`clock`]), the run-anyway switch ([`disable`]), the run
+//! report ([`report`]), record expiry ([`ttl`]), and the orchestration engine
+//! ([`engine`]). The `mmz --…` actions live in [`init`], [`schema`], [`status`], [`freshness`],
 //! [`prune`], [`import_records`], and [`dump`].
 //!
 //! # Reproducible output
@@ -80,6 +80,7 @@ pub mod parametric;
 pub mod probe;
 pub mod provenance;
 pub mod prune;
+pub mod report;
 pub mod resolve;
 pub mod schema;
 pub mod status;

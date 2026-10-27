@@ -75,11 +75,13 @@ on field names.
 
 = Environment
 
-`mmz` reads two variables out of the environment. One pins the times it writes
-down, the other runs a command it would have skipped.
+`mmz` reads three variables out of the environment. One pins the times it writes
+down, one runs a command it would have skipped, and one tells a script which of
+the two a run did.
 
 / #raw("MMZ_NOW"): pin "now" to a Unix epoch in seconds.
 / #raw("MMZ_DISABLE"): `1` runs every wrapped command instead of skipping it.
+/ #raw("MMZ_REPORT"): a file a wrapped run writes `skipped` or `ran` to.
 
 == MMZ_NOW
 
@@ -125,6 +127,23 @@ they do without it.
   refused with exit 2 before the command runs, the same way a malformed
   `MMZ_NOW` is. Reading `yes` as off would skip a run you asked to force.
 ]
+
+== MMZ_REPORT
+
+A skip prints nothing unless `on_hit` says so, and a run of a quiet tool prints
+nothing either. So a script that wants to count its cached gates can't read it
+off the output. Hand mmz a file and it writes the answer there.
+
+```bash
+MMZ_REPORT=target/fmt.report mmz just fmt-check
+cat target/fmt.report          # skipped, or ran
+```
+
+mmz writes the word once it decides, before the command starts. `ran` covers
+every run: a stale record, a forced one, a failing one, and a command no rule
+memoizes. A file mmz can't write stops the run with exit 8 before the command
+starts, so nothing runs and nothing is recorded. Empty or unset writes nothing,
+and `--is-fresh` and `--status` ignore it.
 
 = The full help text
 

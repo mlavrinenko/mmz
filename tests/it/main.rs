@@ -19,6 +19,7 @@ mod cli_json_probes;
 mod cli_outputs;
 mod cli_parametric;
 mod cli_probes;
+mod cli_report;
 mod cli_schema;
 mod cli_scope_gitignore;
 mod cli_signal_exit;

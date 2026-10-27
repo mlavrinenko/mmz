@@ -47,6 +47,8 @@ result on success.
   [`mmz::disable`],
   [The `MMZ_DISABLE` switch that makes a run execute instead of skip.],
 
+  [`mmz::report`], [The `MMZ_REPORT` file a run writes `skipped` or `ran` to.],
+
   [`mmz::error::Error`], [The error enum every entry point returns.],
 )
 

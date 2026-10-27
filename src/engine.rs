@@ -16,6 +16,7 @@ use crate::clock::Clock;
 use crate::disable::{self, Disable};
 use crate::error::{Error, Result};
 use crate::manifest::{Command as Rule, Manifest, StrictCase};
+use crate::report::{Decision, Report};
 use crate::{cache, hashing, notice, outputs, parametric, probe, resolve, signals, ttl};
 
 /// A rule's resolved input digest and the probe digests that fed it.
@@ -28,18 +29,19 @@ struct Digested {
 }
 
 /// One invocation's ambient facts: the command line, the directory it runs in,
-/// the clock any record it writes is stamped from, and whether `MMZ_DISABLE`
-/// forces the run.
+/// the clock any record it writes is stamped from, whether `MMZ_DISABLE`
+/// forces the run, and where `MMZ_REPORT` says to report the decision.
 ///
 /// Bundled rather than passed as four parameters because they are constant for
 /// the whole run and travel together down every path through the engine — and
-/// because the clock and the switch in particular must be the values [`run`]
+/// because the clock, the switch and the report must be the values [`run`]
 /// resolved, not something a callee could be tempted to read for itself.
 struct Invocation<'a> {
     argv: &'a [String],
     cwd: &'a Path,
     clock: Clock,
     disable: Disable,
+    report: Report,
 }
 
 /// Runs `argv` (a program and its arguments) with memoization, from `cwd`.
@@ -57,7 +59,8 @@ struct Invocation<'a> {
 /// other than `1` or `0`, or [`Error::Spawn`] if the command cannot be launched.
 ///
 /// With `MMZ_DISABLE=1` the command always runs and its outcome is recorded as
-/// usual; only the skip is gone.
+/// usual; only the skip is gone. With `MMZ_REPORT` set, the decision is written
+/// to that file, and [`Error::ReportWrite`] stops the run when it cannot be.
 pub fn run(argv: &[String], cwd: &Path) -> Result<u8> {
     // Resolved before anything else, and once: a record this invocation writes
     // is stamped from the clock, and a malformed pin or switch is a
@@ -68,6 +71,7 @@ pub fn run(argv: &[String], cwd: &Path) -> Result<u8> {
         cwd,
         clock: Clock::resolve()?,
         disable: Disable::resolve()?,
+        report: Report::resolve(),
     };
     execute(&call)
 }
@@ -131,6 +135,7 @@ fn memoized(
         let expired = ttl::outlived(rule.ttl.as_ref(), cached.ok, cached.ran_at, call.clock);
         if cached.ok && cached.digest == digest && voided.is_none() && expired.is_none() {
             log::info!("mmz: skip `{identity}` (inputs unchanged)");
+            call.report.write(call.cwd, Decision::Skipped)?;
             announce_hit(manifest, rule, &cached);
             return Ok(0);
         }
@@ -235,11 +240,13 @@ fn exec(call: &Invocation) -> Result<u8> {
 }
 
 /// Spawns the command with inherited stdio and waits for it, passing on a
-/// signal sent to mmz meanwhile (see [`signals`]).
+/// signal sent to mmz meanwhile (see [`signals`]). Every run passes through
+/// here, so this is where `MMZ_REPORT` learns the command ran.
 fn exec_watched(call: &Invocation) -> Result<signals::Ran> {
     let Some((program, rest)) = call.argv.split_first() else {
         return Err(Error::EmptyCommand);
     };
+    call.report.write(call.cwd, Decision::Ran)?;
     signals::run(Command::new(program).args(rest).current_dir(call.cwd)).map_err(|source| {
         Error::Spawn {
             program: program.clone(),

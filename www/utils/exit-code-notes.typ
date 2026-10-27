@@ -100,10 +100,11 @@
     meaning: [A file mmz needed could not be read or written; nothing was
       recorded.],
     detail: [
-      The path is always named, rendered the way `--status` renders it. Three
+      The path is always named, rendered the way `--status` renders it. Four
       kinds of file reach this code — an input a rule declared, the scaffold
-      `mmz --init` writes, and the cache a run records into, `--prune`
-      sweeps or `--import` fills — and they share one fact: the filesystem refused. That is a
+      `mmz --init` writes, the file `MMZ_REPORT` names, and the cache a run
+      records into, `--prune` sweeps or `--import` fills — and they share one
+      fact: the filesystem refused. That is a
       condition of the tree rather than a bug in mmz, which is why it is not
       `70`. A manifest that cannot be read is the exception, and lands at `4`
       with the rest of the manifest failures.

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `MMZ_REPORT=<path>` makes a wrapped run write `skipped` or `ran` to that
+  file, so a script can tell a skip from a run when `on_hit` prints nothing:
+
+  ```bash
+  MMZ_REPORT=target/fmt.report mmz just fmt-check
+  cat target/fmt.report          # skipped, or ran
+  ```
+
+  mmz writes the word before the command starts. A path it cannot write exits
+  8 naming it, and the command never runs. Empty or unset writes nothing, and
+  `--is-fresh` and `--status` ignore it. Asking `mmz --is-fresh` first gave the
+  same answer at the price of hashing every input twice.
+- Library: `mmz::report` resolves the variable, and `Error::ReportWrite` is the
+  new error case, so an exhaustive `match` on `Error` needs an arm.
+
 ## [0.14.1] - 2026-10-23
 
 ### Fixed

@@ -50,6 +50,9 @@ Environment:
     MMZ_DISABLE  1 makes a wrapped run execute instead of skip, and record its
                  outcome as usual. 0, empty or unset leaves memoization on; any
                  other value is refused. --is-fresh and --status ignore it.
+    MMZ_REPORT   a path a wrapped run writes `skipped` or `ran` to before the
+                 command would start; empty or unset writes nothing. A path
+                 mmz cannot write exits 8. --is-fresh and --status ignore it.
 
 Exit codes:
     0    fresh, skipped, or succeeded        6    a probe failed, could not run, or
@@ -427,7 +430,8 @@ fn exit_for(err: &Error) -> u8 {
         Error::InputVanished { .. }
         | Error::InputUnreadable { .. }
         | Error::InitWrite { .. }
-        | Error::CacheIo { .. } => 8,
+        | Error::CacheIo { .. }
+        | Error::ReportWrite { .. } => 8,
         Error::Spawn { .. } => 127,
         Error::Serialize(_) | Error::Internal(_) => 70,
     }

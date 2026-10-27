@@ -324,6 +324,17 @@ pub enum Error {
         source: std::io::Error,
     },
 
+    /// The file `MMZ_REPORT` names could not be written. Written before the
+    /// command spawns, so the refusal leaves nothing run and nothing recorded
+    /// — exit 8, beside the other files the filesystem refused.
+    #[error("failed to write the MMZ_REPORT file {path}: {source}")]
+    ReportWrite {
+        /// The path as `MMZ_REPORT` gave it.
+        path: PathBuf,
+        /// Underlying I/O error.
+        source: std::io::Error,
+    },
+
     /// The wrapped command could not be spawned.
     #[error("failed to run `{program}`: {source}")]
     Spawn {

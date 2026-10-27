@@ -9,10 +9,10 @@ groups:
       www/sizes.yaml: f10ea58e18fbf03b67fc551b02b92f294e394ef6ac39b0327ec56bd83e0dea0b
   cli-prose:
     source:
-      src/main.rs: 27bfa06809df661d7beae261b78d7fbe86aedafc514dc0c60c01e521915c3a34
+      src/main.rs: 9d280ce92b37af71b2c2ede4c33135976c473d22b9e858925f4fa9fe73ad70db
     dependents:
       www/utils/cli-notes.typ: eba32865ff9829a573cb1172d505b4c3255641a62e8c875014ffe3ef394fbba7
-      www/utils/exit-code-notes.typ: e2b7811e399aba766934cac7eb25c3d262894cb73969a4bac1825ff965f38a13
+      www/utils/exit-code-notes.typ: 0c9426220c5dc0d39d368015c69bf1027a39118826237e232af7ec1dea16c0d5
   dev-shell:
     source:
       .config/wt.toml: 326ece11a99b6e0e03333d52732862c0390a4afb9678bf99c8e63756c25b5d85

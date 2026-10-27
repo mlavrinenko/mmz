@@ -3,10 +3,12 @@ use std::path::Path;
 use super::{Invocation, execute};
 use crate::clock::Clock;
 use crate::disable::Disable;
+use crate::report::Report;
 
 /// [`super::run`] with the run-anyway switch pinned off rather than read from
 /// the environment, so a suite run under `MMZ_DISABLE=1` (a forced `just check`)
-/// still tests the skip these cases assert.
+/// still tests the skip these cases assert. The report is off for the same
+/// reason: a suite run under `MMZ_REPORT` must not write the caller's file.
 fn run(argv: &[String], cwd: &Path) -> crate::error::Result<u8> {
     run_with(argv, cwd, Disable::off())
 }
@@ -17,6 +19,7 @@ fn run_with(argv: &[String], cwd: &Path, disable: Disable) -> crate::error::Resu
         cwd,
         clock: Clock::resolve()?,
         disable,
+        report: Report::off(),
     })
 }
 
