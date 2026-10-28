@@ -16,7 +16,7 @@ Typst file per task under `tasks/`, ruled by `.mindtape/config.toml` and changed
 through the `mt` CLI, never by hand. `.mmz/` is unrelated: it is mmz's own
 command cache.
 
-The config extends MindTape's `mindtape-tasks` practice, and `mt check` holds
+The config extends MindTape's `mindtape:tasks` practice, and `mt check` holds
 every open task to it:
 
 - The title starts with an imperative verb.

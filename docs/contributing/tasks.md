@@ -4,7 +4,7 @@
 
 The backlog is [MindTape](https://github.com/mlavrinenko/mindtape): one Typst file per task under `tasks/`, ruled by `.mindtape/config.toml` and changed through the `mt` CLI, never by hand. `.mmz/` is unrelated: it is mmz’s own command cache.
 
-The config extends MindTape’s `mindtape-tasks` practice, and `mt check` holds every open task to it:
+The config extends MindTape’s `mindtape:tasks` practice, and `mt check` holds every open task to it:
 
 - The title starts with an imperative verb.
 - The body is Problem, TO-BE, Changes and Out of scope, plus the kind’s own section (Environment for a `fix`, Alternatives for a `feat`, Source of truth for `docs`, Rollback for `dev`), then Dogfood: how this repo uses the change, or “Not applicable” and why.

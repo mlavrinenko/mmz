@@ -72,6 +72,6 @@ groups:
       schema/status.schema.json: 3d981d66b6b9209384d9c4148bd23e2fac49450388a6c56955ec56e1f01f96c4
   task-practice:
     source:
-      .mindtape/config.toml: a7786fb72d6f30032fc82cd84d264efbffd96812926fcb6ad8d631f05f6e5346
+      .mindtape/config.toml: 03693753b0920fafdd4e9553604f8c028414e7df19657df281ab1c3f10d5d949
     dependents:
-      docs/src/contributing/tasks.typ: 57c548aa9da2acbfad85ef62eae93c560329cdfd8ed5f0ff8dda17770641bde9
+      docs/src/contributing/tasks.typ: e7e2fdf7297f17cf94136d94d33645021c9ca0e9dc364771c90d577b76a04c31

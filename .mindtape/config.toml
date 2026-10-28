@@ -2,13 +2,13 @@
 # MindTape task tracker. This file declares mmz's backlog rules. MindTape
 # constrains only what is declared here; omit a section to accept the defaults.
 
-# The task practice of the sibling mindtape repo, as its `mindtape-tasks` pack:
+# The task practice of the sibling mindtape repo, as its `mindtape:tasks` pack:
 # every open task is one spec in Problem, TO-BE, Changes and Out of scope, plus
 # its kind's own section, with markers, word caps and an imperative title, and
 # a status flip rides in the commit that carries its work. What stays local is
 # what is true of THIS repo: goal verdicts, the `Dogfood` section, estimate
 # caps, assignees, WIP limits and the close gate, all below.
-extends = ["mindtape-tasks"]
+extends = ["mindtape:tasks"]
 
 [tasks]
 # One task per file under `tasks/`. `derive-tags` tags every task with the root
