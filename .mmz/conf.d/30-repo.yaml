@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schema/mmz-fragment.schema.json
 #
 # Repo-wide scripts and drift gates: check-file-size, outdatty-check,
-# check-changelog-history. Imported by ../config.yaml's `conf.d/` entry.
+# check-changelog-history, check-tasks. Imported by ../config.yaml's `conf.d/` entry.
 
 scopes:
   # The gate scripts, and the config files the size and drift gates read.
@@ -12,6 +12,9 @@ scopes:
   # history gate's working-tree half; its other half is in git, which no glob
   # can reach — see `changelog-tags` below.
   changelog: ["CHANGELOG.md", "CHANGELOG.waivers"]
+  # The backlog and the config, templates and goals its rules come from. Not
+  # .mindtape/cache/, which `mt` rewrites on every run.
+  tasks: ["tasks/**", ".mindtape/config.toml", ".mindtape/*.typ", ".mindtape/templates/**"]
 
 probes:
   # See ../conf.d/10-rust.yaml for why every recipe probe below carries `-S` and `-e`.
@@ -21,6 +24,8 @@ probes:
     run: just --dump --dump-format json | jq -S -e -c '.recipes["outdatty-check"]'
   recipe-check-changelog-history:
     run: just --dump --dump-format json | jq -S -e -c '.recipes["check-changelog-history"]'
+  recipe-check-tasks:
+    run: just --dump --dump-format json | jq -S -e -c '.recipes["check-tasks"]'
 
   # The history gate compares the working CHANGELOG.md against what each `v*`
   # tag shipped, and that second side lives in git — no scope's globs reach it,
@@ -127,4 +132,10 @@ commands:
         recipe-check-changelog-history,
         nixpkgs-tools,
       ]
+    tags: [gate]
+
+  # `mt` reads the backlog and the config, and nothing under src/. It comes
+  # from qahq, so `qahq-tools` pins the binary that gives the verdict.
+  - name: just check-tasks
+    inputs: [tasks, recipe-check-tasks, qahq-tools]
     tags: [gate]

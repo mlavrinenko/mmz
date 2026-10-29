@@ -18,6 +18,14 @@
 # that a note EXISTS for every action, key, code and gate; only a human can say
 # whether the note is still true after the thing it describes changed. That is
 # exactly the review this file schedules.
+
+# outdatty 0.4 added an audit that fails on any file no group lists
+# (`require_tracked`, which defaults to every file). This manifest predates
+# it and couples sources to the docs that restate them; it is no inventory of
+# the tree. So it opts out, as it ran before, until
+# tasks/decide-which-files-outdatty-must-see-in-a-group.typ settles coverage.
+require_tracked: ["!**"]
+
 groups:
   # The manifest type and the JSON Schema that validates .mmz/config.yaml are
   # kept in sync by hand; a change to one must be mirrored in the other. The

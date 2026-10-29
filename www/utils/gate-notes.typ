@@ -46,6 +46,11 @@
     here went unnoticed for thirteen commits. A deliberate rewrite is recorded
     in `CHANGELOG.waivers` by `just changelog-waive`.
   ],
+  "check-tasks": [
+    Runs `mt check` over `tasks/`: every task and template against the rules
+    in `.mindtape/config.toml`. `mt` comes from qahq with the other gates, so CI
+    and every checkout judge the backlog with one binary.
+  ],
   "check-doc-coverage": [
     Fails when `mmz --help` advertises an action with no hand-written note, or a
     note names an action the binary no longer has. The list is parsed out of the

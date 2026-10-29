@@ -14,7 +14,7 @@ just check      # the full gate, memoized
 
 ## The gate
 
-`just check` runs 11 gates in parallel. Each arm goes through `just memo <gate>`, which is `mmz just <gate>` — so a gate whose declared inputs have not moved since it last passed is skipped rather than re-run. [docs/contributing/gates.md](docs/contributing/gates.md) covers the memoization itself: what it buys, what it costs, and how to record a pass.
+`just check` runs 12 gates in parallel. Each arm goes through `just memo <gate>`, which is `mmz just <gate>` — so a gate whose declared inputs have not moved since it last passed is skipped rather than re-run. [docs/contributing/gates.md](docs/contributing/gates.md) covers the memoization itself: what it buys, what it costs, and how to record a pass.
 
 | Gate | Command | What it prevents |
 | --- | --- | --- |
@@ -25,6 +25,7 @@ just check      # the full gate, memoized
 | `check-file-size` | `linecop` | Caps every file at the limit `.linecop.yaml` sets for its language. The point is not tidiness: a file nobody can hold in their head is where the untested branch hides. |
 | `outdatty-check` | `outdatty check` | Fails when a source changed and the dependents `outdatty.yaml` couples to it were not re-confirmed. It cannot check that a doc is _correct_ — only that a human looked since the code moved. |
 | `check-changelog-history` | Fail if a released changelog section drifted from its tag | Fails when a `## [x.y.z]` section stops saying what its `vx.y.z` tag shipped. A released section is a historical record, and the edit that swallowed one here went unnoticed for thirteen commits. A deliberate rewrite is recorded in `CHANGELOG.waivers` by `just changelog-waive`. |
+| `check-tasks` | `mt check -q` | Runs `mt check` over `tasks/`: every task and template against the rules in `.mindtape/config.toml`. `mt` comes from qahq with the other gates, so CI and every checkout judge the backlog with one binary. |
 | `check-doc-coverage` | Fail if a CLI action has no hand-written note | Fails when `mmz --help` advertises an action with no hand-written note, or a note names an action the binary no longer has. The list is parsed out of the binary, so it cannot be satisfied by editing a list. |
 | `check-doc-facts` | Fail if a derived doc fact has no hand-written prose | The same set-difference over the derived facts: a manifest key with no prose, a gate with no prose, a page unreachable from the sidebar, a sidebar entry pointing at no page. |
 | `docs-check` | `tola build && pagefind --site public/mmz --silent && tola validate` | Builds the docs site and validates every internal link and asset reference. A cross-page link is a string until something resolves it; this is the something. |
@@ -133,7 +134,7 @@ After editing a source, review the listed dependents, update them as needed, run
 
 `git commit` enforces these: `.githooks/commit-msg` runs `mt check --commit-msg`, and `.githooks/pre-commit` refuses a tree `just check` has not passed or an unstaged `outdatty.lock`. The dev shell installs them on entry, through `just install-hooks`.
 
-Tasks live under `tasks/`, driven by `mt`; their shape and flip flow are in [docs/contributing/tasks.md](docs/contributing/tasks.md), and how a close gates on mmz itself in [Gating with tags](https://mlavrinenko.github.io/mmz/gating/).
+Tasks live under `tasks/`, driven by `mt`, which the dev shell takes from qahq and `just check-tasks` runs in `just check`. Their shape and flip flow are in [docs/contributing/tasks.md](docs/contributing/tasks.md), and how a close gates on mmz itself in [Gating with tags](https://mlavrinenko.github.io/mmz/gating/).
 
 ## Submitting
 

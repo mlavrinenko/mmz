@@ -2,7 +2,7 @@
 
 # Gates
 
-`just check` runs 11 gates. CONTRIBUTING.md lists them; this file argues the machinery around them.
+`just check` runs 12 gates. CONTRIBUTING.md lists them; this file argues the machinery around them.
 
 ## Why the gate memoizes itself
 

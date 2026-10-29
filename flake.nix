@@ -53,6 +53,9 @@
             qahq.packages.${system}.cargo-crap
             qahq.packages.${system}.ejectest
             qahq.packages.${system}.linecop
+            # `mt`: `just check-tasks` and the git hooks check tasks/ and each
+            # commit message against .mindtape/config.toml.
+            qahq.packages.${system}.mindtape
             qahq.packages.${system}.outdatty
             tola.packages.${system}.default
           ] ++ (with pkgs; [

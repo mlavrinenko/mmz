@@ -70,7 +70,7 @@ install-hooks:
 [doc("Run every check-gate sub-recipe in parallel")]
 [group("workflow")]
 [parallel]
-check: (memo "fmt-check") (memo "clippy") (memo "test") (memo "machete") (memo "check-file-size") (memo "outdatty-check") (memo "check-changelog-history") (memo "check-doc-coverage") (memo "check-doc-facts") (memo "docs::check") (memo "docs::md-check")
+check: (memo "fmt-check") (memo "clippy") (memo "test") (memo "machete") (memo "check-file-size") (memo "outdatty-check") (memo "check-changelog-history") (memo "check-tasks") (memo "check-doc-coverage") (memo "check-doc-facts") (memo "docs::check") (memo "docs::md-check")
 
 # Wrap a just recipe in mmz: `just memo fmt-check` runs `mmz just fmt-check`, so
 # the rule named `just fmt-check` in .mmz/config.yaml decides whether the recipe
@@ -164,6 +164,11 @@ measure-sizes:
 [group("gate")]
 machete:
     cargo machete
+
+[doc("Fail if a task or the task config breaks .mindtape/config.toml's rules")]
+[group("gate")]
+check-tasks:
+    mt check -q
 
 [doc("Fail if any file exceeds its linecop cap")]
 [group("gate")]

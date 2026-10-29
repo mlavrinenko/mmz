@@ -226,7 +226,8 @@ and `.githooks/pre-commit` refuses a tree #just.check() has not passed or an
 unstaged `outdatty.lock`. The dev shell installs them on entry, through
 #just.install-hooks().
 
-Tasks live under `tasks/`, driven by `mt`; their shape and flip flow are in
+Tasks live under `tasks/`, driven by `mt`, which the dev shell takes from qahq
+and #just.check-tasks() runs in #just.check(). Their shape and flip flow are in
 #link("docs/contributing/tasks.md")[docs/contributing/tasks.md], and how a close
 gates on mmz itself in #www-link("/gating/").
 
