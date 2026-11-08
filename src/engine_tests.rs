@@ -174,7 +174,7 @@ fn a_success_without_the_declared_output_errors_and_records_nothing() {
         "no record is written, so the rule cannot skip on a claim it did not honour"
     );
 
-    // The next honest run still executes and records normally.
+    // The next run still executes and records normally.
     assert_eq!(run(&build_argv(), base).expect("run"), 0);
     assert_eq!(runs(base), 1);
     assert_eq!(run(&build_argv(), base).expect("run"), 0);

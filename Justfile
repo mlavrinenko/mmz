@@ -191,8 +191,8 @@ check-doc-coverage:
     bash .just/scripts/check-doc-coverage.sh
 
 # Every derived fact the generators write must have hand-written prose behind
-# it: a manifest key with no note, a gate with no note, a page with no NAV
-# entry. See .just/scripts/check-doc-facts.sh.
+# it: a manifest key with no note, a gate with no note, a page with no group.
+# See .just/scripts/check-doc-facts.sh.
 
 [doc("Fail if a derived doc fact has no hand-written prose")]
 [group("gate")]

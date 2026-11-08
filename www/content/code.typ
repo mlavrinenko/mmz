@@ -2,15 +2,15 @@
 #import "../utils/ui.typ": callout
 #import "../utils/site.typ": u
 #import "../utils/sizes.typ" as sizes
-
 #let meta = (
   route: "/code/",
   label: "Code inputs",
   title: "Code inputs: matching source with AST patterns",
-  summary: "The `ast:` selector — depending on a function, a type or an impl block instead of a whole file — what it hashes, how `capture:` narrows a match to the parts that matter, and which grammars a build carries.",
+  summary: "Depend on a function or type instead of a whole file.",
+  group: "Writing a manifest",
+  order: 2,
 )
 #metadata(meta) <page-meta>
-
 #show: page.with(..meta)
 
 A scope names whole files. A `json:` probe narrows a document. Neither reaches

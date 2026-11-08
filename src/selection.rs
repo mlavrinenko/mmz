@@ -14,7 +14,7 @@
 //! ([`Error::NoMatch`], [`Error::NoInputs`], [`crate::probe::ProbeFailure::Empty`]).
 //!
 //! A report survives it fine. `--status` claims nothing about the rules it
-//! prints, so an empty report is honest — as long as the line explaining it is
+//! prints, so an empty report is fine — as long as the line explaining it is
 //! true, which is what [`empty_note`] is for.
 
 use std::path::Path;

@@ -7,7 +7,9 @@
   route: "/manifest/",
   label: "Manifest reference",
   title: "Manifest reference",
-  summary: "Every key .mmz/config.yaml can declare, generated from the JSON Schema the binary ships.",
+  summary: "Every key .mmz/config.yaml can declare.",
+  group: "Reference",
+  order: 1,
 )
 #metadata(meta) <page-meta>
 

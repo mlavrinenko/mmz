@@ -54,7 +54,7 @@ BIN="$TARGET_DIR/release/mmz"
 # a `lang-` feature added to Cargo.toml must reach this script without anyone
 # remembering to edit it. The rule for what counts as one lives in
 # www/lang-features.jq, shared with www/generate-facts.sh — which checks this
-# script's output against the same list, and could not do so honestly by
+# script's output against the same list, and could not do so reliably by
 # deriving it a second way.
 readarray -t GRAMMARS < <(
   cargo metadata --format-version 1 --no-deps \

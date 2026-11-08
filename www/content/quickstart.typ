@@ -6,7 +6,9 @@
   route: "/quickstart/",
   label: "Quickstart",
   title: "Quickstart",
-  summary: "Install mmz, scaffold a manifest, and watch a command skip itself.",
+  summary: "Install mmz and watch a command skip.",
+  group: "Start here",
+  order: 1,
 )
 #metadata(meta) <page-meta>
 

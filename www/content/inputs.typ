@@ -1,15 +1,15 @@
 #import "../utils/page.typ": page
 #import "../utils/ui.typ": callout, listing, transcript
 #import "../utils/site.typ": u
-
 #let meta = (
   route: "/inputs/",
   label: "Inputs",
   title: "Inputs: scopes and probes",
-  summary: "Named glob sets, the gitignore filter and how to opt one scope out of it, leaving paths out with exclude, and probes for the inputs that are not files.",
+  summary: "The files and tool versions a command depends on.",
+  group: "Writing a manifest",
+  order: 1,
 )
 #metadata(meta) <page-meta>
-
 #show: page.with(..meta)
 
 A rule's `inputs:` list names scopes, probes, or both. One namespace: a probe

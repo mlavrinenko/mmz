@@ -6,7 +6,9 @@
   route: "/",
   label: "Overview",
   title: "mmz",
-  summary: "A memoized command runner: prefix any command with mmz and it skips when the inputs you declared are unchanged since it last succeeded.",
+  summary: "A memoized command runner: declare a command's inputs and it skips the command until they change.",
+  group: "Start here",
+  order: 0,
   home: true,
 )
 #metadata(meta) <page-meta>
@@ -59,4 +61,4 @@ inputs resolve to zero files is an error. Relax those last two per project with
 - #strong[No dependency tracing.] Nothing is inferred by watching syscalls.
   Scopes are declared, and being wrong about them is your risk to manage.
 - #strong[No remote cache.] State is local and throwaway. Delete it and the
-  worst case is one honest re-run.
+  worst case is one re-run.

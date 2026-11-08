@@ -56,7 +56,7 @@ design:
   (`jq -e`, a schema check) so a bad shape becomes a non-zero exit and hits the
   rule above. mmz does not validate meaning, and should not learn to.
 
-Document that trade honestly next to the key: a wrong scope costs time, a wrong
+Document that trade plainly next to the key: a wrong scope costs time, a wrong
 probe can lie. Anyone reaching for this should read that sentence first.
 
 == Scope
@@ -78,7 +78,7 @@ probe can lie. Anyone reaching for this should read that sentence first.
 == Cost to weigh while implementing
 
 Every `mmz --is-fresh` resolves every referenced probe, and that path runs in
-git pre-commit hooks. Keep the once-per-process resolution honest and measure a
+git pre-commit hooks. Keep the once-per-process resolution intact and measure a
 realistic manifest before calling this done.
 
 == Home

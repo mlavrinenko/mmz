@@ -71,7 +71,7 @@ commands:
 Three properties this has and `flake.lock` does not. It is per-tool, so
 `machete` busts on `cargo-machete` and nothing else — strictly less churn than
 the blanket, not more. It measures the binary actually in use rather than the
-one a lockfile describes. And it is honest under any PATH, because reporting
+one a lockfile describes. And it is accurate under any PATH, because reporting
 the ambient tool is precisely its job — unlike a recipe-body probe, which
 claims to measure the recipe and actually measures the recipe as rendered by
 whichever `just` answered.
@@ -82,7 +82,7 @@ invisible.
 
 == Two sources, and they are not interchangeable
 
-Where a tool comes from decides which probe is honest for it.
+Where a tool comes from decides which probe is right for it.
 
 *A tool that is its own flake input* — linecop, outdatty and ejectest through
 `qahq`, and tola — is pinned exactly by its node:
@@ -102,7 +102,7 @@ once file-sourced JSON probes exist.
 *A tool that comes out of nixpkgs* — `just`, `jq`, `cargo-machete` — is not
 pinned by any node of its own. `.nodes["nixpkgs"]["locked"]["narHash"]` moves on
 every nixpkgs bump whether or not that tool changed, so for these the lockfile
-is no better than it is today. `just --version` is the honest probe, and it is
+is no better than it is today. `just --version` is the right probe, and it is
 the one that costs a process.
 
 So this is not one mechanism. It is lockfile nodes where the tool is an input,

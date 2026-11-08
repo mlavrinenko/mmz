@@ -4,7 +4,7 @@
 //!
 //! These live in the CLI suite rather than beside `src/clock.rs` because setting
 //! an environment variable in-process is `unsafe` in edition 2024 and this crate
-//! denies `unsafe_code`. A child process is the only honest way to drive the
+//! denies `unsafe_code`. A child process is the only reliable way to drive the
 //! variable, which is also how every real caller sets it.
 
 use std::fs;

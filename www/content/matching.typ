@@ -6,7 +6,9 @@
   route: "/matching/",
   label: "Matching",
   title: "Matching and parametric rules",
-  summary: "How an invocation is matched to a rule, how the cache identity follows from that, and how one rule can fan over a scope's files.",
+  summary: "How a command finds its rule, and how one rule can cover many files.",
+  group: "Writing a manifest",
+  order: 3,
 )
 #metadata(meta) <page-meta>
 
@@ -115,10 +117,10 @@ error, not a silently picked winner.
   `--is-fresh -- <command> <file>` gates the one expansion `<file>` binds to.
 - `--prune` drops a record once its file leaves the tree.
 
-== When the fan is honest
+== When the fan is safe
 
 #callout("warn")[
-  Per-file scoping is only honest when the command genuinely depends on that one
+  Per-file scoping is only safe when the command genuinely depends on that one
   file plus the pins.
 ]
 

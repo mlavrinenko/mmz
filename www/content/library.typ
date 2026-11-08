@@ -6,7 +6,9 @@
   route: "/library/",
   label: "Rust library",
   title: "Rust library",
-  summary: "mmz ships as a library crate as well as a binary; the binary is a thin wrapper over it.",
+  summary: "Use mmz as a Rust library.",
+  group: "Reference",
+  order: 3,
 )
 #metadata(meta) <page-meta>
 

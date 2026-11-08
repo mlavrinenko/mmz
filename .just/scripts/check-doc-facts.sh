@@ -13,9 +13,9 @@
 #   - every `[group("gate")]` recipe needs a www/utils/gate-notes.typ entry, so a
 #     gate cannot join `just check` without CONTRIBUTING.md saying what it is
 #     for;
-#   - every www/content/*.typ page needs a route matching its filename AND a NAV
-#     entry in www/utils/site.typ, so a page cannot be unreachable from the
-#     sidebar and a NAV entry cannot 404.
+#   - every www/content/*.typ page needs a route matching its filename. Its
+#     group and order — where it sits in the sidebar and README — are validated
+#     by www/generate-site-pages.sh, which this gate runs first.
 #
 # Each arm reads its Typst dict's keys by EVALUATING the module through a
 # target/-rooted driver, never by grepping quoted strings — a regex over source
@@ -142,27 +142,6 @@ orphaned=$(comm -13 <(echo "$page_routes") <(echo "$routes"))
 if [ -n "$orphaned" ]; then
     echo "check-doc-facts: filename-derived routes with no page declaring them:" >&2
     while IFS= read -r route; do echo "  - $route" >&2; done <<<"$orphaned"
-    exit 1
-fi
-
-# --- pages, part two: the manifest vs. www/utils/site.typ's NAV ---------------
-# NAV carries only group titles and reading order now, so the two CAN disagree:
-# a page missing from NAV is invisible in the sidebar, and a NAV entry naming no
-# real page's route 404s the moment it is clicked.
-printf '#import "/www/utils/site.typ": NAV\n#metadata(NAV.map(g => g.items).flatten()) <nav-routes>\n' \
-    >"$tmp/nav-routes.typ"
-nav_routes=$(typst query --root . "$tmp/nav-routes.typ" '<nav-routes>' \
-    --field value --one | jq -r '.[]' | sort)
-missing_nav=$(comm -23 <(echo "$routes") <(echo "$nav_routes"))
-if [ -n "$missing_nav" ]; then
-    echo "check-doc-facts: pages with no www/utils/site.typ NAV entry (unreachable in the sidebar):" >&2
-    while IFS= read -r route; do echo "  - $route" >&2; done <<<"$missing_nav"
-    exit 1
-fi
-dead_nav=$(comm -13 <(echo "$routes") <(echo "$nav_routes"))
-if [ -n "$dead_nav" ]; then
-    echo "check-doc-facts: NAV entries naming no page (a 404 in the sidebar):" >&2
-    while IFS= read -r route; do echo "  - $route" >&2; done <<<"$dead_nav"
     exit 1
 fi
 

@@ -460,6 +460,6 @@ fn a_failing_probe_stops_the_gate_rather_than_reporting_stale() {
                 ..
             } if matches!(**failure, ProbeFailure::Failed { .. })
         ),
-        "fail closed: the gate cannot honestly answer without the probe, got {err}"
+        "fail closed: the gate cannot answer without the probe, got {err}"
     );
 }

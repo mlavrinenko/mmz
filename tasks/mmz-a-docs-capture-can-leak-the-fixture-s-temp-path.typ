@@ -58,7 +58,7 @@ Two things to settle before writing it:
 - Whether to match `$TMPDIR`/`/tmp/tmp.*` (cheap, catches what mktemp actually
   produces) or to pass the run's own `$COPY` and `$INIT_DIR` down and grep for
   those (exact, and cannot be defeated by a `TMPDIR` set somewhere else). The
-  second is the honest version of the check; the first is the one that fits on
+  second is the exact version of the check; the first is the one that fits on
   a line.
 - Whether the fix is a gate at all, or normalization at the source: `gen_run`
   could pipe every capture through the `sed` unconditionally, which would make

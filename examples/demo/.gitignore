@@ -1,3 +1,2 @@
-# The pipeline's own artifact: declared as an `outputs:` path in
-# .mmz/config.yaml, produced by bin/report.sh, never committed.
+# bin/report.sh writes the declared output here.
 /out

@@ -51,7 +51,7 @@ gate rule fanned per-file.
 Note: a parametric rule is NOT forced into the dogfood — mmz's gates have no
 natural per-file command, so contriving one would be noise. The parametric
 `--is-fresh` path stays covered by the regression tests added under
-`mmz-is-fresh-ignores-parametric-rules`. This task is the honest, non-contrived
+`mmz-is-fresh-ignores-parametric-rules`. This task is the real, non-contrived
 slice of MindTape's pattern.
 
 == Scope

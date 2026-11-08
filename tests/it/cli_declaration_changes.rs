@@ -70,7 +70,7 @@ fn an_output_added_after_the_fact_is_stat_ed_live_rather_than_read_off_the_recor
     write_project(dir.path(), PLAIN);
     wrap(dir.path()).success();
 
-    // The other half of the same behaviour, and the honest limit of it: the
+    // The other half of the same behaviour, and the real limit of it: the
     // check is present-tense. An artifact already on disk satisfies the new
     // declaration, because a declared output is an existence check made at read
     // time — mmz never claims the artifact came from the run that was recorded,

@@ -82,7 +82,7 @@ probes:
     json: '.nodes["qahq"]["locked"]["narHash"]'
 
 commands:
-  # linecop walks the whole tree, so this one is honestly broad. Its scopes are
+  # linecop walks the whole tree, so this one is deliberately broad. Its scopes are
   # the file sets whose SIZE the gate is judging, plus its own config, plus the
   # input that ships linecop itself. `rust` is declared in
   # ../conf.d/10-rust.yaml; docs-src/docs-md-src/docs-md-out in
@@ -120,7 +120,7 @@ commands:
   #
   # `nixpkgs-tools` rather than `qahq-tools`: git is the tool that produces this
   # verdict (`git show <tag>:CHANGELOG.md` is the comparison), and git comes out
-  # of nixpkgs through the dev shell, so the proxy is the honest pin. It
+  # of nixpkgs through the dev shell, so the proxy is the right pin. It
   # over-busts, which for a gate that runs in well under a second is a cost
   # worth nothing. `gate-scripts` covers the script holding the logic.
   - name: just check-changelog-history

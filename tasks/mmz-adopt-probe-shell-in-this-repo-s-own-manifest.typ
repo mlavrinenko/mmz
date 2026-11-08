@@ -60,7 +60,7 @@ trust-model call and not one to make silently in a follow-up commit.
 - *A wrapper script in `.just/scripts/`* that prepends a known profile path
   and `exec sh -c "$1"`. Fast, no new dependency, works in CI. Costs inventing
   machinery to locate the profile, which is the part `direnv` already solves.
-- *Leave it unset and rely on `jq -S`.* Honest about where things stand: the
+- *Leave it unset and rely on `jq -S`.* Clear about where things stand: the
   accidental version dependency is closed and the deliberate one is not. The
   gates keep working, and a foreign `just` on PATH is a loud spawn failure
   rather than a silent one only while no `just` is installed at all.

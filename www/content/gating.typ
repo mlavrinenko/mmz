@@ -6,7 +6,9 @@
   route: "/gating/",
   label: "Gating with tags",
   title: "Gating with tags",
-  summary: "Use --is-fresh to require that an expensive check already passed, and tags to decide which rules a gate is allowed to ask about.",
+  summary: "Require a check to have passed, without running it again.",
+  group: "Writing a manifest",
+  order: 5,
 )
 #metadata(meta) <page-meta>
 

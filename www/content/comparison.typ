@@ -6,7 +6,9 @@
   route: "/comparison/",
   label: "Comparison",
   title: "Comparison",
-  summary: "Where mmz sits among build systems, task runners and compiler caches — and which of them you should reach for instead.",
+  summary: "With similar tools.",
+  group: "More",
+  order: 2,
 )
 #metadata(meta) <page-meta>
 

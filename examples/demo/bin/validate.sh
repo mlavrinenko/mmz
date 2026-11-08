@@ -1,7 +1,5 @@
 #!/usr/bin/env sh
-# Assert every data file parses and carries the fields the report needs.
-# `jq -e` exits non-zero on a null/false result, so a missing field fails here
-# rather than producing a plausible-looking empty report downstream.
+# `jq -e` fails on null/false, so a missing field fails here.
 set -e
 
 jq -e 'all(.[]; has("id") and has("customer") and (.total | type == "number"))' \

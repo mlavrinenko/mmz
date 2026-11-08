@@ -21,17 +21,27 @@
 // `<h1 align="center">`/`<h4 align="center">` survive both typlite and GitHub's
 // HTML sanitizer, so the header below uses those. This document therefore has
 // no separate `doc-title` ATX `#`: the centered `<h1>` IS the title.
-#import "lib.typ": capture, fact, just, www-link, www-summary
+#import "lib.typ": capture, fact, just, www-label, www-link, www-summary
 
 #metadata((
   output: "README.md",
 )) <mmz-md>
 
 // Every docs-site page except the site root. `www-link` renders a page's own
-// title, and the root's title is "mmz" over a summary that restates this
+// title, and the page's `group`/`order` place it under the site's own group
+// headings; the root's title is "mmz" over a summary that restates this
 // README's own opening line — an index entry pointing the reader back at where
 // they already are. The header's Documentation link is that page.
-#let doc-routes = fact("site-pages").pages.keys().filter(route => route != "/")
+#let site = fact("site-pages")
+#let doc-groups = site.groups.map(title => (
+  title: title,
+  routes: site
+    .pages
+    .keys()
+    .filter(route => (
+      route != "/" and site.pages.at(route).at("group") == title
+    )),
+))
 
 #html.elem("h1", attrs: (align: "center"))[
   #html.elem("img", attrs: (
@@ -44,7 +54,7 @@
 ]
 
 #html.elem("h4", attrs: (align: "center"))[
-  A #link("LICENSE-MIT")[MIT]-licensed memoized command runner.
+  Memoize what's done.
 ]
 
 #html.elem("h4", attrs: (align: "center"))[
@@ -69,32 +79,57 @@
   alt: "License: MIT",
 ))]
 
-Prefix any command with `mmz`. When the matched rule's declared inputs are
-byte-for-byte unchanged since that command last succeeded, `mmz` skips it and
-exits 0. Otherwise it runs the command, streams its output, and records the
-result on success.
+Configure inputs for a command and run it with `mmz ...` as a prefix.
+`mmz` remembers the last successful run and skips further executions while those
+inputs remain unchanged.
 
-It answers one question per invocation: is this rule's work still done?
-#www-link("/comparison/")[The comparison page] places it beside the build
-systems, task runners and compiler caches you might reach for instead.
+For example, the
+#link("https://github.com/mlavrinenko/mmz/tree/main/examples/demo")[demo project's] `.mmz/config.yaml`
+declares two commands and their inputs:
 
-```yaml
-# .mmz/config.yaml
-scopes:
-  rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
+// The fixture's `$schema` line is relative to examples/demo; drop it from the
+// copy shown here, where it would point outside the reader's project.
+#raw(
+  capture("demo-config.yaml")
+    .split("\n")
+    .filter(line => not line.starts-with("# yaml-language-server:"))
+    .join("\n")
+    .trim("\n", repeat: true),
+  lang: "yaml",
+  block: true,
+)
 
-commands:
-  - name: cargo test
-    inputs: [rust]
-```
+Running `mmz ./bin/validate.sh` does the work:
 
 #raw(
-  capture("run-cold.txt").trim("\n", repeat: true)
-    + "\n"
-    + capture("run-warm.txt").trim("\n", repeat: true),
+  capture("run-cold.txt").trim("\n", repeat: true),
   lang: "console",
   block: true,
 )
+
+Running it again skips the command:
+
+#raw(
+  capture("run-warm.txt").trim("\n", repeat: true),
+  lang: "console",
+  block: true,
+)
+
+Then, you can put `mmz --is-fresh --tag gate` in your git pre-commit hook to
+refuse a commit when a gated check is out of date:
+
+```bash
+#!/usr/bin/env sh
+# .git/hooks/pre-commit
+mmz --is-fresh --tag gate || {
+  echo "run the gated checks first" >&2
+  exit 1
+}
+```
+
+No checks run during `git commit`, but you're still covered.
+
+See how it #www-link("/comparison/")[compares] with other tools.
 
 = Installation
 
@@ -102,57 +137,35 @@ commands:
 cargo install mmz
 ```
 
-#www-link("/quickstart/") covers the prebuilt binaries, `nix run`, and scaffolding
-a manifest.
+#www-link("/quickstart/") covers the prebuilt binaries, `nix run`, and
+scaffolding a manifest.
 
 = Usage
 
 ```bash
 mmz --init                # write a starter .mmz/config.yaml
-mmz cargo test            # skipped when the declared inputs are unchanged
-mmz --status              # each rule's freshness and record age
-mmz --is-fresh --tag gate # exit 0 if every gate-tagged rule is fresh; runs nothing
-mmz --prune               # drop records whose rule no longer exists
-mmz --import ../wt        # take the gate passes recorded in another checkout of this repo
+mmz cargo test            # skipped when its inputs are unchanged
+mmz --status              # each command's state and last-run age
+mmz --is-fresh --tag gate # exit 0 if every gate-tagged command is up to date; runs nothing
+mmz --prune               # drop cache records for commands that no longer exist
+mmz --import ../wt        # copy cache records from another checkout
 ```
-
-A git worktree keeps its own cache, so a gate that passed there reads stale
-in the primary checkout after you land it. `--import` fixes that without
-trusting anything: records for rules you still have are copied, and the input
-digest is checked against _this_ tree as usual, so a stale one stays stale.
-Run it from the primary checkout, pointed at the worktree you are landing.
-With [worktrunk](https://worktrunk.dev) that is one hook line in the
-primary's `.config/wt.toml`, firing as the worktree goes away. The hook runs
-inside that worktree, so it steps into the primary first.
-
-```toml
-pre-remove = "cd {{ primary_worktree_path }} && mmz --import {{ worktree_path }}"
-```
-
-= The trade
-
-`mmz` cannot see a dependency you did not declare, so the asymmetry is the whole
-contract:
-
-- Under-declaring a rule's inputs skips a command that should have run — a false
-  green, and dangerous.
-- Over-declaring buys an unnecessary re-run — and nothing else.
-
-Broaden the scope when in doubt. `mmz` fails closed everywhere else: a missing or
-invalid manifest always errors, and so do an unmatched command and a matched rule
-with no inputs, unless `strict` relaxes them.
 
 = Documentation
 
-#list(..doc-routes.map(route => [
-  #www-link(route) — #www-summary(route)
-]))
+#for group in doc-groups [
+  #if group.routes.len() > 0 [
+    *#group.title*
+
+    #list(..group.routes.map(route => [
+      #www-link(route)[#www-label(route)] — #www-summary(route)
+    ]))
+  ]
+]
 
 = Contributing
 
-See #link("CONTRIBUTING.md")[CONTRIBUTING.md]. mmz memoizes its own checks, so
-#just.check() is itself the worked example — and closing a task asserts those
-checks already passed with `mmz --is-fresh --tag gate`.
+See #link("CONTRIBUTING.md")[CONTRIBUTING.md].
 
 = License
 

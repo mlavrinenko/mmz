@@ -1,30 +1,66 @@
 <!-- Generated from docs/src/readme.typ by `just docs md`. Do not edit; edit the source. -->
 
 <h1 align="center"><img src="https://raw.githubusercontent.com/mlavrinenko/mmz/main/www/assets/images/logo.svg" alt="mmz" width="96" /><br />
-mmz</h1><h4 align="center">A <a href="LICENSE-MIT">MIT</a>-licensed memoized command runner.</h4><h4 align="center"><a href="https://mlavrinenko.github.io/mmz/">Documentation</a> · <a href="https://mlavrinenko.github.io/mmz/quickstart/">Quickstart</a> · <a href="https://mlavrinenko.github.io/mmz/comparison/">Comparison</a></h4>
+mmz</h1><h4 align="center">Memoize what’s done.</h4><h4 align="center"><a href="https://mlavrinenko.github.io/mmz/">Documentation</a> · <a href="https://mlavrinenko.github.io/mmz/quickstart/">Quickstart</a> · <a href="https://mlavrinenko.github.io/mmz/comparison/">Comparison</a></h4>
 
 ---
 
 [<img src="https://github.com/mlavrinenko/mmz/actions/workflows/ci.yml/badge.svg" alt="CI" />](https://github.com/mlavrinenko/mmz/actions/workflows/ci.yml) [<img src="https://img.shields.io/crates/v/mmz.svg" alt="crates.io" />](https://crates.io/crates/mmz) [<img src="https://img.shields.io/crates/l/mmz.svg" alt="License: MIT" />](LICENSE-MIT)
 
-Prefix any command with `mmz`. When the matched rule’s declared inputs are byte-for-byte unchanged since that command last succeeded, `mmz` skips it and exits 0. Otherwise it runs the command, streams its output, and records the result on success.
+Configure inputs for a command and run it with `mmz ...` as a prefix. `mmz` remembers the last successful run and skips further executions while those inputs remain unchanged.
 
-It answers one question per invocation: is this rule’s work still done? [The comparison page](https://mlavrinenko.github.io/mmz/comparison/) places it beside the build systems, task runners and compiler caches you might reach for instead.
+For example, the [demo project’s](https://github.com/mlavrinenko/mmz/tree/main/examples/demo) `.mmz/config.yaml` declares two commands and their inputs:
 
 ```yaml
-# .mmz/config.yaml
 scopes:
-  rust: ["**/*.rs", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml"]
+  data: ["data/*.json"]
+  bin: ["bin/*.sh"]
+
+probes:
+  # jq's version is an input, but not a file.
+  jq-version:
+    run: jq --version
+
+on_hit: "mmz: skipped {cache:command} (inputs unchanged)"
 
 commands:
-  - name: cargo test
-    inputs: [rust]
+  - name: ./bin/validate.sh
+    inputs: [data, bin, jq-version]
+    tags: [gate]
+
+  - name: ./bin/report.sh
+    inputs: [data, bin, jq-version]
+    outputs:
+      - out/report.txt
+    tags: [gate, report]
 ```
+
+Running `mmz ./bin/validate.sh` does the work:
 
 ```console
 validate: 4 orders, 2 customers OK
+```
+
+Running it again skips the command:
+
+```console
 mmz: skipped ./bin/validate.sh (inputs unchanged)
 ```
+
+Then, you can put `mmz --is-fresh --tag gate` in your git pre-commit hook to refuse a commit when a gated check is out of date:
+
+```bash
+#!/usr/bin/env sh
+# .git/hooks/pre-commit
+mmz --is-fresh --tag gate || {
+  echo "run the gated checks first" >&2
+  exit 1
+}
+```
+
+No checks run during `git commit`, but you’re still covered.
+
+See how it [compares](https://mlavrinenko.github.io/mmz/comparison/) with other tools.
 
 ## Installation
 
@@ -38,47 +74,43 @@ cargo install mmz
 
 ```bash
 mmz --init                # write a starter .mmz/config.yaml
-mmz cargo test            # skipped when the declared inputs are unchanged
-mmz --status              # each rule's freshness and record age
-mmz --is-fresh --tag gate # exit 0 if every gate-tagged rule is fresh; runs nothing
-mmz --prune               # drop records whose rule no longer exists
-mmz --import ../wt        # take the gate passes recorded in another checkout of this repo
+mmz cargo test            # skipped when its inputs are unchanged
+mmz --status              # each command's state and last-run age
+mmz --is-fresh --tag gate # exit 0 if every gate-tagged command is up to date; runs nothing
+mmz --prune               # drop cache records for commands that no longer exist
+mmz --import ../wt        # copy cache records from another checkout
 ```
-
-A git worktree keeps its own cache, so a gate that passed there reads stale in the primary checkout after you land it. `--import` fixes that without trusting anything: records for rules you still have are copied, and the input digest is checked against _this_ tree as usual, so a stale one stays stale. Run it from the primary checkout, pointed at the worktree you are landing. With \[worktrunk\]([https://worktrunk.dev](https://worktrunk.dev)) that is one hook line in the primary’s `.config/wt.toml`, firing as the worktree goes away. The hook runs inside that worktree, so it steps into the primary first.
-
-```toml
-pre-remove = "cd {{ primary_worktree_path }} && mmz --import {{ worktree_path }}"
-```
-
-## The trade
-
-`mmz` cannot see a dependency you did not declare, so the asymmetry is the whole contract:
-
-- Under-declaring a rule’s inputs skips a command that should have run — a false green, and dangerous.
-- Over-declaring buys an unnecessary re-run — and nothing else.
-
-Broaden the scope when in doubt. `mmz` fails closed everywhere else: a missing or invalid manifest always errors, and so do an unmatched command and a matched rule with no inputs, unless `strict` relaxes them.
 
 ## Documentation
 
-- [Quickstart](https://mlavrinenko.github.io/mmz/quickstart/) — Install mmz, scaffold a manifest, and watch a command skip itself.
-- [Concepts](https://mlavrinenko.github.io/mmz/concepts/) — The model behind mmz: rules, records, freshness, and the asymmetry that decides every design question.
-- [Inputs: scopes and probes](https://mlavrinenko.github.io/mmz/inputs/) — Named glob sets, the gitignore filter and how to opt one scope out of it, leaving paths out with exclude, and probes for the inputs that are not files.
-- [Code inputs: matching source with AST patterns](https://mlavrinenko.github.io/mmz/code/) — The \`ast:\` selector — depending on a function, a type or an impl block instead of a whole file — what it hashes, how \`capture:\` narrows a match to the parts that matter, and which grammars a build carries.
-- [Matching and parametric rules](https://mlavrinenko.github.io/mmz/matching/) — How an invocation is matched to a rule, how the cache identity follows from that, and how one rule can fan over a scope's files.
-- [Declared outputs](https://mlavrinenko.github.io/mmz/outputs/) — A producer command's record can be undone without touching an input. Declaring what a run leaves behind is how mmz notices.
-- [Gating with tags](https://mlavrinenko.github.io/mmz/gating/) — Use --is-fresh to require that an expensive check already passed, and tags to decide which rules a gate is allowed to ask about.
-- [Composing a manifest from imports](https://mlavrinenko.github.io/mmz/composition/) — Why imports: merges files instead of overriding them, the one path rule that trips everyone the first time, and how to debug what a composed manifest actually resolved to.
-- [Manifest reference](https://mlavrinenko.github.io/mmz/manifest/) — Every key .mmz/config.yaml can declare, generated from the JSON Schema the binary ships.
-- [CLI reference](https://mlavrinenko.github.io/mmz/cli/) — Every action mmz accepts, every exit code it returns, and the JSON it can be asked for — generated from the binary's own help text.
-- [Rust library](https://mlavrinenko.github.io/mmz/library/) — mmz ships as a library crate as well as a binary; the binary is a thin wrapper over it.
-- [For AI agents](https://mlavrinenko.github.io/mmz/agents/) — Driving mmz from an agent: machine-readable state, honest exit codes, and the one mistake an agent is most likely to make with it.
-- [Comparison](https://mlavrinenko.github.io/mmz/comparison/) — Where mmz sits among build systems, task runners and compiler caches — and which of them you should reach for instead.
+**Start here**
+
+- [Quickstart](https://mlavrinenko.github.io/mmz/quickstart/) — Install mmz and watch a command skip.
+- [Concepts](https://mlavrinenko.github.io/mmz/concepts/) — How rules, records, and freshness fit together.
+
+**Writing a manifest**
+
+- [Inputs](https://mlavrinenko.github.io/mmz/inputs/) — The files and tool versions a command depends on.
+- [Code inputs](https://mlavrinenko.github.io/mmz/code/) — Depend on a function or type instead of a whole file.
+- [Matching](https://mlavrinenko.github.io/mmz/matching/) — How a command finds its rule, and how one rule can cover many files.
+- [Declared outputs](https://mlavrinenko.github.io/mmz/outputs/) — Declare what a run leaves behind.
+- [Gating with tags](https://mlavrinenko.github.io/mmz/gating/) — Require a check to have passed, without running it again.
+- [Composition](https://mlavrinenko.github.io/mmz/composition/) — Split one manifest across several files.
+
+**Reference**
+
+- [Manifest reference](https://mlavrinenko.github.io/mmz/manifest/) — Every key .mmz/config.yaml can declare.
+- [CLI reference](https://mlavrinenko.github.io/mmz/cli/) — Every action, flag, and exit code.
+- [Rust library](https://mlavrinenko.github.io/mmz/library/) — Use mmz as a Rust library.
+
+**More**
+
+- [For AI agents](https://mlavrinenko.github.io/mmz/agents/) — Machine-readable state and exit codes for agents.
+- [Comparison](https://mlavrinenko.github.io/mmz/comparison/) — With similar tools.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). mmz memoizes its own checks, so `just check` is itself the worked example — and closing a task asserts those checks already passed with `mmz --is-fresh --tag gate`.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

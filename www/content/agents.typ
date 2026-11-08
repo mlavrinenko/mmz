@@ -6,7 +6,9 @@
   route: "/agents/",
   label: "For AI agents",
   title: "For AI agents",
-  summary: "Driving mmz from an agent: machine-readable state, honest exit codes, and the one mistake an agent is most likely to make with it.",
+  summary: "Machine-readable state and exit codes for agents.",
+  group: "More",
+  order: 1,
 )
 #metadata(meta) <page-meta>
 
@@ -48,7 +50,7 @@ question is which input moved:
 mmz --status=json | jq '.rules[] | select(.state != "fresh") | {name, state, missing_output}'
 ```
 
-= Honest exit codes
+= Exit codes
 
 Every code means one thing, so branching on `$?` is safe:
 

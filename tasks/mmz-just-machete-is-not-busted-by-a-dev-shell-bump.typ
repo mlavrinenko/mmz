@@ -56,8 +56,7 @@ Either add `flake.lock` to the `manifests` scope, or give the rule a
 toolchain scope of its own and name it alongside `manifests`. The second is
 probably better: `manifests` reads as "the Cargo manifests" and a lockfile for
 the dev shell does not belong under that name, while a `toolchain` scope
-(`rust-toolchain.toml`, `flake.lock`) is a thing several rules could name
-honestly.
+(`rust-toolchain.toml`, `flake.lock`) is a thing several rules could share.
 
 Note that `rust` would then overlap it. Whether `rust` should be decomposed
 into sources + toolchain, with every current caller naming both, is the real

@@ -51,53 +51,17 @@
   tagline: "Memoized command runner. One question per run: is this work still done?",
 )
 
-// Grouped sidebar: group title, and its members' reading order as ROUTES. The
-// one fact no single page owns — spreading it across twelve files as `order:`
-// integers would make the sidebar's shape invisible and let two pages claim
-// one slot.
-#let NAV = (
-  (title: "Start", items: ("/", "/quickstart/")),
-  (
-    title: "Guide",
-    items: (
-      "/concepts/",
-      "/inputs/",
-      "/code/",
-      "/matching/",
-      "/outputs/",
-      "/gating/",
-      "/composition/",
-    ),
-  ),
-  (title: "Reference", items: ("/manifest/", "/cli/", "/library/")),
-  (title: "More", items: ("/agents/", "/comparison/")),
-)
+// The sidebar's and README's group titles, in reading order. Membership and
+// order within a group live on the page: every `<page-meta>` declares `group`
+// and `order`, and www/generate-site-pages.sh refuses a page whose group is
+// not here or whose order collides with a sibling's. Adding a page therefore
+// edits the page, not a separate list.
+#let GROUPS = ("Start here", "Writing a manifest", "Reference", "More")
 
-// The page manifest — route -> {label, title, summary, home?} — derived from
-// every page's own `<page-meta>` block by www/generate-site-pages.sh, never
-// hand-written here. Empty only during that script's bootstrap pass (see its
-// header): compiling a page imports layout.typ -> this file -> this artifact,
-// so the artifact has to exist, even empty, before the query that fills it.
+// The page manifest — route -> {label, title, summary, group, order, home?} —
+// derived from every page's own `<page-meta>` block by
+// www/generate-site-pages.sh, never hand-written here. Empty only during that
+// script's bootstrap pass (see its header): compiling a page imports
+// layout.typ -> this file -> this artifact, so the artifact has to exist, even
+// empty, before the query that fills it.
 #let PAGES = json("../generated/site-pages.json").pages
-
-// Resolve one page by route. Three outcomes, not two:
-//
-//   - PAGES is EMPTY (the bootstrap pass, before a single page has been
-//     queried): return `none`. Panicking here would make the bootstrap pass
-//     itself un-compilable, which is the chicken-and-egg
-//     www/generate-site-pages.sh exists to break.
-//   - PAGES is non-empty and has the route: return its entry.
-//   - PAGES is non-empty and lacks the route: panic naming it. A route is a
-//     string typed by hand in a page header, in NAV above, or in doc prose;
-//     once the manifest is real an unknown one is always a mistake, never a
-//     pass still warming up.
-#let page-meta(route) = {
-  if PAGES.len() == 0 { return none }
-  if type(route) == str and route in PAGES { return PAGES.at(route) }
-  panic(
-    "unknown docs-site route: "
-      + repr(route)
-      + " — known routes: "
-      + PAGES.keys().join(", "),
-  )
-}

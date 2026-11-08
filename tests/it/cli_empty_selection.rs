@@ -5,7 +5,7 @@
 //! used to be indistinguishable from a passing build, which is the false green
 //! the tool exists to refuse — reached through the door rather than the wall.
 //! `--status` keeps exiting 0 on the same selection: it asserts nothing, so an
-//! empty report is honest as long as the line explaining it is true.
+//! empty report is fine as long as the line explaining it is true.
 
 use std::fs;
 use std::path::Path;

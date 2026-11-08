@@ -74,7 +74,7 @@ just is on PATH*.
 - *Make the hook enter the dev shell.* `direnv exec . target/debug/mmz …` in
   `.mindtape/config.toml`. Fixes the close path only; a bare `mmz --is-fresh`
   in a pre-commit hook or CI has the same problem.
-- *Add the toolchain to the input set.* Honest — the probe genuinely depends on
+- *Add the toolchain to the input set.* Correct — the probe genuinely depends on
   the just version — but it means every gate busts on a dev-shell bump, which
   `flake.lock` in the `rust` scope already does for rustc. Arguably correct, and
   the most expensive.
@@ -90,7 +90,7 @@ It would not have caught this bug because `flake.lock` is byte-identical
 inside and outside `nix develop`. It records what the shell *would* hand you,
 not what the probe *actually invoked*. Making the tool version a genuine input
 needs a self-reporting probe (`just --version`), which detects the mismatch but
-turns the phantom-stale into a real bust — honest, no more usable.
+turns the phantom-stale into a real bust — correct, no more usable.
 
 So the four options all answer "how do we make the digest stable", and none
 answers the question the failure actually poses: is the environment part of the
@@ -134,7 +134,7 @@ declared default rather than an unexamined one.
 == Regression test
 
 A test that runs the same probe under two PATHs and asserts the digest is
-stable is the honest test, but it needs two just versions on hand. The cheaper
+stable is the right test, but it needs two just versions on hand. The cheaper
 one: assert probe output is order-normalised, so a re-ordered JSON object
 hashes the same.
 

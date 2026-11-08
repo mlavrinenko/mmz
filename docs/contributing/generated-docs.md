@@ -34,7 +34,7 @@ Three scripts, run in a fixed order, all writing to the gitignored `www/generate
 
 1. **`www/generate.sh`** builds `mmz` release and captures its live output: the help text, all three JSON Schemas, the version, a `--init` in an empty directory, and a dozen transcripts from running the real binary against a throwaway copy of `examples/demo`. It calls `www/generate-composition.sh` for the composition page’s captures, against `examples/composed`, because a composed `--status` grows a column no other capture has.
 2. **`www/generate-facts.sh`** derives the rest from files: the crate map from `cargo metadata`, the gate table and the `just` module from `just --dump`, the caps from `.linecop.yaml`, the binary sizes from `www/sizes.yaml`.
-3. **`www/generate-site-pages.sh`** compiles every content page to read back its own `<page-meta>` block, producing the route → label/title/summary manifest that the sidebar, the README’s page list and every cross-page link resolve against.
+3. **`www/generate-site-pages.sh`** compiles every content page to read back its own `<page-meta>` block, producing the route → label/title/summary plus each page’s group and order. The sidebar, the README’s page list and every cross-page link resolve against that manifest.
 
 The order is not negotiable, and each script’s header says why. In short: `generate.sh` wipes the directory on entry, so the facts must be restored inside the same critical section; and the page manifest is a full page compile, so it needs both the facts and the captures already in place.
 
@@ -71,7 +71,9 @@ Then `just docs md` renders it, and `just docs md-check` fails from then on if t
   route: "/my-page/",
   label: "My page",
   title: "My page",
-  summary: "One sentence; it becomes the meta description and the lede.",
+  summary: "One short sentence; it becomes the meta description and the lede.",
+  group: "Writing a manifest",
+  order: 7,
 )
 #metadata(meta) <page-meta>
 
@@ -80,7 +82,7 @@ Then `just docs md` renders it, and `just docs md-check` fails from then on if t
 
 One binding feeds both consumers — the metadata block the manifest is built from, and the show rule — so a page cannot disagree with itself about its own route.
 
-Then add the route to `NAV` in `www/utils/site.typ`. `just check-doc-facts` fails if you do not: a page missing from NAV is unreachable in the sidebar, and a NAV entry naming no page is a 404 in it. The route must also match the filename (`my-page.typ` serves `/my-page/`, `index.typ` serves `/`), which is what catches a `<page-meta>` block pointed at some other page’s route.
+Then set `group` to one of `GROUPS` in `www/utils/site.typ` and `order` to its position within that group. `www/generate-site-pages.sh` refuses a missing or unknown group, a non-integer order, and two pages sharing an order in one group, so a page cannot silently vanish from the sidebar or the README. The route must also match the filename (`my-page.typ` serves `/my-page/`, `index.typ` serves `/`), which is what catches a `<page-meta>` block pointed at some other page’s route.
 
 ## Adding a derived fact
 
@@ -95,7 +97,7 @@ Read the notes dict by evaluating it, never by grepping quoted strings out of th
 Binary size is the one fact the generators do not measure, because measuring it means linking the binary once per grammar — thirty LTO builds, about half an hour. That cannot run on every docs build, nor go back to being typed into a page. The shape that resolves it, and the one to copy for the next such fact:
 
 1. **Measure on demand, commit the result.** `just measure-sizes` runs `www/measure-sizes.sh`, which writes `www/sizes.yaml` — the one committed _data_ file the pipeline reads, reviewed into the tree like any other change.
-2. **Cross-check it on the way through.** `generate-facts.sh` refuses a measurement whose grammar set no longer matches the crate’s own `lang-` features, naming both sides. That is what keeps a committed number honest without re-measuring it: the file cannot silently describe a different binary than the one the manifest builds.
+2. **Cross-check it on the way through.** `generate-facts.sh` refuses a measurement whose grammar set no longer matches the crate’s own `lang-` features, naming both sides. That is what keeps a committed number accurate without re-measuring it: the file cannot silently describe a different binary than the one the manifest builds.
 3. **Let `outdatty` schedule the re-run.** The `binary-size` group fails `just outdatty-check` once `Cargo.toml` or `Cargo.lock` moves under the recorded measurement. A reviewer who judges the drift immaterial re-confirms with `just outdatty-update` and runs nothing — the call a gate could not allow.
 
 The tell that a fact belongs here rather than in `generate-facts.sh` is that deriving it needs a _build_ rather than a read.

@@ -40,6 +40,7 @@ export MMZ_DISABLE=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
+# The fixture uses only sh and jq, so the docs build needs no toolchain.
 FIX="$REPO/examples/demo"
 OUT="$SCRIPT_DIR/generated"
 MMZ="$REPO/target/release/mmz"
@@ -167,7 +168,7 @@ gen_run is-fresh-missing-output --is-fresh || true
 RECORD="$(find .mmz/cache -name 'bin-report-sh-*.yaml' | head -1)"
 cp "$RECORD" "$OUT/record.yaml"
 
-# --prune, demonstrated the only honest way: rename a rule so its record is
+# --prune, demonstrated the only real way: rename a rule so its record is
 # genuinely orphaned, then sweep it.
 sed -i 's#^  - name: ./bin/report.sh#  - name: ./bin/report.sh --full#' .mmz/config.yaml
 gen_run prune --prune

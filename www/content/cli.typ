@@ -9,7 +9,9 @@
   route: "/cli/",
   label: "CLI reference",
   title: "CLI reference",
-  summary: "Every action mmz accepts, every exit code it returns, and the JSON it can be asked for — generated from the binary's own help text.",
+  summary: "Every action, flag, and exit code.",
+  group: "Reference",
+  order: 2,
 )
 #metadata(meta) <page-meta>
 

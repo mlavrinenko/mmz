@@ -71,7 +71,7 @@ fn fails_on_an_mktemp_path_the_caller_did_not_pass_down() {
     );
 }
 
-/// The literal pass, which is the honest half: a `$TMPDIR` pointing anywhere
+/// The literal pass, which is the exact half: a `$TMPDIR` pointing anywhere
 /// but `/tmp` produces a path the shape pass cannot recognize, and only the
 /// caller knows what it was.
 #[test]

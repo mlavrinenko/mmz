@@ -28,7 +28,7 @@ terminal panel overflowing its column, a heatmap cell whose text is unreadable
 against its fill, a dark-mode token that vanishes, or a table that a phone
 squeezes into unreadability. Those need eyes.
 
-Splitting it out also keeps the implementation task's "done" honest: the code is
+Splitting it out also keeps the implementation task's "done" meaningful: the code is
 finished and gated, and this is a separate claim about a separate kind of
 evidence.
 

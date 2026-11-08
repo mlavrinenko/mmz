@@ -6,7 +6,9 @@
   route: "/outputs/",
   label: "Declared outputs",
   title: "Declared outputs",
-  summary: "A producer command's record can be undone without touching an input. Declaring what a run leaves behind is how mmz notices.",
+  summary: "Declare what a run leaves behind.",
+  group: "Writing a manifest",
+  order: 4,
 )
 #metadata(meta) <page-meta>
 

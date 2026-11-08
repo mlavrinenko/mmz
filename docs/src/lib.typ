@@ -86,10 +86,11 @@
 // are not JSON.
 #let capture(name) = read("/www/generated/" + name)
 
-// The docs site's page manifest — the site URL, and per route the page's
-// sidebar label, title and summary. Derived from every content page's own
-// `<page-meta>` block by www/generate-site-pages.sh, and read through `fact`
-// above so it arrives on the same terms as every other derived fact.
+// The docs site's page manifest — the site URL, the group order, and per route
+// the page's sidebar label, title, summary, group and order. Derived from every
+// content page's own `<page-meta>` block by www/generate-site-pages.sh, and
+// read through `fact` above so it arrives on the same terms as every other
+// derived fact.
 #let _site = fact("site-pages")
 
 // Resolve one page by route, or fail the render naming it.
@@ -113,10 +114,11 @@
   )
 }
 
-// A page's own title and summary, for prose that NAMES a page (or lists every
-// page, as the README does) rather than linking one. Same panic on an unknown
-// route, for the same reason.
+// A page's own title, sidebar label and summary, for prose that NAMES a page
+// (or lists every page, as the README does) rather than linking one. Same panic
+// on an unknown route, for the same reason.
 #let www-title(route) = _page(route).title
+#let www-label(route) = _page(route).label
 #let www-summary(route) = _page(route).summary
 
 // An absolute link to a docs-site page. `#www-link("/cli/")` renders the page's

@@ -24,7 +24,7 @@ set -eo pipefail
 dir="${1:?usage: check-capture-paths.sh <dir> [literal-path...]}"
 shift
 
-# Two passes, because neither alone is honest.
+# Two passes, because neither alone is enough.
 #
 # The literals are the caller's own mktemp directories. That pass is exact: it
 # cannot miss a leak, and a $TMPDIR pointing somewhere this script would never

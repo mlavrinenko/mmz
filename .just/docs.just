@@ -40,7 +40,7 @@ set working-directory := '..'
 # which would erase anything written first, and the page manifest is a full
 # compile of every www/content/*.typ page, which needs both the facts and
 # generate.sh's own captures. The explicit second call below is a redundant,
-# idempotent, lock-protected re-run — it keeps this recipe honest about what it
+# idempotent, lock-protected re-run — it keeps this recipe accurate about what it
 # produces without depending on generate.sh's trailing call to have been the
 # last word.
 

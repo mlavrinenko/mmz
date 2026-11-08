@@ -1,15 +1,17 @@
 // Page wrapper used by every content file. One call form:
 //
 //   #import "../utils/page.typ": page
-//   #let meta = (route: "/quickstart/", label: "Quickstart", title: …, summary: …)
+//   #let meta = (route: "/quickstart/", label: "Quickstart",
+//     title: …, summary: …, group: …, order: …)
 //   #metadata(meta) <page-meta>
 //   #show: page.with(..meta)
 //
 // The page's own `<page-meta>` dict, spread. `route` becomes `active` and
 // `label` is dropped (tola-page has no use for the sidebar string); `title`,
-// `summary` and `home` are used exactly as given. One binding per page feeds
-// both consumers — the metadata block www/generate-site-pages.sh queries to
-// build the manifest, and this show rule — so a page cannot disagree with
+// `summary` and `home` drive the chrome, while `group` and `order` reach the
+// manifest the sidebar and README place the page from. One binding per page
+// feeds both consumers — the metadata block www/generate-site-pages.sh queries
+// to build the manifest, and this show rule — so a page cannot disagree with
 // itself about its own route, title or summary.
 //
 // The seam is wrap-page's `transform-meta` hook, which rewrites the named

@@ -2,13 +2,16 @@
 # www/generate-site-pages.sh — derive www/generated/site-pages.json from every
 # www/content/*.typ page's own `<page-meta>` block.
 #
-# Each page carries `#metadata((route, label, title, summary, home)) <page-meta>`
+# Each page carries
+# `#metadata((route, label, title, summary, group, order, home)) <page-meta>`
 # and spreads that same dict into its show rule, so the page is the single
-# source of its own route, label, title and summary. This script reads all of
-# them back into one manifest, which is what the sidebar renders from and what
-# docs/src/lib.typ's `www-link` resolves an absolute docs URL against. A page
-# renamed or re-summarised therefore lands in the README's page list, in the
-# sidebar and in every cross-link with no second edit anywhere.
+# source of its own route, label, title, summary, group and order. This script
+# reads all of them back into one manifest: it validates the group against
+# www/utils/site.typ's GROUPS, refuses a duplicate order within a group, and
+# writes the pages in that order. The sidebar renders from it, docs/src/lib.typ's
+# `www-link` resolves an absolute docs URL against it, and the README's page
+# list reads its groups and summaries. A page renamed, re-summarised or moved
+# therefore lands everywhere with no second edit.
 #
 # Called by www/generate.sh, AFTER its generate-facts.sh call, inside the lock
 # that script already holds. The ordering is not negotiable: querying a page's
@@ -90,28 +93,83 @@ if [ "$(jq 'length' <<<"$dupes")" -gt 0 ]; then
   exit 1
 fi
 
-# The site URL, path prefix and repo link — read back off site.typ through a
-# target/-rooted driver. site.typ resolves its own reads relative to ITSELF
-# rather than the root, so `--root .` here and `--root www` above both work
-# against the same file. NAV's flattened routes ride along in the same query so
-# the `pages` object below is written in NAV's curated reading order rather than
-# the glob's alphabetical one — docs/src/readme.typ's page list reads
-# `pages.keys()` directly, and that list is meant to read in the site's own
-# order, not filename order.
-printf '#import "/www/utils/site.typ": NAV, PREFIX, REPO, SITE_URL\n#metadata((url: SITE_URL, prefix: PREFIX, repo: REPO, nav: NAV.map(g => g.items).flatten())) <site-meta>\n' \
+# The site URL, path prefix, repo link and group order — read back off site.typ
+# through a target/-rooted driver. site.typ resolves its own reads relative to
+# ITSELF rather than the root, so `--root .` here and `--root www` above both
+# work against the same file. The groups ride along so the pages below can be
+# validated against them and written in group/order order rather than the
+# glob's filename order.
+printf '#import "/www/utils/site.typ": GROUPS, PREFIX, REPO, SITE_URL\n#metadata((url: SITE_URL, prefix: PREFIX, repo: REPO, groups: GROUPS)) <site-meta>\n' \
   >"$workdir/site-meta-driver.typ"
 site_meta="$(typst query --root "$REPO" "$workdir/site-meta-driver.typ" '<site-meta>' \
   --field value --one)"
 
+groups_json="$(jq -c '.groups' <<<"$site_meta")"
+
+# Every page must name a known group and an integer order. A missing field or a
+# typo'd group is a page that would silently vanish from the sidebar and the
+# README, so it is a hard failure naming the route.
+group_problems="$(jq -r --argjson groups "$groups_json" '
+  to_entries[]
+  | .key as $route
+  | .value as $page
+  | if ($page.group | type) != "string" then
+      "\($route): missing group"
+    elif ($groups | index($page.group)) == null then
+      "\($route): unknown group \($page.group | @json)"
+    elif ($page.order | type) != "number" then
+      "\($route): missing order"
+    elif $page.order < 0 or $page.order != ($page.order | floor) then
+      "\($route): order must be a non-negative integer, got \($page.order)"
+    else empty end
+' <<<"$pages_json")"
+if [ -n "$group_problems" ]; then
+  echo "generate-site-pages.sh: every page needs a known group and an order:" >&2
+  while IFS= read -r problem; do echo "  - $problem" >&2; done <<<"$group_problems"
+  exit 1
+fi
+
+# Two pages at the same position in one group would sort nondeterministically.
+duplicate_orders="$(jq -r '
+  [ to_entries[] | {route: .key, group: .value.group, order: .value.order} ]
+  | group_by([.group, .order])
+  | map(select(length > 1))
+  | .[]
+  | "\(.[0].group) order \(.[0].order): " + (map(.route) | join(", "))
+' <<<"$pages_json")"
+if [ -n "$duplicate_orders" ]; then
+  echo "generate-site-pages.sh: two pages share an order within a group:" >&2
+  while IFS= read -r problem; do echo "  - $problem" >&2; done <<<"$duplicate_orders"
+  exit 1
+fi
+
+# A group with no page would render an empty heading in the sidebar and README.
+empty_groups="$(jq -r --argjson groups "$groups_json" '
+  ([ to_entries[].value.group ] | unique) as $used
+  | $groups[]
+  | . as $group
+  | select(($used | index($group)) == null)
+  | $group
+' <<<"$pages_json")"
+if [ -n "$empty_groups" ]; then
+  echo "generate-site-pages.sh: groups with no page (remove them from GROUPS or add a page):" >&2
+  while IFS= read -r group; do echo "  - $group" >&2; done <<<"$empty_groups"
+  exit 1
+fi
+
 jq -n --argjson site "$site_meta" --argjson pages "$pages_json" '
-  ($site.nav | map(select(. as $r | $pages | has($r)))) as $ordered
-  | (($pages | keys) - $ordered) as $rest
-  | {
-      url: $site.url,
-      prefix: $site.prefix,
-      repo: $site.repo,
-      pages: (reduce ($ordered + $rest)[] as $r ({}; . + {($r): $pages[$r]})),
-    }
+  {
+    url: $site.url,
+    prefix: $site.prefix,
+    repo: $site.repo,
+    groups: $site.groups,
+    pages: (
+      $pages
+      | to_entries
+      | sort_by(. as $entry | [($site.groups | index($entry.value.group)), $entry.value.order])
+      | from_entries
+    ),
+  }
 ' | emit site-pages.json
 
 echo "generate-site-pages.sh: $(jq 'length' <<<"$pages_json") pages"

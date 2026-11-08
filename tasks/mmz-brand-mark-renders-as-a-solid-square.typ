@@ -53,7 +53,7 @@ resolving mask URL and zero alpha. `mark.svg` now says so in its own header.
 
 == Regression cover
 
-None automated, and that is the honest state: `tola validate` proves the asset
+None automated, and that is the actual state: `tola validate` proves the asset
 resolves, which it already did while the mark was invisible. What this needs is
 a rendered-pixel check, which the docs pipeline has no harness for. Recorded in
 `mmz-review-the-monochrome-docs-theme-in-a-browser.typ` as something a human

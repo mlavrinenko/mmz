@@ -49,7 +49,7 @@ probes:
   #
   # The boundary is drawn at tola, not past it. tola embeds Typst, so a
   # docs build technically depends on that compiler too; declaring the input
-  # that ships the binary and stopping is the honest line, because whatever
+  # that ships the binary and stopping is the right line, because whatever
   # tola bundles moves with tola's node anyway.
   tola-tools:
     file: flake.lock

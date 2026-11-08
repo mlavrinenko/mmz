@@ -6,7 +6,9 @@
   route: "/concepts/",
   label: "Concepts",
   title: "Concepts",
-  summary: "The model behind mmz: rules, records, freshness, and the asymmetry that decides every design question.",
+  summary: "How rules, records, and freshness fit together.",
+  group: "Start here",
+  order: 2,
 )
 #metadata(meta) <page-meta>
 
@@ -44,7 +46,7 @@ single input. That is the second way a record stops being valid, and why
 One YAML file per rule, in a git-ignored cache directory, written atomically
 (temp file plus rename) so a crash or a concurrent writer never leaves a
 truncated record. Derived, throwaway state: delete the whole directory and the
-only cost is one honest re-run.
+only cost is one re-run.
 
 A record is fresh only when its `status` is `ok`, its content digest, format,
 algorithm and command all still match, every output its rule declares is still

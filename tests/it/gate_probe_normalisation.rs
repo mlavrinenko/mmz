@@ -10,7 +10,7 @@
 //! `nix develop` read every gate stale against a worktree whose checks had just
 //! passed. `jq -S` sorts keys and removes that degree of freedom.
 //!
-//! The honest test runs one probe under two just versions and asserts one
+//! The real test runs one probe under two just versions and asserts one
 //! digest, which needs two just versions on hand. These are the two halves that
 //! do not: that mmz's digest really is order-stable once a probe sorts, and
 //! that every probe this repo ships actually sorts.

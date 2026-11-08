@@ -1,6 +1,6 @@
 // Page chrome: <head>, header, docs sidebar, main, footer.
 
-#import "../utils/site.typ": NAV, REPO, SITE, page-meta, u
+#import "../utils/site.typ": GROUPS, PAGES, REPO, SITE, u
 
 // Set data-theme before first paint (no flash), then a global toggle.
 #let _theme-script = "(function(){var d=document.documentElement;var t=localStorage.getItem('theme');if(t){d.setAttribute('data-theme',t)}else if(window.matchMedia('(prefers-color-scheme:dark)').matches){d.setAttribute('data-theme','dark')}}());function toggleTheme(){var d=document.documentElement;var n=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',n);localStorage.setItem('theme',n)}"
@@ -135,26 +135,23 @@ heads[0].parentNode.insertBefore(nav,heads[0]);
 
 #let _sidebar(active) = html.elem("aside", attrs: (class: "sidebar"), {
   html.elem("nav", attrs: ("aria-label": "Documentation"), {
-    for group in NAV {
-      html.elem("div", attrs: (class: "nav-group"), {
-        html.elem("p", attrs: (class: "nav-title"), [#group.title])
-        html.elem("ul", {
-          for route in group.items {
-            // `page-meta` returns `none` only during
-            // www/generate-site-pages.sh's bootstrap pass, before the manifest
-            // it queries every page to build exists yet — skip that entry
-            // rather than render a labelless link. Once the manifest is real, a
-            // route in NAV with none in it is a bug, not a skip (see
-            // page-meta's own comment), so nothing here swallows that case.
-            let meta = page-meta(route)
-            if meta != none {
+    for title in GROUPS {
+      let routes = PAGES
+        .keys()
+        .filter(route => PAGES.at(route).at("group") == title)
+      if routes.len() > 0 {
+        html.elem("div", attrs: (class: "nav-group"), {
+          html.elem("p", attrs: (class: "nav-title"), [#title])
+          html.elem("ul", {
+            for route in routes {
               let attrs = (href: u(route))
               if active == route { attrs.insert("aria-current", "page") }
-              html.elem("li", html.elem("a", attrs: attrs, [#meta.label]))
+              let label = PAGES.at(route).at("label")
+              html.elem("li", html.elem("a", attrs: attrs, [#label]))
             }
-          }
+          })
         })
-      })
+      }
     }
   })
 })

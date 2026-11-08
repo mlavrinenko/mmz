@@ -70,9 +70,9 @@ Three scripts, run in a fixed order, all writing to the gitignored
   `just --dump`, the caps from `.linecop.yaml`, the binary sizes from
   `www/sizes.yaml`.
 + #strong[`www/generate-site-pages.sh`] compiles every content page to read back
-  its own `<page-meta>` block, producing the route → label/title/summary manifest
-  that the sidebar, the README's page list and every cross-page link resolve
-  against.
+  its own `<page-meta>` block, producing the route → label/title/summary plus
+  each page's group and order. The sidebar, the README's page list and every
+  cross-page link resolve against that manifest.
 
 The order is not negotiable, and each script's header says why. In short:
 `generate.sh` wipes the directory on entry, so the facts must be restored inside
@@ -137,7 +137,9 @@ is no size proxy.
   route: "/my-page/",
   label: "My page",
   title: "My page",
-  summary: "One sentence; it becomes the meta description and the lede.",
+  summary: "One short sentence; it becomes the meta description and the lede.",
+  group: "Writing a manifest",
+  order: 7,
 )
 #metadata(meta) <page-meta>
 
@@ -147,11 +149,13 @@ is no size proxy.
 One binding feeds both consumers — the metadata block the manifest is built from,
 and the show rule — so a page cannot disagree with itself about its own route.
 
-Then add the route to `NAV` in `www/utils/site.typ`. #just.check-doc-facts()
-fails if you do not: a page missing from NAV is unreachable in the sidebar, and a
-NAV entry naming no page is a 404 in it. The route must also match the filename
-(`my-page.typ` serves `/my-page/`, `index.typ` serves `/`), which is what catches
-a `<page-meta>` block pointed at some other page's route.
+Then set `group` to one of `GROUPS` in `www/utils/site.typ` and `order` to its
+position within that group. `www/generate-site-pages.sh` refuses a missing or
+unknown group, a non-integer order, and two pages sharing an order in one group,
+so a page cannot silently vanish from the sidebar or the README. The route must
+also match the filename (`my-page.typ` serves `/my-page/`, `index.typ` serves
+`/`), which is what catches a `<page-meta>` block pointed at some other page's
+route.
 
 = Adding a derived fact
 
@@ -183,7 +187,7 @@ page. The shape that resolves it, and the one to copy for the next such fact:
   _data_ file the pipeline reads, reviewed into the tree like any other change.
 + #strong[Cross-check it on the way through.] `generate-facts.sh` refuses a
   measurement whose grammar set no longer matches the crate's own `lang-`
-  features, naming both sides. That is what keeps a committed number honest
+  features, naming both sides. That is what keeps a committed number accurate
   without re-measuring it: the file cannot silently describe a different binary
   than the one the manifest builds.
 + #strong[Let `outdatty` schedule the re-run.] The `binary-size` group fails

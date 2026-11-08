@@ -8,7 +8,9 @@
   route: "/composition/",
   label: "Composition",
   title: "Composing a manifest from imports",
-  summary: "Why imports: merges files instead of overriding them, the one path rule that trips everyone the first time, and how to debug what a composed manifest actually resolved to.",
+  summary: "Split one manifest across several files.",
+  group: "Writing a manifest",
+  order: 6,
 )
 #metadata(meta) <page-meta>
 
